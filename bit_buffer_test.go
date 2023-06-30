@@ -39,3 +39,50 @@ func TestClone(t *testing.T) {
 		t.Errorf("Expected BitBuffer a and b should be the same")
 	}
 }
+
+func TestAppendBits(t *testing.T) {
+	b := &BitBuffer{}
+
+	expected := []bool{true, false, true}
+	err := b.appendBits(5, 3)
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	}
+
+	if !checkEqual(b, expected) {
+		t.Errorf("Unexpected BitBuffer state after appendBits: %v, expected: %v", *b, expected)
+	}
+
+	err = b.appendBits(2, 2)
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	}
+
+	expected = []bool{true, false, true, true, false}
+	if !checkEqual(b, expected) {
+		t.Errorf("Unexpected BitBuffer state after appendBits: %v, expected: %v", *b, expected)
+	}
+
+	err = b.appendBits(1000, 32)
+	if err == nil {
+		t.Errorf("Expected error: %v", err)
+	}
+
+	expected = []bool{true, false, true, true, false}
+	if !checkEqual(b, expected) {
+		t.Errorf("Unexpected BitBuffer state after appendBits: %v, expected: %v", *b, expected)
+	}
+}
+
+func checkEqual(b *BitBuffer, expected []bool) bool {
+	if b.len() != len(expected) {
+		return false
+	}
+
+	for i := range expected {
+		if b.getBit(i) != expected[i] {
+			return false
+		}
+	}
+	return true
+}
