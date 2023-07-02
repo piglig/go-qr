@@ -74,6 +74,57 @@ func TestAppendBits(t *testing.T) {
 	}
 }
 
+func TestAppendData(t *testing.T) {
+	a := &BitBuffer{}
+	err := a.appendData(nil)
+	if err == nil {
+		t.Error("Expected error")
+	}
+
+	cases := []struct {
+		ABufferSet []bool
+		BBufferSet []bool
+		Expected   []bool
+	}{
+		{
+			ABufferSet: []bool{},
+			BBufferSet: []bool{true, true, false, true, false, true},
+			Expected:   []bool{true, true, false, true, false, true},
+		},
+		{
+			ABufferSet: []bool{true, true, false, true, false, false},
+			BBufferSet: []bool{},
+			Expected:   []bool{true, true, false, true, false, false},
+		},
+		{
+			ABufferSet: []bool{false, false, true, true, false, true, false, true, true, false, true},
+			BBufferSet: []bool{true, true, false, true, false, false},
+			Expected:   []bool{false, false, true, true, false, true, false, true, true, false, true, true, true, false, true, false, false},
+		},
+	}
+
+	for _, c := range cases {
+		a := &BitBuffer{}
+		b := &BitBuffer{}
+		for i, v := range c.ABufferSet {
+			a.set(i, v)
+		}
+
+		for j, v := range c.BBufferSet {
+			b.set(j, v)
+		}
+
+		err = a.appendData(b)
+		if err != nil {
+			t.Errorf("Unexpected error: %v", err)
+		}
+
+		if !checkEqual(a, c.Expected) {
+			t.Errorf("Unexpected BitBuffer state after appendData: %v, expected: %v", *a, c.Expected)
+		}
+	}
+}
+
 func checkEqual(b *BitBuffer, expected []bool) bool {
 	if b.len() != len(expected) {
 		return false
