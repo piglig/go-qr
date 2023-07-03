@@ -1,6 +1,12 @@
 package go_qr
 
-import "fmt"
+import (
+	"errors"
+	"math"
+	"regexp"
+	"strconv"
+	"strings"
+)
 
 type Mode struct {
 	modeBits         int
@@ -30,15 +36,184 @@ func (m Mode) getModeBits() int {
 	return m.modeBits
 }
 
+const (
+	NumericRegex        = "[0-9]*"
+	AlphanumericRegex   = "[A-Z0-9 $%*+./:-]*"
+	AlphanumericCharset = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ $%*+-./:"
+)
+
 type QrSegment struct {
+	mode     Mode
+	numChars int
+	data     *BitBuffer
+}
+
+func newQrSegment(mode Mode, numCh int, data *BitBuffer) (*QrSegment, error) {
+	if numCh < 0 {
+		return nil, errors.New("invalid value")
+	}
+	return &QrSegment{
+		mode:     mode,
+		numChars: numCh,
+		data:     data.clone(),
+	}, nil
+}
+
+func (q *QrSegment) getData() *BitBuffer {
+	return q.data.clone()
 }
 
 func MakeBytes(data []byte) (*QrSegment, error) {
 	if data == nil {
-		return nil, fmt.Errorf("")
+		return nil, errors.New("data is nil")
 	}
 
-	bb := BitBuffer{}
-	_ = bb
-	return nil, nil
+	bb := &BitBuffer{}
+	for _, b := range data {
+		err := bb.appendBits(int(b&0xFF), 8)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return newQrSegment(Byte, len(data), bb)
+}
+
+func MakeNumeric(digits string) (*QrSegment, error) {
+	if !isNumeric(digits) {
+		return nil, errors.New("string contains non-numeric characters")
+	}
+
+	bb := &BitBuffer{}
+	for i := 0; i < len(digits); {
+		n := min(len(digits)-i, 3)
+		num, _ := strconv.Atoi(digits[i : i+n])
+		err := bb.appendBits(num, n*3+1)
+		if err != nil {
+			return nil, err
+		}
+		i += n
+	}
+
+	return newQrSegment(Numric, len(digits), bb)
+}
+
+func isNumeric(numb string) bool {
+	return regexp.MustCompile(NumericRegex).MatchString(numb)
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+func MakeAlphanumeric(text string) (*QrSegment, error) {
+	if !isisAlphanumeric(text) {
+		return nil, errors.New("string contains unencodable characters in alphanumeric mode")
+	}
+
+	bb := &BitBuffer{}
+	i := 0
+	for ; i <= len(text)-2; i += 2 {
+		temp := strings.IndexByte(AlphanumericCharset, text[i]) * 45
+		temp += strings.IndexByte(AlphanumericCharset, text[i+1])
+		err := bb.appendBits(temp, 11)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	if i < len(text) {
+		err := bb.appendBits(strings.IndexByte(AlphanumericCharset, text[i]), 6)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return newQrSegment(Alphanumeric, len(text), bb)
+}
+
+func isisAlphanumeric(text string) bool {
+	return regexp.MustCompile(AlphanumericRegex).MatchString(text)
+}
+
+func MakeSegments(text string) ([]*QrSegment, error) {
+	res := make([]*QrSegment, 0)
+	if text == "" {
+	} else if isNumeric(text) {
+		seg, err := MakeNumeric(text)
+		if err != nil {
+			return nil, err
+		}
+
+		res = append(res, seg)
+	} else if isisAlphanumeric(text) {
+		seg, err := MakeAlphanumeric(text)
+		if err != nil {
+			return nil, err
+		}
+		res = append(res, seg)
+	} else {
+		seg, err := MakeBytes([]byte(text))
+		if err != nil {
+			return nil, err
+		}
+		res = append(res, seg)
+	}
+	return res, nil
+}
+
+func MakeEci(val int) (*QrSegment, error) {
+	bb := &BitBuffer{}
+	if val < 0 {
+		return nil, errors.New("ECI assignment value out of range")
+	} else if val < (1 << 7) {
+		err := bb.appendBits(val, 8)
+		if err != nil {
+			return nil, err
+		}
+	} else if val < (1 << 14) {
+		err := bb.appendBits(0b10, 2)
+		if err != nil {
+			return nil, err
+		}
+
+		err = bb.appendBits(val, 14)
+		if err != nil {
+			return nil, err
+		}
+	} else if val < 1e6 {
+		err := bb.appendBits(0b110, 3)
+		if err != nil {
+			return nil, err
+		}
+
+		err = bb.appendBits(val, 21)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		return nil, errors.New("ECI assignment value out of range")
+	}
+	return newQrSegment(Eci, 0, bb)
+}
+
+func GetTotalBits(segs []*QrSegment, ver int) int {
+	var res int64
+	for _, seg := range segs {
+		if seg == nil {
+			continue
+		}
+
+		ccbits := seg.mode.numCharCountBits(ver)
+		if seg.numChars >= (1 << ccbits) {
+			return -1
+		}
+		res += int64(4 + ccbits + seg.data.len())
+		if res > math.MaxInt {
+			return -1
+		}
+	}
+	return int(res)
 }
