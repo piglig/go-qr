@@ -198,7 +198,7 @@ func encodeSegments(segs []*QrSegment, ecl Ecc, minVer, maxVer, mask int, boostE
 		if bb.getBit(i) {
 			bit = 1
 		}
-		dataCodewords[i>>3] |= bit << (7 - (i & 7))
+		dataCodewords[i>>3] |= byte(bit << (7 - (i & 7)))
 	}
 	return &QrCode{}, nil
 }
