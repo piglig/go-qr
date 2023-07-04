@@ -108,6 +108,20 @@ func min(a, b int) int {
 	return b
 }
 
+func max(a, b int) int {
+	if a < b {
+		return b
+	}
+	return a
+}
+
+func abs(x int) int {
+	if x < 0 {
+		return -x
+	}
+	return x
+}
+
 func MakeAlphanumeric(text string) (*QrSegment, error) {
 	if !isisAlphanumeric(text) {
 		return nil, errors.New("string contains unencodable characters in alphanumeric mode")
@@ -199,7 +213,7 @@ func MakeEci(val int) (*QrSegment, error) {
 	return newQrSegment(Eci, 0, bb)
 }
 
-func GetTotalBits(segs []*QrSegment, ver int) int {
+func getTotalBits(segs []*QrSegment, ver int) int {
 	var res int64
 	for _, seg := range segs {
 		if seg == nil {
