@@ -70,6 +70,23 @@ func NewQrCode(ver int, ecl Ecc, dataCodewords []byte, msk int) (*QrCode, error)
 	if dataCodewords == nil {
 		return nil, errors.New("dataCodewords is nil")
 	}
+
+	qrCode := &QrCode{
+		version:              ver,
+		size:                 ver*4 + 17,
+		errorCorrectionLevel: ecl,
+	}
+
+	modules := make([][]bool, qrCode.size)
+	isFunction := make([][]bool, qrCode.size)
+	for i := 0; i < qrCode.size; i++ {
+		modules[i] = make([]bool, qrCode.size)
+		isFunction[i] = make([]bool, qrCode.size)
+	}
+	qrCode.modules = modules
+
+	qrCode.drawFunctionPatterns()
+
 	// TODO create QrCode
 	return nil, nil
 }
@@ -100,7 +117,102 @@ func (q *QrCode) drawFinderPattern(x, y int) {
 }
 
 func (q *QrCode) drawVersion() {
-	// TODO drawVersion
+	if q.version < 7 {
+		return
+	}
+
+	rem := q.version
+	for i := 0; i < 12; i++ {
+		rem = (rem << 1) ^ ((rem >> 11) * 0x1F25)
+	}
+	bits := q.version<<12 | rem
+
+	// Draw two copies
+	for i := 0; i < 18; i++ {
+		bit := getBit(bits, i)
+		a := q.size - 11 + i%3
+		b := i / 3
+		q.setFunctionModule(a, b, bit)
+		q.setFunctionModule(b, a, bit)
+	}
+}
+
+func (q *QrCode) drawFunctionPatterns() {
+	for i := 0; i < q.size; i++ {
+		q.setFunctionModule(6, i, i%2 == 0)
+		q.setFunctionModule(i, 6, i%2 == 0)
+	}
+
+	q.drawFinderPattern(3, 3)
+	q.drawFinderPattern(q.size-4, 3)
+	q.drawFinderPattern(3, q.size-4)
+
+	alignPatPos := q.getAlignmentPatternPositions()
+	numAlign := len(alignPatPos)
+	for i := 0; i < numAlign; i++ {
+		for j := 0; j < numAlign; j++ {
+			if !(i == 0 && j == 0 || i == 0 && j == numAlign-1 || i == numAlign-1 && j == 0) {
+				q.drawAlignmentPattern(alignPatPos[i], alignPatPos[j])
+			}
+		}
+	}
+
+	q.drawFormatBits(0)
+	q.drawVersion()
+}
+
+func (q *QrCode) getAlignmentPatternPositions() []int {
+	if q.version == 1 {
+		return []int{}
+	} else {
+		numAlign := q.version/7 + 2
+		step := 0
+		if q.version == 32 {
+			step = 26
+		} else {
+			step = (q.version*4 + numAlign*2 + 1) / (numAlign*2 - 2) * 2
+		}
+
+		res := make([]int, numAlign)
+		res[0] = 6
+		for i, pos := len(res)-1, q.size-7; i >= 1; {
+			res[i] = pos
+			i--
+			pos -= step
+		}
+
+		return res
+	}
+}
+
+func (q *QrCode) drawFormatBits(msk int) {
+	data := int(q.errorCorrectionLevel)<<3 | msk
+	rem := data
+	for i := 0; i < 10; i++ {
+		rem = (rem << 1) ^ ((rem >> 9) * 0x537)
+	}
+
+	bits := (data<<10 | rem) ^ 0x537
+
+	for i := 0; i <= 5; i++ {
+		q.setFunctionModule(8, i, getBit(bits, i))
+	}
+	q.setFunctionModule(8, 7, getBit(bits, 6))
+	q.setFunctionModule(8, 8, getBit(bits, 7))
+	q.setFunctionModule(7, 8, getBit(bits, 8))
+
+	for i := 9; i < 15; i++ {
+		q.setFunctionModule(14-i, 8, getBit(bits, i))
+	}
+
+	for i := 0; i < 8; i++ {
+		q.setFunctionModule(q.size-1-i, 8, getBit(bits, i))
+	}
+
+	for i := 8; i < 15; i++ {
+		q.setFunctionModule(8, q.size-15+i, getBit(bits, i))
+	}
+	q.setFunctionModule(8, q.size-8, true)
 }
 
 func EncodeText(text string, ecl Ecc) (*QrCode, error) {
@@ -238,6 +350,6 @@ func getNumRawDataModules(ver int) (int, error) {
 	return res, nil
 }
 
-func GetBit(x, i int) bool {
+func getBit(x, i int) bool {
 	return ((x >> uint(i)) & 1) != 0
 }
