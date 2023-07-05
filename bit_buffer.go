@@ -45,7 +45,7 @@ func (b *BitBuffer) appendBits(val, length int) error {
 		return fmt.Errorf("maximum length reached")
 	}
 	for i := length - 1; i >= 0; i-- {
-		b.set(b.len(), GetBit(val, i))
+		b.set(b.len(), getBit(val, i))
 	}
 	return nil
 }
