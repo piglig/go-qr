@@ -3,6 +3,7 @@ package go_qr
 import (
 	"errors"
 	"fmt"
+	"math"
 )
 
 type Ecc int
@@ -84,8 +85,25 @@ func NewQrCode(ver int, ecl Ecc, dataCodewords []byte, msk int) (*QrCode, error)
 		isFunction[i] = make([]bool, qrCode.size)
 	}
 	qrCode.modules = modules
+	qrCode.isFunction = isFunction
 
 	qrCode.drawFunctionPatterns()
+	allCodewords, err := qrCode.addEccAndInterLeave(dataCodewords)
+	if err != nil {
+		return nil, err
+	}
+
+	if msk == -1 {
+		minPenalty := math.MaxInt
+		for i := 0; i < 8; i++ {
+			err = qrCode.applyMask(i)
+			if err != nil {
+				return nil, err
+			}
+			qrCode.drawFormatBits(i)
+			_, _ = allCodewords, minPenalty
+		}
+	}
 
 	// TODO create QrCode
 	return nil, nil
@@ -94,6 +112,129 @@ func NewQrCode(ver int, ecl Ecc, dataCodewords []byte, msk int) (*QrCode, error)
 func (q *QrCode) setFunctionModule(x, y int, isDark bool) {
 	q.modules[y][x] = isDark
 	q.isFunction[y][x] = true
+}
+
+func (q *QrCode) addEccAndInterLeave(data []byte) ([]byte, error) {
+	if data == nil {
+		return nil, errors.New("data is nil")
+	}
+
+	numDataCodewords, err := getNumDataCodewords(q.version, q.errorCorrectionLevel)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(data) != numDataCodewords {
+		return nil, errors.New("invalid argument")
+	}
+
+	numBlocks := getNumErrorCorrectionBlocks()[q.errorCorrectionLevel][q.version]
+	blockEccLen := getEccCodeWordsPerBlock()[q.errorCorrectionLevel][q.version]
+	rawCodewords, err := getNumRawDataModules(q.version)
+	if err != nil {
+		return nil, err
+	}
+	rawCodewords = rawCodewords / 8
+	numShortBlocks := int(numBlocks) - rawCodewords%int(numBlocks)
+	shortBlockLen := rawCodewords / int(numBlocks)
+
+	blocks := make([][]byte, numBlocks)
+	rsDiv, err := reedSolomonComputeDivisor(int(blockEccLen))
+	if err != nil {
+		return nil, err
+	}
+	for i, k := 0, 0; i < int(numBlocks); i++ {
+		dat, block := make([]byte, 0), make([]byte, shortBlockLen+1)
+		index := 1
+		if i < numShortBlocks {
+			index = 0
+		}
+
+		copy(dat, data[k:k+shortBlockLen-int(blockEccLen)+index])
+		k += len(dat)
+		copy(block, dat)
+		ecc := reedSolomonComputeRemainder(dat, rsDiv)
+		copy(block[len(block)-int(blockEccLen):], ecc)
+		blocks[i] = block
+	}
+
+	res := make([]byte, rawCodewords)
+	for i, k := 0, 0; i < len(blocks[0]); i++ {
+		for j := 0; j < len(blocks); j++ {
+			if i != shortBlockLen-int(blockEccLen) || j >= numShortBlocks {
+				res[k] = blocks[j][i]
+				k++
+			}
+		}
+	}
+	return res, nil
+}
+
+func (q *QrCode) drawCodewords(data []byte) error {
+	numRawDataModules, err := getNumRawDataModules(q.version / 8)
+	if err != nil {
+		return err
+	}
+
+	if len(data) != numRawDataModules {
+		return errors.New("illegal argument")
+	}
+
+	i := 0
+	for right := q.size - 1; right >= 1; right -= 2 {
+		if right == 6 {
+			right = 5
+		}
+		for vert := 0; vert < q.size; vert++ {
+			for j := 0; j < 2; j++ {
+				x := right - j
+				upward := ((right + 1) & 2) == 0
+				y := vert
+				if upward {
+					y = q.size - 1 - vert
+				}
+				if !q.isFunction[y][x] && i < len(data)*8 {
+					q.modules[y][x] = getBit(int(data[i>>3]), 7-(i&7))
+					i++
+				}
+			}
+		}
+	}
+	return nil
+}
+
+func (q *QrCode) applyMask(msk int) error {
+	if msk < 0 || msk > 7 {
+		return errors.New("mask value out of range")
+	}
+
+	for y := 0; y < q.size; y++ {
+		for x := 0; x < q.size; x++ {
+			var invert bool
+			switch msk {
+			case 0:
+				invert = (x+y)%2 == 0
+			case 1:
+				invert = y%2 == 0
+			case 2:
+				invert = x%3 == 0
+			case 3:
+				invert = (x+y)%3 == 0
+			case 4:
+				invert = (x/3+y/2)%2 == 0
+			case 5:
+				invert = x*y%2+x*y%3 == 0
+			case 6:
+				invert = (x*y%2+x*y%3)%2 == 0
+			case 7:
+				invert = ((x+y)%2+x*y%3)%2 == 0
+			default:
+				return errors.New("mask value out of range")
+			}
+			q.modules[y][x] = q.modules[y][x] != (invert && !q.isFunction[y][x])
+		}
+	}
+	return nil
 }
 
 func (q *QrCode) drawAlignmentPattern(x, y int) {
@@ -327,6 +468,31 @@ func getNumDataCodewords(ver int, ecl Ecc) (int, error) {
 		int(eccCodewordsPerBlock[ecl][ver])*int(numErrorCorrectionBlocks[ecl][ver]), nil
 }
 
+func (q *QrCode) finderPenaltyCountPatterns(runHistory []int) int {
+	n := runHistory[1]
+	core := n > 0 && runHistory[2] == n && runHistory[3] == n*3 && runHistory[4] == n && runHistory[5] == n
+	res := 0
+	if core && runHistory[0] >= n*4 && runHistory[6] >= n {
+		res = 1
+	}
+
+	if core && runHistory[6] >= n*4 && runHistory[0] >= n {
+		res += 1
+	}
+	return res
+}
+
+func (q *QrCode) finderPenaltyTerminateAndCount(currentRunColor bool, currentRunLen int, runHistory []int) int {
+	if currentRunColor {
+		q.finderPenaltyAddHistory(currentRunLen, runHistory)
+		currentRunLen = 0
+	}
+
+	currentRunLen += q.size
+	q.finderPenaltyAddHistory(currentRunLen, runHistory)
+	return q.finderPenaltyCountPatterns(runHistory)
+}
+
 func getNumRawDataModules(ver int) (int, error) {
 	if ver < MinVersion || ver > MaxVersion {
 		return 0, errors.New("version number out of range")
@@ -348,6 +514,57 @@ func getNumRawDataModules(ver int) (int, error) {
 		}
 	}
 	return res, nil
+}
+
+func reedSolomonComputeDivisor(degree int) ([]byte, error) {
+	if degree < 1 || degree > 255 {
+		return nil, errors.New("degree out of range")
+	}
+
+	res := make([]byte, degree)
+	res[degree-1] = 1
+
+	root := 1
+	for i := 0; i < degree; i++ {
+		for j := 0; j < len(res); j++ {
+			res[j] = byte(reedSolomonMultiply(int(res[j]&0xFF), root))
+			if j+1 < len(res) {
+				res[j] ^= res[j+1]
+			}
+		}
+		root = reedSolomonMultiply(root, 0x02)
+	}
+	return res, nil
+}
+
+func reedSolomonComputeRemainder(data, divisor []byte) []byte {
+	res := make([]byte, len(divisor))
+	for _, b := range data {
+		factor := (b ^ res[0]) & 0xFF
+		copy(res, res[1:])
+		res[len(res)-1] = byte(0)
+		for i := 0; i < len(res); i++ {
+			res[i] ^= byte(reedSolomonMultiply(int(divisor[i]&0xFF), int(factor)))
+		}
+	}
+	return res
+}
+
+func reedSolomonMultiply(x, y int) int {
+	z := 0
+	for i := 7; i >= 0; i-- {
+		z = (z << 1) ^ ((z >> 7) * 0x11D)
+		z ^= ((y >> i) & 1) * x
+	}
+	return z
+}
+
+func (q *QrCode) finderPenaltyAddHistory(currentRunLen int, runHistory []int) {
+	if runHistory[0] == 0 {
+		currentRunLen += q.size
+	}
+	copy(runHistory[1:], runHistory[:len(runHistory)-1])
+	runHistory[0] = currentRunLen
 }
 
 func getBit(x, i int) bool {
