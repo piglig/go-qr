@@ -93,6 +93,11 @@ func NewQrCode(ver int, ecl Ecc, dataCodewords []byte, msk int) (*QrCode, error)
 		return nil, err
 	}
 
+	err = qrCode.drawCodewords(allCodewords)
+	if err != nil {
+		return nil, err
+	}
+
 	if msk == -1 {
 		minPenalty := math.MaxInt
 		for i := 0; i < 8; i++ {
@@ -101,12 +106,28 @@ func NewQrCode(ver int, ecl Ecc, dataCodewords []byte, msk int) (*QrCode, error)
 				return nil, err
 			}
 			qrCode.drawFormatBits(i)
-			_, _ = allCodewords, minPenalty
+			penalty := qrCode.getPenaltyScore()
+			if penalty < minPenalty {
+				msk = i
+				minPenalty = penalty
+			}
+			err = qrCode.applyMask(i)
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 
-	// TODO create QrCode
-	return nil, nil
+	qrCode.mask = msk
+	err = qrCode.applyMask(msk)
+	if err != nil {
+		return nil, err
+	}
+
+	qrCode.drawFormatBits(msk)
+	qrCode.isFunction = nil
+
+	return qrCode, nil
 }
 
 func (q *QrCode) setFunctionModule(x, y int, isDark bool) {
@@ -235,6 +256,80 @@ func (q *QrCode) applyMask(msk int) error {
 		}
 	}
 	return nil
+}
+
+func (q *QrCode) getPenaltyScore() int {
+	res := 0
+	for y := 0; y < q.size; y++ {
+		runColor, runX := false, 0
+		runHistory := make([]int, 0)
+		for x := 0; x < q.size; x++ {
+			if q.modules[y][x] == runColor {
+				runX++
+				if runX == 5 {
+					res += penaltyN1
+				} else if runX > 5 {
+					res++
+				}
+			} else {
+				q.finderPenaltyAddHistory(runX, runHistory)
+				if !runColor {
+					res += q.finderPenaltyCountPatterns(runHistory) * penaltyN3
+				}
+				runColor = q.modules[y][x]
+				runX = 1
+			}
+		}
+		res += q.finderPenaltyTerminateAndCount(runColor, runX, runHistory) * penaltyN3
+	}
+
+	for x := 0; x < q.size; x++ {
+		runColor, runY := false, 0
+		runHistory := make([]int, 0)
+		for y := 0; y < q.size; y++ {
+			if q.modules[y][x] == runColor {
+				runY++
+				if runY == 5 {
+					res += penaltyN1
+				} else if runY > 5 {
+					res++
+				}
+			} else {
+				q.finderPenaltyAddHistory(runY, runHistory)
+				if !runColor {
+					res += q.finderPenaltyCountPatterns(runHistory) * penaltyN3
+				}
+				runColor = q.modules[y][x]
+				runY = 1
+			}
+		}
+		res += q.finderPenaltyTerminateAndCount(runColor, runY, runHistory) * penaltyN3
+	}
+
+	for y := 0; y < q.size-1; y++ {
+		for x := 0; x < q.size-1; x++ {
+			color := q.modules[y][x]
+			if color == q.modules[y][x+1] &&
+				color == q.modules[y+1][x] &&
+				color == q.modules[y+1][x+1] {
+				res += penaltyN2
+			}
+		}
+	}
+
+	dark := 0
+	for _, row := range q.modules {
+		for _, color := range row {
+			if color {
+				dark++
+			}
+		}
+	}
+
+	total := q.size * q.size
+	k := (abs(dark*20-total*10)+total-1)/total - 1
+	res += k * penaltyN4
+	return res
 }
 
 func (q *QrCode) drawAlignmentPattern(x, y int) {
