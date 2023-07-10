@@ -451,14 +451,26 @@ func (q *QrCode) drawFormatBits(msk int) {
 	q.setFunctionModule(8, q.size-8, true)
 }
 
-func EncodeText(text string, ecl Ecc) (*QrCode, error) {
+func encodeText(text string, ecl Ecc) (*QrCode, error) {
 	segs, err := MakeSegments(text)
 	if err != nil {
 		return nil, err
 	}
 
-	_ = segs
-	return nil, nil
+	return encodeStandardSegments(segs, ecl)
+}
+
+func encodeBinary(data []byte, ecl Ecc) (*QrCode, error) {
+	segs, err := MakeBytes(data)
+	if err != nil {
+		return nil, err
+	}
+
+	return encodeStandardSegments([]*QrSegment{segs}, ecl)
+}
+
+func encodeStandardSegments(segs []*QrSegment, ecl Ecc) (*QrCode, error) {
+	return encodeSegments(segs, ecl, MinVersion, MaxVersion, -1, true)
 }
 
 func encodeSegments(segs []*QrSegment, ecl Ecc, minVer, maxVer, mask int, boostEcl bool) (*QrCode, error) {
