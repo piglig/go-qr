@@ -25,7 +25,7 @@ func (m Mode) numCharCountBits(ver int) int {
 }
 
 var (
-	Numric       = newMode(0x1, 10, 12, 14)
+	Numeric      = newMode(0x1, 10, 12, 14)
 	Alphanumeric = newMode(0x2, 9, 11, 13)
 	Byte         = newMode(0x4, 8, 16, 16)
 	Kanji        = newMode(0x8, 8, 10, 12)
@@ -94,7 +94,7 @@ func MakeNumeric(digits string) (*QrSegment, error) {
 		i += n
 	}
 
-	return newQrSegment(Numric, len(digits), bb)
+	return newQrSegment(Numeric, len(digits), bb)
 }
 
 func isNumeric(numb string) bool {
