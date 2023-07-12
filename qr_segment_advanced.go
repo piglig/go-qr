@@ -14,8 +14,18 @@ func MakeSegmentsOptimally(text string, ecl Ecc, minVersion, maxVersion int) ([]
 	if !(MinVersion <= minVersion && minVersion <= maxVersion && maxVersion <= MaxVersion) {
 		return nil, errors.New("invalid value")
 	}
-
 	return nil, nil
+}
+
+func makeSegmentsOptimallyWithVersion(codePoints []int, version int) ([]*QrSegment, error) {
+	if len(codePoints) == 0 {
+		return make([]*QrSegment, 0), nil
+	}
+	charModes, err := computeCharacterModes(codePoints, version)
+	if err != nil {
+		return nil, err
+	}
+	return splitIntoSegments(codePoints, charModes)
 }
 
 // Returns a new slice of Unicode code points (effectively
@@ -132,6 +142,77 @@ func computeCharacterModes(codePoints []int, version int) ([]Mode, error) {
 		}
 	}
 	return res, nil
+}
+
+func splitIntoSegments(codePoints []int, charModes []Mode) ([]*QrSegment, error) {
+	if len(codePoints) == 0 {
+		return nil, errors.New("code points cannot be empty")
+	}
+
+	res := make([]*QrSegment, 0)
+
+	curMode := charModes[0]
+	start := 0
+	for i := 1; ; i++ {
+		if i < len(codePoints) && reflect.DeepEqual(charModes[i], curMode) {
+			continue
+		}
+
+		runes := make([]rune, i-start)
+		for j, cp := range codePoints[start:i] {
+			runes[j] = rune(cp)
+		}
+
+		s := string(runes)
+
+		if curMode.isByte() {
+			qs, err := MakeBytes([]byte(s))
+			if err != nil {
+				return nil, err
+			}
+			res = append(res, qs)
+		} else if curMode.isNumeric() {
+			qs, err := MakeNumeric(s)
+			if err != nil {
+				return nil, err
+			}
+			res = append(res, qs)
+		} else if curMode.isAlphanumeric() {
+			qs, err := MakeAlphanumeric(s)
+			if err != nil {
+				return nil, err
+			}
+			res = append(res, qs)
+		} else if curMode.isKanji() {
+			qs, err := makeKanji(s)
+			if err != nil {
+				return nil, err
+			}
+			res = append(res, qs)
+		} else {
+			return nil, errors.New("invalid mode")
+		}
+		if i >= len(codePoints) {
+			return res, nil
+		}
+		curMode = charModes[i]
+		start = i
+	}
+}
+
+func makeKanji(text string) (*QrSegment, error) {
+	bb := &BitBuffer{}
+	for _, c := range text {
+		if !isKanji(int(c)) {
+			return nil, errors.New("string contains non-kanji-mode characters")
+		}
+		val := unicdeToQRKanji[int16(c)]
+		err := bb.appendBits(int(val), 13)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return newQrSegment(Kanji, len(text), bb)
 }
 
 func isKanji(c int) bool {

@@ -36,6 +36,26 @@ func (m Mode) getModeBits() int {
 	return m.modeBits
 }
 
+func (m Mode) isNumeric() bool {
+	return m.modeBits == Numeric.getModeBits()
+}
+
+func (m Mode) isAlphanumeric() bool {
+	return m.modeBits == Alphanumeric.getModeBits()
+}
+
+func (m Mode) isByte() bool {
+	return m.modeBits == Byte.getModeBits()
+}
+
+func (m Mode) isKanji() bool {
+	return m.modeBits == Kanji.getModeBits()
+}
+
+func (m Mode) isEci() bool {
+	return m.modeBits == Eci.getModeBits()
+}
+
 const (
 	NumericRegex        = "[0-9]*"
 	AlphanumericRegex   = "[A-Z0-9 $%*+./:-]*"
