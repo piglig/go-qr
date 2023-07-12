@@ -165,32 +165,31 @@ func splitIntoSegments(codePoints []int, charModes []Mode) ([]*QrSegment, error)
 
 		s := string(runes)
 
-		switch curMode {
-		case Byte:
+		if curMode.isByte() {
 			qs, err := MakeBytes([]byte(s))
 			if err != nil {
 				return nil, err
 			}
 			res = append(res, qs)
-		case Numeric:
+		} else if curMode.isNumeric() {
 			qs, err := MakeNumeric(s)
 			if err != nil {
 				return nil, err
 			}
 			res = append(res, qs)
-		case Alphanumeric:
+		} else if curMode.isAlphanumeric() {
 			qs, err := MakeAlphanumeric(s)
 			if err != nil {
 				return nil, err
 			}
 			res = append(res, qs)
-		case Kanji:
+		} else if curMode.isKanji() {
 			qs, err := makeKanji(s)
 			if err != nil {
 				return nil, err
 			}
 			res = append(res, qs)
-		default:
+		} else {
 			return nil, errors.New("invalid mode")
 		}
 		if i >= len(codePoints) {
