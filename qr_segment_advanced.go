@@ -3,6 +3,7 @@ package go_qr
 import (
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"reflect"
 	"unicode/utf16"
 )
@@ -14,7 +15,39 @@ func MakeSegmentsOptimally(text string, ecl Ecc, minVersion, maxVersion int) ([]
 	if !(MinVersion <= minVersion && minVersion <= maxVersion && maxVersion <= MaxVersion) {
 		return nil, errors.New("invalid value")
 	}
-	return nil, nil
+
+	segs := make([]*QrSegment, 0)
+	codePoints, err := toCodePoints(text)
+	if err != nil {
+		return nil, err
+	}
+
+	for version := minVersion; ; version++ {
+		if version == minVersion || version == 10 || version == 27 {
+			segs, err = makeSegmentsOptimallyWithVersion(codePoints, version)
+			if err != nil {
+				return nil, err
+			}
+
+			dataCapacityBits, err := getNumDataCodewords(version, ecl)
+			if err != nil {
+				return nil, err
+			}
+
+			dataCapacityBits *= 8
+			dataUsedBits := getTotalBits(segs, version)
+			if dataUsedBits != -1 && dataUsedBits <= dataCapacityBits {
+				return segs, nil
+			}
+			if version >= maxVersion {
+				msg := "segment too long"
+				if dataUsedBits != -1 {
+					msg = fmt.Sprintf("data length = %d bits, max capacity = %d bits", dataUsedBits, dataCapacityBits)
+				}
+				return nil, &DataTooLongException{Msg: msg}
+			}
+		}
+	}
 }
 
 func makeSegmentsOptimallyWithVersion(codePoints []int, version int) ([]*QrSegment, error) {
