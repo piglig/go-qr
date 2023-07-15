@@ -3,6 +3,7 @@ package main
 import (
 	go_qr "github.com/piglig/go-qr"
 	"image"
+	"math"
 )
 
 func main() {
@@ -25,9 +26,13 @@ func toImage(qr go_qr.QrCode, scale, border, lightColor, darkColor int) *image.R
 		panic("Invalid input")
 	}
 
-	if border > (1<<31-1)/2 || int64(11)+int64(border)*2 > (1<<31-1)/int64(scale) {
+	if border > (math.MaxInt/2) || int64(qr.GetSize())+int64(border)*2 > math.MaxInt/int64(scale) {
 		panic("Scale or border too large")
 	}
 
-	return nil
+	size := qr.GetSize() + border*2
+	imageWidth := size * scale
+	imageHeight := size * scale
+	result := image.NewRGBA(image.Rect(0, 0, imageWidth, imageHeight))
+	return result
 }
