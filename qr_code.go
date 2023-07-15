@@ -451,29 +451,29 @@ func (q *QrCode) drawFormatBits(msk int) {
 	q.setFunctionModule(8, q.size-8, true)
 }
 
-func encodeText(text string, ecl Ecc) (*QrCode, error) {
+func EncodeText(text string, ecl Ecc) (*QrCode, error) {
 	segs, err := MakeSegments(text)
 	if err != nil {
 		return nil, err
 	}
 
-	return encodeStandardSegments(segs, ecl)
+	return EncodeStandardSegments(segs, ecl)
 }
 
-func encodeBinary(data []byte, ecl Ecc) (*QrCode, error) {
+func EncodeBinary(data []byte, ecl Ecc) (*QrCode, error) {
 	segs, err := MakeBytes(data)
 	if err != nil {
 		return nil, err
 	}
 
-	return encodeStandardSegments([]*QrSegment{segs}, ecl)
+	return EncodeStandardSegments([]*QrSegment{segs}, ecl)
 }
 
-func encodeStandardSegments(segs []*QrSegment, ecl Ecc) (*QrCode, error) {
-	return encodeSegments(segs, ecl, MinVersion, MaxVersion, -1, true)
+func EncodeStandardSegments(segs []*QrSegment, ecl Ecc) (*QrCode, error) {
+	return EncodeSegments(segs, ecl, MinVersion, MaxVersion, -1, true)
 }
 
-func encodeSegments(segs []*QrSegment, ecl Ecc, minVer, maxVer, mask int, boostEcl bool) (*QrCode, error) {
+func EncodeSegments(segs []*QrSegment, ecl Ecc, minVer, maxVer, mask int, boostEcl bool) (*QrCode, error) {
 	if !(MinVersion <= minVer && minVer <= maxVer && maxVer <= MaxVersion) {
 		return nil, errors.New("invalid value")
 	}
