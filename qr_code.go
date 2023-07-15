@@ -134,8 +134,8 @@ func (q *QrCode) GetSize() int {
 	return q.size
 }
 
-func (q *QrCode) GetModule() [][]bool {
-	return q.modules
+func (q *QrCode) GetModule(x, y int) bool {
+	return 0 <= x && x < q.size && 0 <= y && y < q.size && q.modules[y][x]
 }
 
 func (q *QrCode) setFunctionModule(x, y int, isDark bool) {
