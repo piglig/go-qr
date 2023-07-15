@@ -130,7 +130,7 @@ func NewQrCode(ver int, ecl Ecc, dataCodewords []byte, msk int) (*QrCode, error)
 	return qrCode, nil
 }
 
-func (q *QrCode) getSize() int {
+func (q *QrCode) GetSize() int {
 	return q.size
 }
 

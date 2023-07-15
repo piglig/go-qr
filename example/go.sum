@@ -2,3 +2,5 @@ github.com/piglig/go-qr v0.0.0-20230714143922-d57254d9ab72 h1:S+vndxQStUrK/7eiHm
 github.com/piglig/go-qr v0.0.0-20230714143922-d57254d9ab72/go.mod h1:3hYdlBIWJix2GxUTKX3BdEngEuysvaOKZilAAD2DFRM=
 github.com/piglig/go-qr v0.0.0-20230715030318-9c831f8f094b h1:yBYmcT7473wZQGQ+swsQt75hPhP3tsLqzCVKO5JNV28=
 github.com/piglig/go-qr v0.0.0-20230715030318-9c831f8f094b/go.mod h1:3hYdlBIWJix2GxUTKX3BdEngEuysvaOKZilAAD2DFRM=
+github.com/piglig/go-qr v0.0.0-20230715032429-08fe2c51b637 h1:slaHvctcriCMGX7j0vKz1GePajH7QliIjXC7WRQeAzA=
+github.com/piglig/go-qr v0.0.0-20230715032429-08fe2c51b637/go.mod h1:3hYdlBIWJix2GxUTKX3BdEngEuysvaOKZilAAD2DFRM=
