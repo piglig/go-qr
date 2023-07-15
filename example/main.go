@@ -4,11 +4,13 @@ import (
 	go_qr "github.com/piglig/go-qr"
 	"image"
 	"image/color"
+	"image/png"
 	"math"
+	"os"
 )
 
 func main() {
-
+	doBasicDemo()
 }
 
 func doBasicDemo() {
@@ -18,12 +20,19 @@ func doBasicDemo() {
 	if err != nil {
 		return
 	}
-
-	_, _ = text, qr
+	img := toImageStandard(qr, 10, 4)
+	err = writePng(img, "hello-world-QR.png")
+	if err != nil {
+		return
+	}
 }
 
-func toImage(qr go_qr.QrCode, scale, border, lightColor, darkColor int) *image.RGBA {
-	if scale <= 0 || border < 0 {
+func toImageStandard(qr *go_qr.QrCode, scale, border int) *image.RGBA {
+	return toImage(qr, scale, border, color.White, color.Black)
+}
+
+func toImage(qr *go_qr.QrCode, scale, border int, lightColor, darkColor color.Color) *image.RGBA {
+	if scale <= 0 || border < 0 || qr == nil {
 		panic("Invalid input")
 	}
 
@@ -39,15 +48,28 @@ func toImage(qr go_qr.QrCode, scale, border, lightColor, darkColor int) *image.R
 		for x := 0; x < imageWidth; x++ {
 			moduleX := x/scale - border
 			moduleY := y/scale - border
-			_, _ = moduleY, moduleX
-			//color := qr.GetModule(moduleX, moduleY)
-			isDark := true
+			isDark := qr.GetModule(moduleX, moduleY)
 			if isDark {
-				result.Set(x, y, color.RGBA{R: uint8((darkColor >> 16) & 0xFF), G: uint8((darkColor >> 8) & 0xFF), B: uint8(darkColor & 0xFF), A: 255})
+				result.Set(x, y, color.Black)
 			} else {
-				result.Set(x, y, color.RGBA{R: uint8((lightColor >> 16) & 0xFF), G: uint8((lightColor >> 8) & 0xFF), B: uint8(lightColor & 0xFF), A: 255})
+				result.Set(x, y, color.White)
 			}
 		}
 	}
 	return result
+}
+
+func writePng(img *image.RGBA, filepath string) error {
+	file, err := os.Create(filepath)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	err = png.Encode(file, img)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
