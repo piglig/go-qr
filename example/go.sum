@@ -10,3 +10,5 @@ github.com/piglig/go-qr v0.0.0-20230715033414-59a9fbb3ff7c h1:4BsHLhhw6BOWzp4Gnl
 github.com/piglig/go-qr v0.0.0-20230715033414-59a9fbb3ff7c/go.mod h1:3hYdlBIWJix2GxUTKX3BdEngEuysvaOKZilAAD2DFRM=
 github.com/piglig/go-qr v0.0.0-20230715034957-9d02d364fbf4 h1:FV3QY4P7n9jUuhuXEWzCRlPWTtuYB5u2ZmcvXtPevnY=
 github.com/piglig/go-qr v0.0.0-20230715034957-9d02d364fbf4/go.mod h1:3hYdlBIWJix2GxUTKX3BdEngEuysvaOKZilAAD2DFRM=
+github.com/piglig/go-qr v0.0.0-20230715051305-91187b40c525 h1:o/SLMxNUQ/J9S/PFyP6+sBhuus/0LwnKhMGjlFANJ4g=
+github.com/piglig/go-qr v0.0.0-20230715051305-91187b40c525/go.mod h1:3hYdlBIWJix2GxUTKX3BdEngEuysvaOKZilAAD2DFRM=
