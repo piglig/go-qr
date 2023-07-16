@@ -9,11 +9,17 @@ import (
 type Ecc int
 
 const (
-	Low      Ecc = 1
-	Medium   Ecc = 0
-	Quartile Ecc = 3
-	High     Ecc = 2
+	Low Ecc = iota
+	Medium
+	Quartile
+	High
 )
+
+var eccFormats = [...]int{1, 0, 3, 2}
+
+func (e Ecc) FormatBits() int {
+	return eccFormats[e]
+}
 
 const (
 	MinVersion = 1
