@@ -12,7 +12,7 @@ type QrSegmentAdvanced struct {
 }
 
 func MakeSegmentsOptimally(text string, ecl Ecc, minVersion, maxVersion int) ([]*QrSegment, error) {
-	if !(MinVersion <= minVersion && minVersion <= maxVersion && maxVersion <= MaxVersion) {
+	if !isValidVersion(minVersion, maxVersion) {
 		return nil, errors.New("invalid value")
 	}
 

@@ -482,7 +482,7 @@ func EncodeStandardSegments(segs []*QrSegment, ecl Ecc) (*QrCode, error) {
 }
 
 func EncodeSegments(segs []*QrSegment, ecl Ecc, minVer, maxVer, mask int, boostEcl bool) (*QrCode, error) {
-	if !(MinVersion <= minVer && minVer <= maxVer && maxVer <= MaxVersion) {
+	if !isValidVersion(minVer, maxVer) {
 		return nil, errors.New("invalid value")
 	}
 
@@ -569,6 +569,10 @@ func EncodeSegments(segs []*QrSegment, ecl Ecc, minVer, maxVer, mask int, boostE
 		dataCodewords[i>>3] |= byte(bit << (7 - (i & 7)))
 	}
 	return NewQrCode(version, ecl, dataCodewords, mask)
+}
+
+func isValidVersion(minVer, maxVer int) bool {
+	return MinVersion <= minVer && minVer <= maxVer && maxVer <= MaxVersion
 }
 
 func getNumDataCodewords(ver int, ecl Ecc) (int, error) {
