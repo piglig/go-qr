@@ -14,7 +14,7 @@ func main() {
 }
 
 func doBasicDemo() {
-	text := "Hello world!"
+	text := "Hello, world!"
 	errCorLvl := go_qr.Low
 	qr, err := go_qr.EncodeText(text, errCorLvl)
 	if err != nil {
