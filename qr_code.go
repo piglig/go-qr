@@ -105,7 +105,7 @@ func NewQrCode(ver int, ecl Ecc, dataCodewords []byte, msk int) (*QrCode, error)
 	}
 
 	if msk == -1 {
-		minPenalty := math.MaxInt
+		minPenalty := math.MaxInt32
 		for i := 0; i < 8; i++ {
 			err = qrCode.applyMask(i)
 			if err != nil {
@@ -179,7 +179,7 @@ func (q *QrCode) addEccAndInterLeave(data []byte) ([]byte, error) {
 		return nil, err
 	}
 	for i, k := 0, 0; i < int(numBlocks); i++ {
-		dat, block := make([]byte, 0), make([]byte, shortBlockLen+1)
+		dat, block := make([]byte, shortBlockLen-int(blockEccLen)), make([]byte, shortBlockLen+1)
 		index := 1
 		if i < numShortBlocks {
 			index = 0
@@ -206,11 +206,12 @@ func (q *QrCode) addEccAndInterLeave(data []byte) ([]byte, error) {
 }
 
 func (q *QrCode) drawCodewords(data []byte) error {
-	numRawDataModules, err := getNumRawDataModules(q.version / 8)
+	numRawDataModules, err := getNumRawDataModules(q.version)
 	if err != nil {
 		return err
 	}
 
+	numRawDataModules /= 8
 	if len(data) != numRawDataModules {
 		return errors.New("illegal argument")
 	}
@@ -276,7 +277,7 @@ func (q *QrCode) getPenaltyScore() int {
 	res := 0
 	for y := 0; y < q.size; y++ {
 		runColor, runX := false, 0
-		runHistory := make([]int, 0)
+		runHistory := make([]int, 7)
 		for x := 0; x < q.size; x++ {
 			if q.modules[y][x] == runColor {
 				runX++
@@ -299,7 +300,7 @@ func (q *QrCode) getPenaltyScore() int {
 
 	for x := 0; x < q.size; x++ {
 		runColor, runY := false, 0
-		runHistory := make([]int, 0)
+		runHistory := make([]int, 7)
 		for y := 0; y < q.size; y++ {
 			if q.modules[y][x] == runColor {
 				runY++
@@ -359,7 +360,7 @@ func (q *QrCode) drawFinderPattern(x, y int) {
 		for dx := -4; dx <= 4; dx++ {
 			dist := max(abs(dx), abs(dy))
 			xx, yy := x+dx, y+dy
-			if 0 <= xx && xx < q.size && 0 <= yy && y < q.size {
+			if 0 <= xx && xx < q.size && 0 <= yy && yy < q.size {
 				q.setFunctionModule(xx, yy, dist != 2 && dist != 4)
 			}
 		}
@@ -436,13 +437,13 @@ func (q *QrCode) getAlignmentPatternPositions() []int {
 }
 
 func (q *QrCode) drawFormatBits(msk int) {
-	data := int(q.errorCorrectionLevel)<<3 | msk
+	data := q.errorCorrectionLevel.FormatBits()<<3 | msk
 	rem := data
 	for i := 0; i < 10; i++ {
 		rem = (rem << 1) ^ ((rem >> 9) * 0x537)
 	}
 
-	bits := (data<<10 | rem) ^ 0x537
+	bits := (data<<10 | rem) ^ 0x5412
 
 	for i := 0; i <= 5; i++ {
 		q.setFunctionModule(8, i, getBit(bits, i))
