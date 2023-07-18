@@ -1,6 +1,8 @@
 package go_qr
 
-import "testing"
+import (
+	"testing"
+)
 
 func TestMakeNumeric(t *testing.T) {
 	cases := []struct {
@@ -52,5 +54,137 @@ func TestIsNumeric(t *testing.T) {
 		if got != c.want {
 			t.Errorf("isNumeric(%q) == %v, want %v", c.in, got, c.want)
 		}
+	}
+}
+
+func TestNumCharCountBits(t *testing.T) {
+	tests := []struct {
+		name string
+		mode Mode
+		ver  int
+		want int
+	}{
+		{
+			"Numeric mode, version 0",
+			Numeric,
+			0,
+			10,
+		},
+		{
+			"Alphanumeric mode, version 20",
+			Alphanumeric,
+			20,
+			11,
+		},
+		{
+			"Byte mode, version 25",
+			Byte,
+			25,
+			16,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.mode.numCharCountBits(tt.ver); got != tt.want {
+				t.Errorf("Mode.numCharCountBits() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestGetModeBits(t *testing.T) {
+	tests := []struct {
+		name string
+		mode Mode
+		want int
+	}{
+		{
+			"Numeric mode bits",
+			Numeric,
+			0x1,
+		},
+		{
+			"Alphanumeric mode bits",
+			Alphanumeric,
+			0x2,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.mode.getModeBits(); got != tt.want {
+				t.Errorf("Mode.getModeBits() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestIsModes(t *testing.T) {
+	tests := []struct {
+		name      string
+		mode      Mode
+		isNumeric bool
+		isAlpha   bool
+		isByte    bool
+		isKanji   bool
+		isEci     bool
+	}{
+		{
+			"Numeric mode",
+			Numeric,
+			true,
+			false,
+			false,
+			false,
+			false,
+		},
+		{
+			"Alphanumeric mode",
+			Alphanumeric,
+			false,
+			true,
+			false,
+			false,
+			false,
+		},
+		{
+			"Byte mode",
+			Byte,
+			false,
+			false,
+			true,
+			false,
+			false,
+		},
+		{
+			"Eci mode",
+			Eci,
+			false,
+			false,
+			false,
+			false,
+			true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.mode.isNumeric(); got != tt.isNumeric {
+				t.Errorf("Mode.isNumeric() = %v, want %v", got, tt.isNumeric)
+			}
+			if got := tt.mode.isAlphanumeric(); got != tt.isAlpha {
+				t.Errorf("Mode.isAlphanumeric() = %v, want %v", got, tt.isAlpha)
+			}
+			if got := tt.mode.isByte(); got != tt.isByte {
+				t.Errorf("Mode.isByte() = %v, want %v", got, tt.isByte)
+			}
+			if got := tt.mode.isKanji(); got != tt.isKanji {
+				t.Errorf("Mode.isKanji() = %v, want %v", got, tt.isKanji)
+			}
+			if got := tt.mode.isEci(); got != tt.isEci {
+				t.Errorf("Mode.isEci() = %v, want %v", got, tt.isEci)
+			}
+		})
 	}
 }
