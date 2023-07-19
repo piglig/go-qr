@@ -47,3 +47,62 @@ func TestFinderPenaltyCountPatterns(t *testing.T) {
 		})
 	}
 }
+
+func TestGetNumRawDataModules(t *testing.T) {
+	testCases := []struct {
+		name    string
+		version int
+		want    int
+		wantErr bool
+	}{
+		{
+			name:    "version less than MinVersion",
+			version: 0,
+			want:    0,
+			wantErr: true,
+		},
+		{
+			name:    "version more than MaxVersion",
+			version: 41,
+			want:    0,
+			wantErr: true,
+		},
+		{
+			name:    "version equals to MinVersion",
+			version: 1,
+			want:    208,
+			wantErr: false,
+		},
+		{
+			name:    "version equals to MaxVersion",
+			version: 40,
+			want:    29648,
+			wantErr: false,
+		},
+		{
+			name:    "version between 2 and 6",
+			version: 4,
+			want:    807,
+			wantErr: false,
+		},
+		{
+			name:    "version equal or higher than 7",
+			version: 9,
+			want:    2336,
+			wantErr: false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := getNumRawDataModules(tc.version)
+			if (err != nil) != tc.wantErr {
+				t.Fatalf("getNumRawDataModules() error = %v, wantErr %v", err, tc.wantErr)
+				return
+			}
+			if got != tc.want {
+				t.Errorf("getNumRawDataModules() = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
