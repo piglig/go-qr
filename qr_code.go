@@ -179,14 +179,14 @@ func (q *QrCode) addEccAndInterLeave(data []byte) ([]byte, error) {
 		return nil, err
 	}
 	for i, k := 0, 0; i < int(numBlocks); i++ {
-		dat, block := make([]byte, shortBlockLen-int(blockEccLen)), make([]byte, shortBlockLen+1)
 		index := 1
 		if i < numShortBlocks {
 			index = 0
 		}
-
+		dat := make([]byte, shortBlockLen-int(blockEccLen)+index)
 		copy(dat, data[k:k+shortBlockLen-int(blockEccLen)+index])
 		k += len(dat)
+		block := make([]byte, shortBlockLen+1)
 		copy(block, dat)
 		ecc := reedSolomonComputeRemainder(dat, rsDiv)
 		copy(block[len(block)-int(blockEccLen):], ecc)

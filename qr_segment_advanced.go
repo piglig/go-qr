@@ -16,7 +16,6 @@ func MakeSegmentsOptimally(text string, ecl Ecc, minVersion, maxVersion int) ([]
 		return nil, errors.New("invalid value")
 	}
 
-	segs := make([]*QrSegment, 0)
 	codePoints, err := toCodePoints(text)
 	if err != nil {
 		return nil, err
@@ -24,7 +23,7 @@ func MakeSegmentsOptimally(text string, ecl Ecc, minVersion, maxVersion int) ([]
 
 	for version := minVersion; ; version++ {
 		if version == minVersion || version == 10 || version == 27 {
-			segs, err = makeSegmentsOptimallyWithVersion(codePoints, version)
+			segs, err := makeSegmentsOptimallyWithVersion(codePoints, version)
 			if err != nil {
 				return nil, err
 			}
@@ -93,10 +92,6 @@ func countUtf8Bytes(cp int) (int, error) {
 }
 
 func computeCharacterModes(codePoints []int, version int) ([]Mode, error) {
-	if len(codePoints) == 0 {
-		return nil, errors.New("invalid code point")
-	}
-
 	if len(codePoints) > 7089 {
 		return nil, errors.New("string too long")
 	}
@@ -128,7 +123,7 @@ func computeCharacterModes(codePoints []int, version int) ([]Mode, error) {
 			charModes[i][0] = modeTypes[0]
 		}
 
-		if isisAlphanumeric(string(rune(c))) {
+		if isAlphanumeric(string(rune(c))) {
 			curCosts[1] = prevCosts[1] + 33
 			charModes[i][1] = modeTypes[1]
 		}
