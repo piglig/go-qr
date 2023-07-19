@@ -133,3 +133,38 @@ func TestGetNumErrorCorrectionBlocks(t *testing.T) {
 		t.Errorf("getNumErrorCorrectionBlocks() did not return expected value")
 	}
 }
+
+func TestFinderPenaltyAddHistory(t *testing.T) {
+	tests := []struct {
+		q              *QrCode
+		currentRunLen  int
+		runHistory     []int
+		expectedOutput []int
+	}{
+		{
+			q:              &QrCode{size: 5},
+			currentRunLen:  10,
+			runHistory:     []int{0, 2, 3, 4},
+			expectedOutput: []int{15, 0, 2, 3},
+		},
+		{
+			q:              &QrCode{size: 8},
+			currentRunLen:  12,
+			runHistory:     []int{1, 2, 3, 4},
+			expectedOutput: []int{12, 1, 2, 3},
+		},
+		{
+			q:              &QrCode{size: 6},
+			currentRunLen:  7,
+			runHistory:     []int{0, 0, 0, 0},
+			expectedOutput: []int{13, 0, 0, 0},
+		},
+	}
+
+	for _, test := range tests {
+		test.q.finderPenaltyAddHistory(test.currentRunLen, test.runHistory)
+		if !reflect.DeepEqual(test.runHistory, test.expectedOutput) {
+			t.Errorf("Expected %v, but got %v", test.expectedOutput, test.runHistory)
+		}
+	}
+}

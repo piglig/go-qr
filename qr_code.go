@@ -74,10 +74,6 @@ func NewQrCode(ver int, ecl Ecc, dataCodewords []byte, msk int) (*QrCode, error)
 		return nil, errors.New("mask value out of range")
 	}
 
-	if dataCodewords == nil {
-		return nil, errors.New("dataCodewords is nil")
-	}
-
 	qrCode := &QrCode{
 		version:              ver,
 		size:                 ver*4 + 17,
