@@ -143,7 +143,7 @@ func abs(x int) int {
 }
 
 func MakeAlphanumeric(text string) (*QrSegment, error) {
-	if !isisAlphanumeric(text) {
+	if !isAlphanumeric(text) {
 		return nil, errors.New("string contains unencodable characters in alphanumeric mode")
 	}
 
@@ -168,7 +168,7 @@ func MakeAlphanumeric(text string) (*QrSegment, error) {
 	return newQrSegment(Alphanumeric, len(text), bb)
 }
 
-func isisAlphanumeric(text string) bool {
+func isAlphanumeric(text string) bool {
 	return regexp.MustCompile(AlphanumericRegex).MatchString(text)
 }
 
@@ -182,7 +182,7 @@ func MakeSegments(text string) ([]*QrSegment, error) {
 		}
 
 		res = append(res, seg)
-	} else if isisAlphanumeric(text) {
+	} else if isAlphanumeric(text) {
 		seg, err := MakeAlphanumeric(text)
 		if err != nil {
 			return nil, err

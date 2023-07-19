@@ -27,7 +27,7 @@ func TestIsAlphanumeric(t *testing.T) {
 		{"://www.apple.com", false}, // contains double slashes and lower case letters
 	}
 	for _, c := range cases {
-		got := isisAlphanumeric(c.in)
+		got := isAlphanumeric(c.in)
 		if got != c.want {
 			t.Errorf("isisAlphanumeric(%q) == %v, want %v", c.in, got, c.want)
 		}

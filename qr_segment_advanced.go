@@ -123,7 +123,7 @@ func computeCharacterModes(codePoints []int, version int) ([]Mode, error) {
 			charModes[i][0] = modeTypes[0]
 		}
 
-		if isisAlphanumeric(string(rune(c))) {
+		if isAlphanumeric(string(rune(c))) {
 			curCosts[1] = prevCosts[1] + 33
 			charModes[i][1] = modeTypes[1]
 		}
