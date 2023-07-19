@@ -14,6 +14,7 @@ import (
 
 func main() {
 	doBasicDemo()
+	doVarietyDemo()
 }
 
 func doBasicDemo() {
@@ -40,6 +41,28 @@ func doBasicDemo() {
 	}
 	defer svgFile.Close()
 	_, err = svgFile.WriteString(svg)
+	if err != nil {
+		return
+	}
+}
+
+func doVarietyDemo() {
+	// Numeric mode encoding (3.33 bits per digit)
+	qr, err := go_qr.EncodeText("314159265358979323846264338327950288419716939937510", go_qr.Medium)
+	if err != nil {
+		return
+	}
+	err = writePng(toImageStandard(qr, 13, 1), "pi-digits-QR.png")
+	if err != nil {
+		return
+	}
+
+	// Alphanumeric mode encoding (5.5 bits per character)
+	qr, err = go_qr.EncodeText("DOLLAR-AMOUNT:$39.87 PERCENTAGE:100.00% OPERATIONS:+-*/", go_qr.High)
+	if err != nil {
+		return
+	}
+	err = writePng(toImageStandard(qr, 10, 2), "alphanumeric-QR.png")
 	if err != nil {
 		return
 	}

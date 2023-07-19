@@ -39,15 +39,16 @@ func TestIsNumeric(t *testing.T) {
 		in   string
 		want bool
 	}{
-		{"12345", true},        // contains only numbers
-		{"ABCDE", false},       // contains no numbers
-		{"abc123", true},       // contains numbers and lowercase letters
-		{"ABC123", true},       // contains numbers and uppercase letters
-		{"Special!@#1", true},  // contains special characters and a number
-		{"Special!@#", false},  // contains special characters, but no number
-		{" ", false},           // contains only a whitespace character
-		{"Mixed123CASE", true}, // mixture of digits, uppercase and lower case letters
-		{"1.23", true},         // contains numbers and a dot
+		{"12345", true},         // contains only numbers
+		{"ABCDE", false},        // contains no numbers
+		{"abc123", false},       // contains numbers and lowercase letters
+		{"ABC123", false},       // contains numbers and uppercase letters
+		{"Special!@#1", false},  // contains special characters and a number
+		{"Special!@#", false},   // contains special characters, but no number
+		{" ", false},            // contains only a whitespace character
+		{"Mixed123CASE", false}, // mixture of digits, uppercase and lower case letters
+		{"1.23", false},         // contains numbers and a dot
+		{"0", true},             // contains a number
 	}
 	for _, c := range cases {
 		got := isNumeric(c.in)

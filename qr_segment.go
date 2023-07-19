@@ -57,7 +57,7 @@ func (m Mode) isEci() bool {
 }
 
 const (
-	NumericRegex        = `\d`
+	NumericRegex        = `^\d+$`
 	AlphanumericRegex   = `^[0-9A-Z $%*+\-.\/:]*$`
 	AlphanumericCharset = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ $%*+-./:"
 )
