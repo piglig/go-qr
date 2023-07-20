@@ -66,6 +66,16 @@ func doVarietyDemo() {
 	if err != nil {
 		return
 	}
+
+	// Unicode text as UTF-8
+	qr, err = go_qr.EncodeText("こんにちwa、世界！ αβγδ", go_qr.Quartile)
+	if err != nil {
+		return
+	}
+	err = writePng(toImageStandard(qr, 10, 3), "unicode-QR.png")
+	if err != nil {
+		return
+	}
 }
 
 func toImageStandard(qr *go_qr.QrCode, scale, border int) *image.RGBA {
