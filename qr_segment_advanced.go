@@ -244,7 +244,7 @@ func makeKanji(text string) (*QrSegment, error) {
 }
 
 func isKanji(c int) bool {
-	return c < len(unicdeToQRKanji) && unicdeToQRKanji[c] != -1
+	return c < len(unicdeToQRKanji) && unicdeToQRKanji[c] != -1 && c >= 0
 }
 
 const PackedQRKanjiToUnicode = "MAAwATAC/wz/DjD7/xr/G/8f/wEwmzCcALT/QACo/z7/4/8/MP0w/jCdMJ4wA07dMAUwBjAHMPwgFSAQ/w8AXDAcIBb/XCAmICUgGCAZIBwgHf8I/wkwFDAV/zv/Pf9b/10wCDAJMAowCzAMMA0wDjAPMBAwEf8LIhIAsQDX//8A9/8dImD/HP8eImYiZyIeIjQmQiZA" +
