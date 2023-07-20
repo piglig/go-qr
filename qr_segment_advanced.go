@@ -212,7 +212,7 @@ func splitIntoSegments(codePoints []int, charModes []Mode) ([]*QrSegment, error)
 			}
 			res = append(res, qs)
 		} else if curMode.isKanji() {
-			qs, err := makeKanji(s)
+			qs, err := MakeKanji(s)
 			if err != nil {
 				return nil, err
 			}
@@ -228,19 +228,20 @@ func splitIntoSegments(codePoints []int, charModes []Mode) ([]*QrSegment, error)
 	}
 }
 
-func makeKanji(text string) (*QrSegment, error) {
+func MakeKanji(text string) (*QrSegment, error) {
 	bb := &BitBuffer{}
+	runes := []rune(text)
 	for _, c := range text {
 		if !isKanji(int(c)) {
 			return nil, errors.New("string contains non-kanji-mode characters")
 		}
-		val := unicdeToQRKanji[int16(c)]
-		err := bb.appendBits(int(val), 13)
+		val := unicdeToQRKanji[c]
+		err := bb.appendBits(val, 13)
 		if err != nil {
 			return nil, err
 		}
 	}
-	return newQrSegment(Kanji, len(text), bb)
+	return newQrSegment(Kanji, len(runes), bb)
 }
 
 func isKanji(c int) bool {
@@ -358,7 +359,7 @@ const PackedQRKanjiToUnicode = "MAAwATAC/wz/DjD7/xr/G/8f/wEwmzCcALT/QACo/z7/4/8/
 	"////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////" +
 	"/////////////////////////////////////////////w=="
 
-var unicdeToQRKanji [1 << 16]int16
+var unicdeToQRKanji [1 << 16]int
 
 func init() {
 	for i := range unicdeToQRKanji {
@@ -372,6 +373,6 @@ func init() {
 			continue
 		}
 
-		unicdeToQRKanji[c] = int16(i / 2)
+		unicdeToQRKanji[c] = i / 2
 	}
 }

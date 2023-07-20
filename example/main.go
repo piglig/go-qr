@@ -15,6 +15,7 @@ import (
 func main() {
 	doBasicDemo()
 	doVarietyDemo()
+	doSegmentDemo()
 }
 
 func doBasicDemo() {
@@ -78,6 +79,123 @@ func doVarietyDemo() {
 	}
 }
 
+func doSegmentDemo() {
+	// Illustration "silver"
+	silver0 := "THE SQUARE ROOT OF 2 IS 1."
+	silver1 := "41421356237309504880168872420969807856967187537694807317667973799"
+	qr, err := go_qr.EncodeText(silver0+silver1, go_qr.Low)
+	if err != nil {
+		return
+	}
+	err = writePng(toImageStandard(qr, 10, 3), "sqrt2-monolithic-QR.png")
+	if err != nil {
+		return
+	}
+
+	seg1, err := go_qr.MakeAlphanumeric(silver0)
+	if err != nil {
+		return
+	}
+
+	seg2, err := go_qr.MakeNumeric(silver1)
+	if err != nil {
+		return
+	}
+
+	segs := []*go_qr.QrSegment{seg1, seg2}
+	qr, err = go_qr.EncodeStandardSegments(segs, go_qr.Low)
+	if err != nil {
+		return
+	}
+	err = writePng(toImageStandard(qr, 10, 3), "sqrt2-segmented-QR.png")
+	if err != nil {
+		return
+	}
+
+	golden0 := "Golden ratio φ = 1."
+	golden1 := "6180339887498948482045868343656381177203091798057628621354486227052604628189024497072072041893911374"
+	golden2 := "......"
+	qr, err = go_qr.EncodeText(golden0+golden1+golden2, go_qr.Low)
+	if err != nil {
+		return
+	}
+	err = writePng(toImageStandard(qr, 8, 5), "phi-monolithic-QR.png")
+	if err != nil {
+		return
+	}
+
+	goldenSeg1, err := go_qr.MakeBytes([]byte(golden0))
+	if err != nil {
+		return
+	}
+
+	goldenSeg2, err := go_qr.MakeNumeric(golden1)
+	if err != nil {
+		return
+	}
+
+	goldenSeg3, err := go_qr.MakeAlphanumeric(golden2)
+	if err != nil {
+		return
+	}
+
+	segs = []*go_qr.QrSegment{goldenSeg1, goldenSeg2, goldenSeg3}
+	qr, err = go_qr.EncodeStandardSegments(segs, go_qr.Low)
+	if err != nil {
+		return
+	}
+	err = writePng(toImageStandard(qr, 8, 5), "phi-segmented-QR.png")
+	if err != nil {
+		return
+	}
+
+	// Illustration "Madoka": kanji, kana, Cyrillic, full-width Latin, Greek characters
+	madoka := "「魔法少女まどか☆マギカ」って、　ИАИ　ｄｅｓｕ　κα？"
+	qr, err = go_qr.EncodeText(madoka, go_qr.Low)
+	if err != nil {
+		return
+	}
+	err = writePng(toImage(qr, 9, 4, color.RGBA{
+		R: 0xFF,
+		G: 0xFF,
+		B: 0xE0,
+		A: 0xFF,
+	}, color.RGBA{
+		R: 0x30,
+		G: 0x30,
+		B: 0x80,
+		A: 0xFF,
+	}), "madoka-utf8-QR.png")
+	if err != nil {
+		return
+	}
+
+	madokaSeg, err := go_qr.MakeKanji(madoka)
+	if err != nil {
+		return
+	}
+
+	segs = []*go_qr.QrSegment{madokaSeg}
+	qr, err = go_qr.EncodeStandardSegments(segs, go_qr.Low)
+	if err != nil {
+		return
+	}
+	err = writePng(toImage(qr, 9, 4, color.RGBA{
+		R: 0xE0,
+		G: 0xF0,
+		B: 0xEF,
+		A: 0xFF,
+	}, color.RGBA{
+		R: 0x40,
+		G: 0x40,
+		B: 0x40,
+		A: 0xFF,
+	}), "madoka-kanji-QR.png")
+	if err != nil {
+		return
+	}
+}
+
 func toImageStandard(qr *go_qr.QrCode, scale, border int) *image.RGBA {
 	return toImage(qr, scale, border, color.White, color.Black)
 }
@@ -101,9 +219,9 @@ func toImage(qr *go_qr.QrCode, scale, border int, lightColor, darkColor color.Co
 			moduleY := y/scale - border
 			isDark := qr.GetModule(moduleX, moduleY)
 			if isDark {
-				result.Set(x, y, color.Black)
+				result.Set(x, y, darkColor)
 			} else {
-				result.Set(x, y, color.White)
+				result.Set(x, y, lightColor)
 			}
 		}
 	}
