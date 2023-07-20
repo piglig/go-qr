@@ -150,10 +150,7 @@ func (q *QrCode) addEccAndInterLeave(data []byte) ([]byte, error) {
 		return nil, errors.New("data is nil")
 	}
 
-	numDataCodewords, err := getNumDataCodewords(q.version, q.errorCorrectionLevel)
-	if err != nil {
-		return nil, err
-	}
+	numDataCodewords := getNumDataCodewords(q.version, q.errorCorrectionLevel)
 
 	if len(data) != numDataCodewords {
 		return nil, errors.New("invalid argument")
@@ -161,11 +158,7 @@ func (q *QrCode) addEccAndInterLeave(data []byte) ([]byte, error) {
 
 	numBlocks := getNumErrorCorrectionBlocks()[q.errorCorrectionLevel][q.version]
 	blockEccLen := getEccCodeWordsPerBlock()[q.errorCorrectionLevel][q.version]
-	rawCodewords, err := getNumRawDataModules(q.version)
-	if err != nil {
-		return nil, err
-	}
-	rawCodewords = rawCodewords / 8
+	rawCodewords := getNumRawDataModules(q.version) / 8
 	numShortBlocks := int(numBlocks) - rawCodewords%int(numBlocks)
 	shortBlockLen := rawCodewords / int(numBlocks)
 
@@ -202,12 +195,7 @@ func (q *QrCode) addEccAndInterLeave(data []byte) ([]byte, error) {
 }
 
 func (q *QrCode) drawCodewords(data []byte) error {
-	numRawDataModules, err := getNumRawDataModules(q.version)
-	if err != nil {
-		return err
-	}
-
-	numRawDataModules /= 8
+	numRawDataModules := getNumRawDataModules(q.version) / 8
 	if len(data) != numRawDataModules {
 		return errors.New("illegal argument")
 	}
@@ -491,11 +479,7 @@ func EncodeSegments(segs []*QrSegment, ecl Ecc, minVer, maxVer, mask int, boostE
 
 	version, dataUsedBits := 0, 0
 	for version = minVer; ; version++ {
-		dataCapacityBits, err := getNumDataCodewords(version, ecl)
-		if err != nil {
-			return nil, err
-		}
-		dataCapacityBits *= 8
+		dataCapacityBits := getNumDataCodewords(version, ecl) * 8
 		dataUsedBits = getTotalBits(segs, version)
 		if dataUsedBits != -1 && dataUsedBits <= dataCapacityBits {
 			break
@@ -511,10 +495,7 @@ func EncodeSegments(segs []*QrSegment, ecl Ecc, minVer, maxVer, mask int, boostE
 	}
 
 	for _, newEcl := range []Ecc{Medium, Quartile, High} {
-		numDataCodewords, err := getNumDataCodewords(version, newEcl)
-		if err != nil {
-			return nil, err
-		}
+		numDataCodewords := getNumDataCodewords(version, newEcl)
 		if boostEcl && dataUsedBits <= numDataCodewords*8 {
 			ecl = newEcl
 		}
@@ -540,13 +521,8 @@ func EncodeSegments(segs []*QrSegment, ecl Ecc, minVer, maxVer, mask int, boostE
 		}
 	}
 
-	dataCapacityBits, err := getNumDataCodewords(version, ecl)
-	if err != nil {
-		return nil, err
-	}
-
-	dataCapacityBits *= 8
-	err = bb.appendBits(0, min(4, dataCapacityBits-bb.len()))
+	dataCapacityBits := getNumDataCodewords(version, ecl) * 8
+	err := bb.appendBits(0, min(4, dataCapacityBits-bb.len()))
 	if err != nil {
 		return nil, err
 	}
@@ -578,16 +554,12 @@ func isValidVersion(minVer, maxVer int) bool {
 	return MinVersion <= minVer && minVer <= maxVer && maxVer <= MaxVersion
 }
 
-func getNumDataCodewords(ver int, ecl Ecc) (int, error) {
+func getNumDataCodewords(ver int, ecl Ecc) int {
 	eccCodewordsPerBlock := getEccCodeWordsPerBlock()
-	numRawDataModules, err := getNumRawDataModules(ver)
-	if err != nil {
-		return 0, err
-	}
-
+	numRawDataModules := getNumRawDataModules(ver)
 	numErrorCorrectionBlocks := getNumErrorCorrectionBlocks()
 	return numRawDataModules/8 -
-		int(eccCodewordsPerBlock[ecl][ver])*int(numErrorCorrectionBlocks[ecl][ver]), nil
+		int(eccCodewordsPerBlock[ecl][ver])*int(numErrorCorrectionBlocks[ecl][ver])
 }
 
 func (q *QrCode) finderPenaltyCountPatterns(runHistory []int) int {
@@ -615,11 +587,7 @@ func (q *QrCode) finderPenaltyTerminateAndCount(currentRunColor bool, currentRun
 	return q.finderPenaltyCountPatterns(runHistory)
 }
 
-func getNumRawDataModules(ver int) (int, error) {
-	if ver < MinVersion || ver > MaxVersion {
-		return 0, errors.New("version number out of range")
-	}
-
+func getNumRawDataModules(ver int) int {
 	size := ver*4 + 17
 	res := size * size
 	res -= 8 * 8 * 3
@@ -635,7 +603,7 @@ func getNumRawDataModules(ver int) (int, error) {
 			res -= 6 * 3 * 2
 		}
 	}
-	return res, nil
+	return res
 }
 
 func reedSolomonComputeDivisor(degree int) ([]byte, error) {

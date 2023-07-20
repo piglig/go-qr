@@ -28,12 +28,7 @@ func MakeSegmentsOptimally(text string, ecl Ecc, minVersion, maxVersion int) ([]
 				return nil, err
 			}
 
-			dataCapacityBits, err := getNumDataCodewords(version, ecl)
-			if err != nil {
-				return nil, err
-			}
-
-			dataCapacityBits *= 8
+			dataCapacityBits := getNumDataCodewords(version, ecl) * 8
 			dataUsedBits := getTotalBits(segs, version)
 			if dataUsedBits != -1 && dataUsedBits <= dataCapacityBits {
 				return segs, nil

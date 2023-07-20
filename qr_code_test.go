@@ -59,18 +59,6 @@ func TestGetNumRawDataModules(t *testing.T) {
 		wantErr bool
 	}{
 		{
-			name:    "version less than MinVersion",
-			version: 0,
-			want:    0,
-			wantErr: true,
-		},
-		{
-			name:    "version more than MaxVersion",
-			version: 41,
-			want:    0,
-			wantErr: true,
-		},
-		{
 			name:    "version equals to MinVersion",
 			version: 1,
 			want:    208,
@@ -98,11 +86,7 @@ func TestGetNumRawDataModules(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			got, err := getNumRawDataModules(tc.version)
-			if (err != nil) != tc.wantErr {
-				t.Fatalf("getNumRawDataModules() error = %v, wantErr %v", err, tc.wantErr)
-				return
-			}
+			got := getNumRawDataModules(tc.version)
 			if got != tc.want {
 				t.Errorf("getNumRawDataModules() = %v, want %v", got, tc.want)
 			}
