@@ -41,7 +41,7 @@ func (b *BitBuffer) appendBits(val, length int) error {
 	if length < 0 || length > 31 || (val>>uint(length)) != 0 {
 		return fmt.Errorf("value out of range")
 	}
-	if math.MaxInt-b.len() < length {
+	if math.MaxInt32-b.len() < length {
 		return fmt.Errorf("maximum length reached")
 	}
 	for i := length - 1; i >= 0; i-- {
@@ -55,7 +55,7 @@ func (b *BitBuffer) appendData(other *BitBuffer) error {
 		return fmt.Errorf("BitBuffer is nil")
 	}
 
-	if math.MaxInt-b.len() < other.len() {
+	if math.MaxInt32-b.len() < other.len() {
 		return fmt.Errorf("maximum length reached")
 	}
 

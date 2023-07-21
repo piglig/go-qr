@@ -245,7 +245,7 @@ func getTotalBits(segs []*QrSegment, ver int) int {
 			return -1
 		}
 		res += int64(4 + ccbits + seg.data.len())
-		if res > math.MaxInt {
+		if res > math.MaxInt32 {
 			return -1
 		}
 	}

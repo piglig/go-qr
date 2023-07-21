@@ -8,9 +8,6 @@ import (
 	"unicode/utf16"
 )
 
-type QrSegmentAdvanced struct {
-}
-
 func MakeSegmentsOptimally(text string, ecl Ecc, minVersion, maxVersion int) ([]*QrSegment, error) {
 	if !isValidVersion(minVersion, maxVersion) {
 		return nil, errors.New("invalid value")
@@ -168,12 +165,7 @@ func computeCharacterModes(codePoints []int, version int) ([]Mode, error) {
 }
 
 func splitIntoSegments(codePoints []int, charModes []Mode) ([]*QrSegment, error) {
-	if len(codePoints) == 0 {
-		return nil, errors.New("code points cannot be empty")
-	}
-
 	res := make([]*QrSegment, 0)
-
 	curMode := charModes[0]
 	start := 0
 	for i := 1; ; i++ {
