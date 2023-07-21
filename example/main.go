@@ -222,6 +222,68 @@ func doMaskDemo() {
 	if err != nil {
 		return
 	}
+
+	qr, err = go_qr.EncodeSegments(segs, go_qr.High, go_qr.MinVersion, go_qr.MaxVersion, 3, true)
+	if err != nil {
+		return
+	}
+
+	err = writePng(toImage(qr, 8, 6, color.RGBA{
+		R: 0xFF,
+		G: 0xE0,
+		B: 0xE0,
+		A: 0xFF,
+	}, color.RGBA{
+		R: 0x60,
+		G: 0x20,
+		B: 0x20,
+		A: 0xFF,
+	}), "project-nayuki-mask3-QR.png")
+	if err != nil {
+		return
+	}
+
+	// Chinese text as UTF-8
+	segs, err = go_qr.MakeSegments("維基百科（Wikipedia，聆聽i/ˌwɪkᵻˈpiːdi.ə/）是一個自由內容、公開編輯且多語言的網路百科全書協作計畫")
+	if err != nil {
+		return
+	}
+
+	qr, err = go_qr.EncodeSegments(segs, go_qr.Medium, go_qr.MinVersion, go_qr.MaxVersion, 0, true) // Force mask 0
+	if err != nil {
+		return
+	}
+	err = writePng(toImageStandard(qr, 10, 3), "unicode-mask0-QR.png")
+	if err != nil {
+		return
+	}
+
+	qr, err = go_qr.EncodeSegments(segs, go_qr.Medium, go_qr.MinVersion, go_qr.MaxVersion, 1, true) // Force mask 1
+	if err != nil {
+		return
+	}
+	err = writePng(toImageStandard(qr, 10, 3), "unicode-mask1-QR.png")
+	if err != nil {
+		return
+	}
+
+	qr, err = go_qr.EncodeSegments(segs, go_qr.Medium, go_qr.MinVersion, go_qr.MaxVersion, 5, true) // Force mask 5
+	if err != nil {
+		return
+	}
+	err = writePng(toImageStandard(qr, 10, 3), "unicode-mask5-QR.png")
+	if err != nil {
+		return
+	}
+
+	qr, err = go_qr.EncodeSegments(segs, go_qr.Medium, go_qr.MinVersion, go_qr.MaxVersion, 7, true) // Force mask 7
+	if err != nil {
+		return
+	}
+	err = writePng(toImageStandard(qr, 10, 3), "unicode-mask7-QR.png")
+	if err != nil {
+		return
+	}
 }
 
 func toImageStandard(qr *go_qr.QrCode, scale, border int) *image.RGBA {
