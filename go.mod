@@ -1,3 +1,3 @@
 module github.com/piglig/go-qr
 
-go 1.20
+go 1.18

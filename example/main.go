@@ -205,7 +205,7 @@ func toImage(qr *go_qr.QrCode, scale, border int, lightColor, darkColor color.Co
 		panic("Invalid input")
 	}
 
-	if border > (math.MaxInt/2) || int64(qr.GetSize())+int64(border)*2 > math.MaxInt/int64(scale) {
+	if border > (math.MaxInt32/2) || int64(qr.GetSize())+int64(border)*2 > math.MaxInt32/int64(scale) {
 		panic("Scale or border too large")
 	}
 
