@@ -16,6 +16,7 @@ func main() {
 	doBasicDemo()
 	doVarietyDemo()
 	doSegmentDemo()
+	doMaskDemo()
 }
 
 func doBasicDemo() {
@@ -191,6 +192,33 @@ func doSegmentDemo() {
 		B: 0x40,
 		A: 0xFF,
 	}), "madoka-kanji-QR.png")
+	if err != nil {
+		return
+	}
+}
+
+func doMaskDemo() {
+	segs, err := go_qr.MakeSegments("https://www.github.com/piglig")
+	if err != nil {
+		return
+	}
+
+	qr, err := go_qr.EncodeSegments(segs, go_qr.High, go_qr.MinVersion, go_qr.MaxVersion, -1, true)
+	if err != nil {
+		return
+	}
+
+	err = writePng(toImage(qr, 8, 6, color.RGBA{
+		R: 0xE0,
+		G: 0xFF,
+		B: 0xE0,
+		A: 0xFF,
+	}, color.RGBA{
+		R: 0x20,
+		G: 0x60,
+		B: 0x20,
+		A: 0xFF,
+	}), "project-nayuki-automask-QR.png")
 	if err != nil {
 		return
 	}
