@@ -56,31 +56,26 @@ func TestGetNumRawDataModules(t *testing.T) {
 		name    string
 		version int
 		want    int
-		wantErr bool
 	}{
 		{
 			name:    "version equals to MinVersion",
 			version: 1,
 			want:    208,
-			wantErr: false,
 		},
 		{
 			name:    "version equals to MaxVersion",
 			version: 40,
 			want:    29648,
-			wantErr: false,
 		},
 		{
 			name:    "version between 2 and 6",
 			version: 4,
 			want:    807,
-			wantErr: false,
 		},
 		{
 			name:    "version equal or higher than 7",
 			version: 9,
 			want:    2336,
-			wantErr: false,
 		},
 	}
 

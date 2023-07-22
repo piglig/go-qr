@@ -11,6 +11,119 @@ func TestMakeNumeric(t *testing.T) {
 	_ = cases
 }
 
+func TestMakeBytes(t *testing.T) {
+	tests := []struct {
+		name    string
+		data    []byte
+		wantErr bool
+	}{
+		{
+			name:    "test with non-nil data",
+			data:    []byte{0x01, 0xFF},
+			wantErr: false,
+		},
+		{
+			name:    "test with nil data",
+			data:    nil,
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := MakeBytes(tt.data)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("MakeBytes() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+		})
+	}
+}
+
+func TestNewQrSegment(t *testing.T) {
+	tests := []struct {
+		name    string
+		mode    Mode
+		numCh   int
+		data    *BitBuffer
+		wantErr bool
+	}{
+		{
+			name:    "test with positive numCh",
+			mode:    Numeric,
+			numCh:   10,
+			data:    &BitBuffer{},
+			wantErr: false,
+		},
+		{
+			name:    "test with negative numCh",
+			mode:    Numeric,
+			numCh:   -1,
+			data:    &BitBuffer{},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := newQrSegment(tt.mode, tt.numCh, tt.data)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("newQrSegment() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+		})
+	}
+}
+
+//func TestEncodeSegments(t *testing.T) {
+//	cases := []struct {
+//		name           string
+//		segments       []*QrSegment
+//		ecl            Ecc
+//		minVer, maxVer int
+//		mask           int
+//		boostEcl       bool
+//		wantErr        bool
+//		wantQrCode     *QrCode
+//	}{
+//		{
+//			name:       "test with nil segments",
+//			segments:   nil,
+//			ecl:        Low,
+//			minVer:     MinVersion,
+//			maxVer:     MaxVersion,
+//			mask:       -1,
+//			boostEcl:   true,
+//			wantErr:    true,
+//			wantQrCode: nil,
+//		},
+//		{
+//			name:       "test version mismatch",
+//			segments:   []*QrSegment{{mode: Byte, numChars: 29, data: {}}},
+//			ecl:        Low,
+//			minVer:     MinVersion,
+//			maxVer:     MaxVersion,
+//			mask:       -1,
+//			boostEcl:   true,
+//			wantErr:    true,
+//			wantQrCode: nil,
+//		},
+//	}
+//
+//	for _, tt := range cases {
+//		t.Run(tt.name, func(t *testing.T) {
+//			qr, err := EncodeSegments(tt.segments, tt.ecl, tt.minVer, tt.maxVer, tt.mask, tt.boostEcl)
+//			if (err != nil) != tt.wantErr {
+//				t.Errorf("EncodeSegments() error = %v, wantErr %v", err, tt.wantErr)
+//			}
+//
+//			if qr != tt.wantQrCode { // You might want to use reflect.DeepEqual(got, tt.wantQrCode) if your QrCode struct contains slices or maps
+//				t.Errorf("EncodeSegments() = %v, want %v", qr, tt.wantQrCode)
+//			}
+//		})
+//	}
+//}
+
 func TestIsAlphanumeric(t *testing.T) {
 	cases := []struct {
 		in   string
