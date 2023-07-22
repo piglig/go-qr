@@ -1,6 +1,7 @@
 package go_qr
 
 import (
+	"github.com/stretchr/testify/assert"
 	"testing"
 )
 
@@ -42,35 +43,46 @@ func TestMakeBytes(t *testing.T) {
 
 func TestNewQrSegment(t *testing.T) {
 	tests := []struct {
-		name    string
-		mode    Mode
-		numCh   int
-		data    *BitBuffer
-		wantErr bool
+		name     string
+		mode     Mode
+		numCh    int
+		data     *BitBuffer
+		wantErr  bool
+		wantData *QrSegment
 	}{
 		{
-			name:    "test with positive numCh",
-			mode:    Numeric,
-			numCh:   10,
-			data:    &BitBuffer{},
-			wantErr: false,
+			name:     "test with positive numCh",
+			mode:     Numeric,
+			numCh:    10,
+			data:     &BitBuffer{true, true, false},
+			wantErr:  false,
+			wantData: &QrSegment{mode: Numeric, numChars: 10, data: &BitBuffer{true, true, false}},
 		},
 		{
-			name:    "test with negative numCh",
-			mode:    Numeric,
-			numCh:   -1,
-			data:    &BitBuffer{},
-			wantErr: true,
+			name:     "test with negative numCh",
+			mode:     Numeric,
+			numCh:    -1,
+			data:     &BitBuffer{},
+			wantErr:  true,
+			wantData: nil,
+		}, {
+			name:     "test with zero numCh",
+			mode:     Numeric,
+			numCh:    0,
+			data:     &BitBuffer{},
+			wantErr:  false,
+			wantData: &QrSegment{mode: Numeric, numChars: 0, data: &BitBuffer{}},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := newQrSegment(tt.mode, tt.numCh, tt.data)
+			got, err := newQrSegment(tt.mode, tt.numCh, tt.data)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("newQrSegment() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
+			assert.Equal(t, got, tt.wantData)
 		})
 	}
 }
