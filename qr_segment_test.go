@@ -6,10 +6,32 @@ import (
 )
 
 func TestMakeNumeric(t *testing.T) {
-	cases := []struct {
-		digits string
-	}{}
-	_ = cases
+	tests := []struct {
+		name    string
+		digits  string
+		wantErr bool
+	}{
+		{
+			name:    "test with normal digits",
+			digits:  "123456",
+			wantErr: false,
+		},
+		{
+			name:    "test with empty digit",
+			digits:  "",
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := MakeNumeric(tt.digits)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("MakeNumeric() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+		})
+	}
 }
 
 func TestMakeBytes(t *testing.T) {
@@ -20,7 +42,7 @@ func TestMakeBytes(t *testing.T) {
 	}{
 		{
 			name:    "test with non-nil data",
-			data:    []byte{0x01, 0xFF},
+			data:    []byte("hello"),
 			wantErr: false,
 		},
 		{
@@ -51,12 +73,36 @@ func TestNewQrSegment(t *testing.T) {
 		wantData *QrSegment
 	}{
 		{
+			name:     "test with one numCh and no BitBuffer",
+			mode:     Numeric,
+			numCh:    1,
+			data:     &BitBuffer{},
+			wantErr:  false,
+			wantData: &QrSegment{mode: Numeric, numChars: 1, data: &BitBuffer{}},
+		},
+		{
+			name:     "test with one numCh",
+			mode:     Numeric,
+			numCh:    1,
+			data:     &BitBuffer{true},
+			wantErr:  false,
+			wantData: &QrSegment{mode: Numeric, numChars: 1, data: &BitBuffer{true}},
+		},
+		{
 			name:     "test with positive numCh",
 			mode:     Numeric,
 			numCh:    10,
 			data:     &BitBuffer{true, true, false},
 			wantErr:  false,
 			wantData: &QrSegment{mode: Numeric, numChars: 10, data: &BitBuffer{true, true, false}},
+		},
+		{
+			name:     "test with positive numCh and no BitBuffer",
+			mode:     Numeric,
+			numCh:    10,
+			data:     &BitBuffer{},
+			wantErr:  false,
+			wantData: &QrSegment{mode: Numeric, numChars: 10, data: &BitBuffer{}},
 		},
 		{
 			name:     "test with negative numCh",
