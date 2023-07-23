@@ -5,6 +5,50 @@ import (
 	"testing"
 )
 
+func TestMakeAlphanumeric(t *testing.T) {
+	tests := []struct {
+		name    string
+		data    string
+		wantErr bool
+	}{
+		{
+			name:    "test with a digit",
+			data:    "0",
+			wantErr: false,
+		},
+		{
+			name:    "test with normal digits",
+			data:    "123456",
+			wantErr: false,
+		},
+		{
+			name:    "test with empty data",
+			data:    "",
+			wantErr: false,
+		},
+		{
+			name:    "test with a lower case letter",
+			data:    "a",
+			wantErr: true,
+		},
+		{
+			name:    "test with a uppercase letter",
+			data:    "A",
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := MakeAlphanumeric(tt.data)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("MakeAlphanumeric() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+		})
+	}
+}
+
 func TestMakeNumeric(t *testing.T) {
 	tests := []struct {
 		name    string
