@@ -309,54 +309,133 @@ func TestNewQrSegment(t *testing.T) {
 	}
 }
 
-//func TestEncodeSegments(t *testing.T) {
-//	cases := []struct {
-//		name           string
-//		segments       []*QrSegment
-//		ecl            Ecc
-//		minVer, maxVer int
-//		mask           int
-//		boostEcl       bool
-//		wantErr        bool
-//		wantQrCode     *QrCode
-//	}{
-//		{
-//			name:       "test with nil segments",
-//			segments:   nil,
-//			ecl:        Low,
-//			minVer:     MinVersion,
-//			maxVer:     MaxVersion,
-//			mask:       -1,
-//			boostEcl:   true,
-//			wantErr:    true,
-//			wantQrCode: nil,
-//		},
-//		{
-//			name:       "test version mismatch",
-//			segments:   []*QrSegment{{mode: Byte, numChars: 29, data: {}}},
-//			ecl:        Low,
-//			minVer:     MinVersion,
-//			maxVer:     MaxVersion,
-//			mask:       -1,
-//			boostEcl:   true,
-//			wantErr:    true,
-//			wantQrCode: nil,
-//		},
-//	}
-//
-//	for _, tt := range cases {
-//		t.Run(tt.name, func(t *testing.T) {
-//			qr, err := EncodeSegments(tt.segments, tt.ecl, tt.minVer, tt.maxVer, tt.mask, tt.boostEcl)
-//			if (err != nil) != tt.wantErr {
-//				t.Errorf("EncodeSegments() error = %v, wantErr %v", err, tt.wantErr)
-//			}
-//
-//			if qr != tt.wantQrCode { // You might want to use reflect.DeepEqual(got, tt.wantQrCode) if your QrCode struct contains slices or maps
-//				t.Errorf("EncodeSegments() = %v, want %v", qr, tt.wantQrCode)
-//			}
-//		})
-//	}
-//}
+func TestEncodeStandardSegments(t *testing.T) {
+	cases := []struct {
+		name       string
+		segments   []*QrSegment
+		ecl        Ecc
+		wantErr    bool
+		wantQrCode *QrCode
+	}{
+		{
+			name:       "test with nil segments",
+			segments:   nil,
+			ecl:        Low,
+			wantErr:    true,
+			wantQrCode: nil,
+		},
+		{
+			name: "test with Byte segments",
+			segments: []*QrSegment{{
+				mode:     Byte,
+				numChars: 13,
+				data: &BitBuffer{false, true, false, false, true, false, false, false, false, true, true, false, false,
+					true, false, true, false, true, true, false, true, true, false, false, false, true, true, false, true,
+					true, false, false, false, true, true, false, true, true, true, true, false, false, true, false, true,
+					true, false, false, false, false, true, false, false, false, false, false, false, true, true, true, false,
+					true, true, true, false, true, true, false, true, true, true, true, false, true, true, true, false, false,
+					true, false, false, true, true, false, true, true, false, false, false, true, true, false, false, true,
+					false, false, false, false, true, false, false, false, false, true},
+			}},
+			ecl:     Low,
+			wantErr: false,
+			wantQrCode: &QrCode{
+				version:              MinVersion,
+				size:                 21,
+				errorCorrectionLevel: Medium,
+				mask:                 2,
+				modules: [][]bool{
+					{true, true, true, true, true, true, true, false, false, false, false, false, true, false, true, true, true, true, true, true, true},
+					{true, false, false, false, false, false, true, false, false, true, false, true, false, false, true, false, false, false, false, false, true},
+					{true, false, true, true, true, false, true, false, true, false, true, true, true, false, true, false, true, true, true, false, true},
+					{true, false, true, true, true, false, true, false, true, false, false, false, false, false, true, false, true, true, true, false, true},
+					{true, false, true, true, true, false, true, false, true, true, false, false, true, false, true, false, true, true, true, false, true},
+					{true, false, false, false, false, false, true, false, true, true, true, true, false, false, true, false, false, false, false, false, true},
+					{true, true, true, true, true, true, true, false, true, false, true, false, true, false, true, true, true, true, true, true, true},
+					{false, false, false, false, false, false, false, false, true, false, true, false, false, false, false, false, false, false, false, false, false},
+					{true, false, true, true, true, true, true, false, false, true, true, true, false, false, true, true, true, true, true, false, false},
+					{false, false, false, true, true, false, false, true, true, false, false, false, true, true, false, false, true, true, true, false, true},
+					{false, false, false, true, false, false, true, false, true, true, true, false, true, true, true, false, false, true, true, true, false},
+					{false, true, true, false, false, true, false, true, false, false, true, true, true, true, false, true, false, true, true, false, false},
+					{true, true, false, true, true, true, true, false, true, false, false, false, true, false, true, true, false, false, false, false, true},
+					{false, false, false, false, false, false, false, false, true, false, false, false, false, true, true, true, true, true, false, false, false},
+					{true, true, true, true, true, true, true, false, false, true, true, false, true, true, true, true, false, false, true, true, false},
+					{true, false, false, false, false, false, true, false, true, false, true, false, true, true, false, true, false, true, true, true, false},
+					{true, false, true, true, true, false, true, false, true, true, false, true, true, true, true, false, true, false, false, true, true},
+					{true, false, true, true, true, false, true, false, true, false, true, false, false, false, false, true, true, true, false, false, false},
+					{true, false, true, true, true, false, true, false, true, true, true, true, true, false, true, true, false, false, true, false, false},
+					{true, false, false, false, false, false, true, false, false, false, true, false, true, true, false, false, true, true, true, false, false},
+					{true, true, true, true, true, true, true, false, true, true, false, true, false, false, true, false, true, false, false, true, false},
+				},
+				isFunction: nil,
+			},
+		},
+		{
+			name: "test with Numeric segments",
+			segments: []*QrSegment{
+				{mode: Numeric, numChars: 51, data: &BitBuffer{
+					false, true, false, false, true, true, true, false, true, false, false, false, true,
+					false, false, true, true, true, true, true, false, true, false, false, false, false, true, false, false,
+					true, false, true, false, true, true, false, false, true, true, false, true, true, true, true, false,
+					true, false, false, true, true, false, true, false, true, false, false, false, false, true, true, true,
+					true, false, true, false, false, true, true, true, false, false, true, false, false, false, false, true,
+					false, false, false, false, true, false, true, false, true, false, false, true, false, false, true, false,
+					true, false, false, false, true, true, true, true, true, true, false, true, true, false, true, true,
+					false, false, true, false, false, true, false, false, false, false, false, false, true, true, false,
+					true, false, false, false, true, true, true, false, true, true, false, false, true, true, false, false,
+					true, true, true, false, true, false, true, false, true, true, true, true, true, false, true, false, true,
+					false, false, true, false, true, true, true, true, true, true, true, true, false},
+				}},
+			ecl:     Medium,
+			wantErr: false,
+			wantQrCode: &QrCode{
+				version:              2,
+				size:                 25,
+				errorCorrectionLevel: Medium,
+				mask:                 3,
+				modules: [][]bool{
+					{true, true, true, true, true, true, true, false, true, false, false, false, false, false, true, false, false, false, true, true, true, true, true, true, true},
+					{true, false, false, false, false, false, true, false, true, false, true, false, true, true, true, false, true, false, true, false, false, false, false, false, true},
+					{true, false, true, true, true, false, true, false, false, false, true, false, false, false, true, true, true, false, true, false, true, true, true, false, true},
+					{true, false, true, true, true, false, true, false, true, true, false, true, true, true, false, false, true, false, true, false, true, true, true, false, true},
+					{true, false, true, true, true, false, true, false, false, true, false, false, true, true, true, true, false, false, true, false, true, true, true, false, true},
+					{true, false, false, false, false, false, true, false, false, true, false, false, true, false, false, false, true, false, true, false, false, false, false, false, true},
+					{true, true, true, true, true, true, true, false, true, false, true, false, true, false, true, false, true, false, true, true, true, true, true, true, true},
+					{false, false, false, false, false, false, false, false, true, false, false, true, true, true, false, true, false, false, false, false, false, false, false, false, false},
+					{true, false, true, true, false, true, true, true, false, true, false, true, false, false, true, true, false, false, true, false, false, true, false, true, true},
+					{false, false, false, false, true, true, false, false, true, false, true, true, true, true, false, true, false, false, true, true, false, false, true, true, false},
+					{true, true, true, false, false, true, true, false, false, true, true, false, true, true, true, false, false, true, false, false, false, true, false, false, false},
+					{true, false, false, false, true, false, false, true, false, false, false, false, false, true, false, false, true, false, true, false, true, false, true, false, true},
+					{false, true, false, true, true, false, true, true, false, true, false, true, false, false, true, false, false, false, true, false, false, true, false, false, true},
+					{false, true, false, false, true, false, false, false, true, true, true, true, false, true, false, false, true, false, false, true, true, false, true, true, true},
+					{false, true, true, true, true, false, true, false, true, false, true, false, true, false, true, false, true, true, false, false, true, true, true, false, true},
+					{true, false, false, true, false, false, false, true, true, true, true, false, true, true, true, false, true, true, true, true, true, false, false, true, false},
+					{false, false, true, true, false, false, true, true, true, true, true, true, false, true, false, false, true, true, true, true, true, true, false, true, false},
+					{false, false, false, false, false, false, false, false, true, false, true, false, true, true, false, true, true, false, false, false, true, false, false, true, false},
+					{true, true, true, true, true, true, true, false, true, true, true, true, true, false, false, false, true, false, true, false, true, false, false, true, false},
+					{true, false, false, false, false, false, true, false, true, true, true, false, true, false, true, false, true, false, false, false, true, false, true, true, false},
+					{true, false, true, true, true, false, true, false, false, true, false, true, true, true, false, true, true, true, true, true, true, true, false, true, true},
+					{true, false, true, true, true, false, true, false, true, true, false, false, true, true, false, false, true, false, true, false, false, false, true, false, true},
+					{true, false, true, true, true, false, true, false, true, true, false, true, true, true, false, true, true, true, true, false, true, true, false, true, false},
+					{true, false, false, false, false, false, true, false, false, true, false, false, false, false, false, true, true, true, false, false, false, false, true, true, false},
+					{true, true, true, true, true, true, true, false, true, false, false, false, true, false, true, true, false, true, true, true, false, false, true, false, true},
+				},
+				isFunction: nil,
+			},
+		},
+	}
+
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := EncodeStandardSegments(tt.segments, tt.ecl)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("EncodeSegments() error = %v, wantErr %v", err, tt.wantErr)
+			}
+
+			assert.Equal(t, tt.wantQrCode, got)
+		})
+	}
+}
 
 func TestIsAlphanumeric(t *testing.T) {
 	cases := []struct {

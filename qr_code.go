@@ -473,6 +473,10 @@ func EncodeStandardSegments(segs []*QrSegment, ecl Ecc) (*QrCode, error) {
 }
 
 func EncodeSegments(segs []*QrSegment, ecl Ecc, minVer, maxVer, mask int, boostEcl bool) (*QrCode, error) {
+	if segs == nil {
+		return nil, errors.New("slice of QrSegment is nil")
+	}
+
 	if !isValidVersion(minVer, maxVer) {
 		return nil, errors.New("invalid value")
 	}
