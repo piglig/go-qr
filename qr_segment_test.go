@@ -51,58 +51,99 @@ func TestMakeAlphanumeric(t *testing.T) {
 
 func TestMakeNumeric(t *testing.T) {
 	tests := []struct {
-		name    string
-		digits  string
-		wantErr bool
+		name     string
+		digits   string
+		wantErr  bool
+		wantData *QrSegment
 	}{
 		{
 			name:    "test with normal digits",
-			digits:  "123456",
+			digits:  "314159265358979323846264338327950288419716939937510",
 			wantErr: false,
+			wantData: &QrSegment{
+				mode:     Numeric,
+				numChars: 51,
+				data: &BitBuffer{false, true, false, false, true, true, true, false, true, false, false, false, true,
+					false, false, true, true, true, true, true, false, true, false, false, false, false, true, false, false,
+					true, false, true, false, true, true, false, false, true, true, false, true, true, true, true, false,
+					true, false, false, true, true, false, true, false, true, false, false, false, false, true, true, true,
+					true, false, true, false, false, true, true, true, false, false, true, false, false, false, false, true,
+					false, false, false, false, true, false, true, false, true, false, false, true, false, false, true, false,
+					true, false, false, false, true, true, true, true, true, true, false, true, true, false, true, true,
+					false, false, true, false, false, true, false, false, false, false, false, false, true, true, false,
+					true, false, false, false, true, true, true, false, true, true, false, false, true, true, false, false,
+					true, true, true, false, true, false, true, false, true, true, true, true, true, false, true, false, true,
+					false, false, true, false, true, true, true, true, true, true, true, true, false},
+			},
 		},
 		{
-			name:    "test with empty digit",
-			digits:  "",
-			wantErr: true,
+			name:     "test with empty digit",
+			digits:   "",
+			wantErr:  true,
+			wantData: nil,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := MakeNumeric(tt.digits)
+			got, err := MakeNumeric(tt.digits)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("MakeNumeric() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
+
+			assert.Equal(t, got, tt.wantData)
 		})
 	}
 }
 
 func TestMakeBytes(t *testing.T) {
 	tests := []struct {
-		name    string
-		data    []byte
-		wantErr bool
+		name     string
+		data     []byte
+		wantErr  bool
+		wantData *QrSegment
 	}{
 		{
 			name:    "test with non-nil data",
-			data:    []byte("hello"),
+			data:    []byte("https://www.github.com/piglig"),
 			wantErr: false,
+			wantData: &QrSegment{
+				mode:     Byte,
+				numChars: 29,
+				data: &BitBuffer{false, true, true, false, true, false, false, false, false, true, true, true, false, true,
+					false, false, false, true, true, true, false, true, false, false, false, true, true, true, false, false,
+					false, false, false, true, true, true, false, false, true, true, false, false, true, true, true, false,
+					true, false, false, false, true, false, true, true, true, true, false, false, true, false, true, true,
+					true, true, false, true, true, true, false, true, true, true, false, true, true, true, false, true, true,
+					true, false, true, true, true, false, true, true, true, false, false, true, false, true, true, true,
+					false, false, true, true, false, false, true, true, true, false, true, true, false, true, false, false,
+					true, false, true, true, true, false, true, false, false, false, true, true, false, true, false, false,
+					false, false, true, true, true, false, true, false, true, false, true, true, false, false, false, true,
+					false, false, false, true, false, true, true, true, false, false, true, true, false, false, false, true,
+					true, false, true, true, false, true, true, true, true, false, true, true, false, true, true, false, true,
+					false, false, true, false, true, true, true, true, false, true, true, true, false, false, false, false,
+					false, true, true, false, true, false, false, true, false, true, true, false, false, true, true, true,
+					false, true, true, false, true, true, false, false, false, true, true, false, true, false, false, true,
+					false, true, true, false, false, true, true, true},
+			},
 		},
 		{
-			name:    "test with nil data",
-			data:    nil,
-			wantErr: true,
+			name:     "test with nil data",
+			data:     nil,
+			wantErr:  true,
+			wantData: nil,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := MakeBytes(tt.data)
+			got, err := MakeBytes(tt.data)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("MakeBytes() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
+			assert.Equal(t, got, tt.wantData)
 		})
 	}
 }
