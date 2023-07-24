@@ -7,44 +7,70 @@ import (
 
 func TestMakeAlphanumeric(t *testing.T) {
 	tests := []struct {
-		name    string
-		data    string
-		wantErr bool
+		name     string
+		data     string
+		wantErr  bool
+		wantData *QrSegment
 	}{
 		{
 			name:    "test with a digit",
 			data:    "0",
 			wantErr: false,
+			wantData: &QrSegment{
+				mode:     Alphanumeric,
+				numChars: 1,
+				data:     &BitBuffer{false, false, false, false, false, false},
+			},
 		},
 		{
 			name:    "test with normal digits",
 			data:    "123456",
 			wantErr: false,
+			wantData: &QrSegment{
+				mode:     Alphanumeric,
+				numChars: 6,
+				data: &BitBuffer{false, false, false, false, false, true, false, true, true, true, true, false, false,
+					false, true, false, false, false, true, false, true, true, false, false, false, true, true, true, false,
+					false, true, true, true},
+			},
 		},
 		{
 			name:    "test with empty data",
 			data:    "",
 			wantErr: false,
+			wantData: &QrSegment{
+				mode:     Alphanumeric,
+				numChars: 0,
+				data:     &BitBuffer{},
+			},
 		},
 		{
-			name:    "test with a lower case letter",
-			data:    "a",
-			wantErr: true,
+			name:     "test with a lower case letter",
+			data:     "a",
+			wantErr:  true,
+			wantData: nil,
 		},
 		{
 			name:    "test with a uppercase letter",
 			data:    "A",
 			wantErr: false,
+			wantData: &QrSegment{
+				mode:     Alphanumeric,
+				numChars: 1,
+				data:     &BitBuffer{false, false, true, false, true, false},
+			},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := MakeAlphanumeric(tt.data)
+			got, err := MakeAlphanumeric(tt.data)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("MakeAlphanumeric() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
+
+			assert.Equal(t, got, tt.wantData)
 		})
 	}
 }
@@ -139,6 +165,71 @@ func TestMakeBytes(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := MakeBytes(tt.data)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("MakeBytes() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			assert.Equal(t, got, tt.wantData)
+		})
+	}
+}
+
+func TestMakeKanji(t *testing.T) {
+	tests := []struct {
+		name     string
+		data     string
+		wantErr  bool
+		wantData *QrSegment
+	}{
+		{
+			name:    "test with Kanji data",
+			data:    "「魔法少女まどか☆マギカ」って、　ИАИ　ｄｅｓｕ　κα？",
+			wantErr: false,
+			wantData: &QrSegment{
+				mode:     Kanji,
+				numChars: 29,
+				data: &BitBuffer{false, false, false, false, false, false, false, true, true, false, true, false, true, true,
+					false, false, false, false, false, false, false, false, false, false, true, false, false, true, true,
+					true, true, true, true, false, false, false, false, false, false, false, true, false, true, false, true,
+					true, true, false, true, true, false, true, false, true, false, true, false, true, true, false, true,
+					false, true, true, true, false, false, false, false, true, false, true, false, true, true, true, false,
+					false, false, false, false, false, true, false, true, false, false, false, true, true, true, false, false,
+					false, false, true, false, false, true, false, true, false, false, true, false, false, false, false,
+					false, false, true, false, true, true, false, false, true, false, false, false, false, true, true, false,
+					true, true, true, true, false, true, false, false, false, false, true, true, false, false, false, true,
+					true, false, true, false, false, false, false, true, true, false, false, false, true, false, true, false,
+					false, false, false, false, false, false, false, true, true, false, true, true, false, false, false,
+					false, false, true, false, true, false, false, false, false, false, true, false, false, false, false,
+					true, false, true, false, false, false, true, false, false, false, false, false, false, false, false,
+					false, false, false, false, false, false, true, false, false, false, false, false, false, false, false,
+					false, false, false, false, false, false, false, false, true, false, false, true, false, false, true,
+					false, false, true, false, false, false, true, false, false, true, false, false, false, false, false,
+					false, false, false, false, true, false, false, true, false, false, true, false, false, true, false,
+					false, false, false, false, false, false, false, false, false, false, false, false, false, false, false,
+					false, true, false, false, false, false, false, true, false, false, false, false, false, false, true,
+					false, false, false, false, false, true, false, true, false, false, false, false, true, false, false,
+					false, true, false, false, true, true, false, false, false, false, true, false, false, false, true,
+					false, true, false, true, false, false, false, false, false, false, false, false, false, false, false,
+					false, false, false, false, false, true, false, false, false, false, false, true, false, false, false,
+					false, false, false, false, true, true, true, true, true, true, true, true, true, false, false, false,
+					false, false, false, false, false, false, true, false, false, false},
+			},
+		},
+		{
+			name:    "test with nil data",
+			data:    "",
+			wantErr: false,
+			wantData: &QrSegment{
+				mode:     Kanji,
+				numChars: 0,
+				data:     &BitBuffer{},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := MakeKanji(tt.data)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("MakeBytes() error = %v, wantErr %v", err, tt.wantErr)
 				return
