@@ -235,7 +235,7 @@ func isKanji(c int) bool {
 	return c < len(unicdeToQRKanji) && unicdeToQRKanji[c] != -1 && c >= 0
 }
 
-const PackedQRKanjiToUnicode = "MAAwATAC/wz/DjD7/xr/G/8f/wEwmzCcALT/QACo/z7/4/8/MP0w/jCdMJ4wA07dMAUwBjAHMPwgFSAQ/w8AXDAcIBb/XCAmICUgGCAZIBwgHf8I/wkwFDAV/zv/Pf9b/10wCDAJMAowCzAMMA0wDjAPMBAwEf8LIhIAsQDX//8A9/8dImD/HP8eImYiZyIeIjQmQiZA" +
+const packedQRKanjiToUnicode = "MAAwATAC/wz/DjD7/xr/G/8f/wEwmzCcALT/QACo/z7/4/8/MP0w/jCdMJ4wA07dMAUwBjAHMPwgFSAQ/w8AXDAcIBb/XCAmICUgGCAZIBwgHf8I/wkwFDAV/zv/Pf9b/10wCDAJMAowCzAMMA0wDjAPMBAwEf8LIhIAsQDX//8A9/8dImD/HP8eImYiZyIeIjQmQiZA" +
 	"ALAgMiAzIQP/5f8EAKIAo/8F/wP/Bv8K/yAApyYGJgUlyyXPJc4lxyXGJaEloCWzJbIlvSW8IDswEiGSIZAhkSGTMBP/////////////////////////////IggiCyKGIocigiKDIioiKf////////////////////8iJyIoAKwh0iHUIgAiA///////////////////" +
 	"//////////8iICKlIxIiAiIHImEiUiJqImsiGiI9Ih0iNSIrIiz//////////////////yErIDAmbyZtJmogICAhALb//////////yXv/////////////////////////////////////////////////xD/Ef8S/xP/FP8V/xb/F/8Y/xn///////////////////8h" +
 	"/yL/I/8k/yX/Jv8n/yj/Kf8q/yv/LP8t/y7/L/8w/zH/Mv8z/zT/Nf82/zf/OP85/zr///////////////////9B/0L/Q/9E/0X/Rv9H/0j/Sf9K/0v/TP9N/07/T/9Q/1H/Uv9T/1T/Vf9W/1f/WP9Z/1r//////////zBBMEIwQzBEMEUwRjBHMEgwSTBKMEswTDBN" +
@@ -353,7 +353,7 @@ func init() {
 		unicdeToQRKanji[i] = -1
 	}
 
-	bytes, _ := base64.StdEncoding.DecodeString(PackedQRKanjiToUnicode)
+	bytes, _ := base64.StdEncoding.DecodeString(packedQRKanjiToUnicode)
 	for i := 0; i < len(bytes); i += 2 {
 		c := int(bytes[i]&0xFF)<<8 | int(bytes[i+1]&0xFF)
 		if c == 0xFFFF {
