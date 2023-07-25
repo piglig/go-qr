@@ -65,7 +65,7 @@ type QrCode struct {
 	isFunction [][]bool
 }
 
-func NewQrCode(ver int, ecl Ecc, dataCodewords []byte, msk int) (*QrCode, error) {
+func newQrCode(ver int, ecl Ecc, dataCodewords []byte, msk int) (*QrCode, error) {
 	if ver < MinVersion || ver > MaxVersion {
 		return nil, errors.New("version value out of range")
 	}
@@ -146,10 +146,6 @@ func (q *QrCode) setFunctionModule(x, y int, isDark bool) {
 }
 
 func (q *QrCode) addEccAndInterLeave(data []byte) ([]byte, error) {
-	if data == nil {
-		return nil, errors.New("data is nil")
-	}
-
 	numDataCodewords := getNumDataCodewords(q.version, q.errorCorrectionLevel)
 
 	if len(data) != numDataCodewords {
@@ -248,8 +244,6 @@ func (q *QrCode) applyMask(msk int) error {
 				invert = (x*y%2+x*y%3)%2 == 0
 			case 7:
 				invert = ((x+y)%2+x*y%3)%2 == 0
-			default:
-				return errors.New("mask value out of range")
 			}
 			q.modules[y][x] = q.modules[y][x] != (invert && !q.isFunction[y][x])
 		}
@@ -551,7 +545,7 @@ func EncodeSegments(segs []*QrSegment, ecl Ecc, minVer, maxVer, mask int, boostE
 		}
 		dataCodewords[i>>3] |= byte(bit << (7 - (i & 7)))
 	}
-	return NewQrCode(version, ecl, dataCodewords, mask)
+	return newQrCode(version, ecl, dataCodewords, mask)
 }
 
 func isValidVersion(minVer, maxVer int) bool {

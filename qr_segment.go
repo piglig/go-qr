@@ -57,9 +57,9 @@ func (m Mode) isEci() bool {
 }
 
 const (
-	NumericRegex        = `^\d+$`
-	AlphanumericRegex   = `^[0-9A-Z $%*+\-.\/:]*$`
-	AlphanumericCharset = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ $%*+-./:"
+	numericRegex        = `^\d+$`
+	alphanumericRegex   = `^[0-9A-Z $%*+\-.\/:]*$`
+	alphanumericCharset = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ $%*+-./:"
 )
 
 type QrSegment struct {
@@ -118,7 +118,7 @@ func MakeNumeric(digits string) (*QrSegment, error) {
 }
 
 func isNumeric(numb string) bool {
-	return regexp.MustCompile(NumericRegex).MatchString(numb)
+	return regexp.MustCompile(numericRegex).MatchString(numb)
 }
 
 func min(a, b int) int {
@@ -150,8 +150,8 @@ func MakeAlphanumeric(text string) (*QrSegment, error) {
 	bb := &BitBuffer{}
 	i := 0
 	for ; i <= len(text)-2; i += 2 {
-		temp := strings.IndexByte(AlphanumericCharset, text[i]) * 45
-		temp += strings.IndexByte(AlphanumericCharset, text[i+1])
+		temp := strings.IndexByte(alphanumericCharset, text[i]) * 45
+		temp += strings.IndexByte(alphanumericCharset, text[i+1])
 		err := bb.appendBits(temp, 11)
 		if err != nil {
 			return nil, err
@@ -159,7 +159,7 @@ func MakeAlphanumeric(text string) (*QrSegment, error) {
 	}
 
 	if i < len(text) {
-		err := bb.appendBits(strings.IndexByte(AlphanumericCharset, text[i]), 6)
+		err := bb.appendBits(strings.IndexByte(alphanumericCharset, text[i]), 6)
 		if err != nil {
 			return nil, err
 		}
@@ -169,7 +169,7 @@ func MakeAlphanumeric(text string) (*QrSegment, error) {
 }
 
 func isAlphanumeric(text string) bool {
-	return regexp.MustCompile(AlphanumericRegex).MatchString(text)
+	return regexp.MustCompile(alphanumericRegex).MatchString(text)
 }
 
 func MakeSegments(text string) ([]*QrSegment, error) {
