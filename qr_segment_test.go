@@ -437,112 +437,100 @@ func TestEncodeStandardSegments(t *testing.T) {
 	}
 }
 
-func TestIsAlphanumeric(t *testing.T) {
+func TestMakeSegments(t *testing.T) {
 	cases := []struct {
-		in   string
-		want bool
-	}{
-		{"HELLO WORLD", true},       // contains uppercase letters and a space
-		{"12345", true},             // contains numbers
-		{"$%*+-./:", true},          // contains valid special characters
-		{"hello world", false},      // contains lowercase letters
-		{"_NotValid", false},        // contains underscore which is not a valid character
-		{"123abc", false},           // contains lowercase letters
-		{"Special!@#", false},       // contains special characters that are not allowed
-		{"Mixed123CASE$", false},    // mixture of digits, uppercase letters and a valid special character
-		{"://www.apple.com", false}, // contains double slashes and lower case letters
-	}
-	for _, c := range cases {
-		got := isAlphanumeric(c.in)
-		if got != c.want {
-			t.Errorf("isisAlphanumeric(%q) == %v, want %v", c.in, got, c.want)
-		}
-	}
-}
-
-func TestIsNumeric(t *testing.T) {
-	cases := []struct {
-		in   string
-		want bool
-	}{
-		{"12345", true},         // contains only numbers
-		{"ABCDE", false},        // contains no numbers
-		{"abc123", false},       // contains numbers and lowercase letters
-		{"ABC123", false},       // contains numbers and uppercase letters
-		{"Special!@#1", false},  // contains special characters and a number
-		{"Special!@#", false},   // contains special characters, but no number
-		{" ", false},            // contains only a whitespace character
-		{"Mixed123CASE", false}, // mixture of digits, uppercase and lower case letters
-		{"1.23", false},         // contains numbers and a dot
-		{"0", true},             // contains a number
-	}
-	for _, c := range cases {
-		got := isNumeric(c.in)
-		if got != c.want {
-			t.Errorf("isNumeric(%q) == %v, want %v", c.in, got, c.want)
-		}
-	}
-}
-
-func TestNumCharCountBits(t *testing.T) {
-	tests := []struct {
-		name string
-		mode Mode
-		ver  int
-		want int
+		name         string
+		text         string
+		wantErr      bool
+		wantSegments []*QrSegment
 	}{
 		{
-			"Numeric mode, version 0",
-			Numeric,
-			0,
-			10,
+			name:         "test with empty text",
+			text:         "",
+			wantErr:      false,
+			wantSegments: []*QrSegment{},
 		},
 		{
-			"Alphanumeric mode, version 20",
-			Alphanumeric,
-			20,
-			11,
+			name:    "test with numeric text",
+			text:    "314159265358979323846264338327950288419716939937510",
+			wantErr: false,
+			wantSegments: []*QrSegment{{
+				mode:     Numeric,
+				numChars: 51,
+				data: &BitBuffer{false, true, false, false, true, true, true, false, true, false, false, false, true,
+					false, false, true, true, true, true, true, false, true, false, false, false, false, true, false, false,
+					true, false, true, false, true, true, false, false, true, true, false, true, true, true, true, false,
+					true, false, false, true, true, false, true, false, true, false, false, false, false, true, true, true,
+					true, false, true, false, false, true, true, true, false, false, true, false, false, false, false, true,
+					false, false, false, false, true, false, true, false, true, false, false, true, false, false, true, false,
+					true, false, false, false, true, true, true, true, true, true, false, true, true, false, true, true,
+					false, false, true, false, false, true, false, false, false, false, false, false, true, true, false,
+					true, false, false, false, true, true, true, false, true, true, false, false, true, true, false, false,
+					true, true, true, false, true, false, true, false, true, true, true, true, true, false, true, false, true,
+					false, false, true, false, true, true, true, true, true, true, true, true, false},
+			}},
 		},
 		{
-			"Byte mode, version 25",
-			Byte,
-			25,
-			16,
+			name: "test with byte text",
+			text: "https://www.github.com/piglig",
+			wantSegments: []*QrSegment{{
+				mode:     Byte,
+				numChars: 29,
+				data: &BitBuffer{false, true, true, false, true, false, false, false, false, true, true, true, false, true,
+					false, false, false, true, true, true, false, true, false, false, false, true, true, true, false, false,
+					false, false, false, true, true, true, false, false, true, true, false, false, true, true, true, false,
+					true, false, false, false, true, false, true, true, true, true, false, false, true, false, true, true,
+					true, true, false, true, true, true, false, true, true, true, false, true, true, true, false, true, true,
+					true, false, true, true, true, false, true, true, true, false, false, true, false, true, true, true,
+					false, false, true, true, false, false, true, true, true, false, true, true, false, true, false, false,
+					true, false, true, true, true, false, true, false, false, false, true, true, false, true, false, false,
+					false, false, true, true, true, false, true, false, true, false, true, true, false, false, false, true,
+					false, false, false, true, false, true, true, true, false, false, true, true, false, false, false, true,
+					true, false, true, true, false, true, true, true, true, false, true, true, false, true, true, false, true,
+					false, false, true, false, true, true, true, true, false, true, true, true, false, false, false, false,
+					false, true, true, false, true, false, false, true, false, true, true, false, false, true, true, true,
+					false, true, true, false, true, true, false, false, false, true, true, false, true, false, false, true,
+					false, true, true, false, false, true, true, true},
+			}},
+		},
+		{
+			name: "test with alphanumeric text",
+			text: "DOLLAR-AMOUNT:$39.87 PERCENTAGE:100.00% OPERATIONS:+-*/",
+			wantSegments: []*QrSegment{{
+				mode:     Alphanumeric,
+				numChars: 55,
+				data: &BitBuffer{false, true, false, false, true, true, false, false, false, false, true, false, true,
+					true, true, true, false, false, false, true, true, false, false, false, true, true, true, false, true,
+					true, true, false, true, true, true, true, false, false, true, true, true, true, true, true, false, true,
+					true, true, true, true, true, false, true, true, false, true, false, true, false, true, false, true,
+					true, true, false, true, true, false, true, false, true, false, false, false, true, false, true, true,
+					true, false, true, false, false, false, false, true, false, false, false, false, true, true, false, true,
+					true, true, true, true, true, false, false, true, false, true, true, false, true, true, true, true, true,
+					true, false, false, true, true, false, true, true, false, true, false, true, false, true, false, false,
+					true, false, false, false, true, false, true, false, false, false, true, false, true, false, true, false,
+					true, false, false, false, false, true, false, true, false, false, false, false, false, true, true, true,
+					false, true, false, false, true, false, false, true, false, true, false, true, false, false, false, true,
+					false, false, false, false, false, false, true, false, true, true, false, true, false, false, false, false,
+					false, true, false, true, false, true, false, false, false, false, false, false, false, false, false,
+					false, false, false, true, true, false, true, true, false, true, false, false, true, false, true, false,
+					false, false, true, false, true, false, false, false, true, false, true, false, true, false, false, true,
+					false, false, false, true, false, false, true, true, true, false, true, true, true, true, true, false,
+					true, true, false, true, false, false, false, false, true, false, true, false, false, false, false, true,
+					false, false, true, true, true, true, true, true, true, true, true, false, false, true, false, false,
+					true, true, true, false, true, false, true, true, true, false, false, true, false, true, false, true, true,
+				},
+			}},
 		},
 	}
 
-	for _, tt := range tests {
+	for _, tt := range cases {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := tt.mode.numCharCountBits(tt.ver); got != tt.want {
-				t.Errorf("Mode.numCharCountBits() = %v, want %v", got, tt.want)
+			got, err := MakeSegments(tt.text)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("MakeSegments() error = %v, wantErr %v", err, tt.wantErr)
 			}
-		})
-	}
-}
 
-func TestGetModeBits(t *testing.T) {
-	tests := []struct {
-		name string
-		mode Mode
-		want int
-	}{
-		{
-			"Numeric mode bits",
-			Numeric,
-			0x1,
-		},
-		{
-			"Alphanumeric mode bits",
-			Alphanumeric,
-			0x2,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := tt.mode.getModeBits(); got != tt.want {
-				t.Errorf("Mode.getModeBits() = %v, want %v", got, tt.want)
-			}
+			assert.Equal(t, tt.wantSegments, got)
 		})
 	}
 }
