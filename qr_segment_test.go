@@ -70,7 +70,7 @@ func TestMakeAlphanumeric(t *testing.T) {
 				return
 			}
 
-			assert.Equal(t, got, tt.wantData)
+			assert.Equal(t, tt.wantData, got)
 		})
 	}
 }
@@ -118,7 +118,7 @@ func TestMakeNumeric(t *testing.T) {
 				return
 			}
 
-			assert.Equal(t, got, tt.wantData)
+			assert.Equal(t, tt.wantData, got)
 		})
 	}
 }
@@ -169,7 +169,7 @@ func TestMakeBytes(t *testing.T) {
 				t.Errorf("MakeBytes() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			assert.Equal(t, got, tt.wantData)
+			assert.Equal(t, tt.wantData, got)
 		})
 	}
 }
@@ -234,7 +234,7 @@ func TestMakeKanji(t *testing.T) {
 				t.Errorf("MakeBytes() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			assert.Equal(t, got, tt.wantData)
+			assert.Equal(t, tt.wantData, got)
 		})
 	}
 }
@@ -304,7 +304,7 @@ func TestNewQrSegment(t *testing.T) {
 				t.Errorf("newQrSegment() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			assert.Equal(t, got, tt.wantData)
+			assert.Equal(t, tt.wantData, got)
 		})
 	}
 }
@@ -531,6 +531,68 @@ func TestMakeSegments(t *testing.T) {
 			}
 
 			assert.Equal(t, tt.wantSegments, got)
+		})
+	}
+}
+
+func TestMakeEci(t *testing.T) {
+	cases := []struct {
+		name        string
+		val         int
+		wantErr     bool
+		wantSegment *QrSegment
+	}{
+		{
+			name:        "test with negative value",
+			val:         -1,
+			wantErr:     true,
+			wantSegment: nil,
+		},
+		{
+			name:        "test with outside value",
+			val:         1e6 + 1,
+			wantErr:     true,
+			wantSegment: nil,
+		},
+		{
+			name:    "test with 100 value",
+			val:     100,
+			wantErr: false,
+			wantSegment: &QrSegment{
+				mode:     Eci,
+				numChars: 0,
+				data:     &BitBuffer{false, true, true, false, false, true, false, false},
+			},
+		},
+		{
+			name:    "test with 1000 value",
+			val:     1000,
+			wantErr: false,
+			wantSegment: &QrSegment{
+				mode:     Eci,
+				numChars: 0,
+				data:     &BitBuffer{true, false, false, false, false, false, true, true, true, true, true, false, true, false, false, false},
+			},
+		},
+		{
+			name:    "test with 99999 value",
+			val:     99999,
+			wantErr: false,
+			wantSegment: &QrSegment{
+				mode:     Eci,
+				numChars: 0,
+				data:     &BitBuffer{true, true, false, false, false, false, false, true, true, false, false, false, false, true, true, false, true, false, false, true, true, true, true, true},
+			},
+		},
+	}
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := MakeEci(tt.val)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("MakeSegments() error = %v, wantErr %v", err, tt.wantErr)
+			}
+
+			assert.Equal(t, tt.wantSegment, got)
 		})
 	}
 }
