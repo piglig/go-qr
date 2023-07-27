@@ -1,6 +1,8 @@
 package go_qr
 
-import "testing"
+import (
+	"testing"
+)
 
 func TestGetNumRawDataModules(t *testing.T) {
 	testCases := []struct {
