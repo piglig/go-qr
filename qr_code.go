@@ -66,10 +66,6 @@ type QrCode struct {
 }
 
 func newQrCode(ver int, ecl Ecc, dataCodewords []byte, msk int) (*QrCode, error) {
-	if ver < MinVersion || ver > MaxVersion {
-		return nil, errors.New("version value out of range")
-	}
-
 	if msk < -1 || msk > 7 {
 		return nil, errors.New("mask value out of range")
 	}
@@ -472,7 +468,7 @@ func EncodeSegments(segs []*QrSegment, ecl Ecc, minVer, maxVer, mask int, boostE
 	}
 
 	if !isValidVersion(minVer, maxVer) {
-		return nil, errors.New("invalid value")
+		return nil, errors.New("invalid version")
 	}
 
 	version, dataUsedBits := 0, 0
