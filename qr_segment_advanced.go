@@ -42,9 +42,6 @@ func MakeSegmentsOptimally(text string, ecl Ecc, minVersion, maxVersion int) ([]
 }
 
 func makeSegmentsOptimallyWithVersion(codePoints []int, version int) ([]*QrSegment, error) {
-	if len(codePoints) == 0 {
-		return make([]*QrSegment, 0), nil
-	}
 	charModes, err := computeCharacterModes(codePoints, version)
 	if err != nil {
 		return nil, err
@@ -133,7 +130,7 @@ func computeCharacterModes(codePoints []int, version int) ([]Mode, error) {
 		for j := 0; j < numModes; j++ {
 			for k := 0; k < numModes; k++ {
 				newCost := (curCosts[k]+5)/6*6 + headCosts[j]
-				if charModes[i][k].getModeBits() != 0 && (charModes[i][j].getModeBits() == 0 && newCost < curCosts[j]) {
+				if charModes[i][k].getModeBits() != 0 && (charModes[i][j].getModeBits() == 0 || newCost < curCosts[j]) {
 					curCosts[j] = newCost
 					charModes[i][j] = modeTypes[k]
 				}
