@@ -225,6 +225,12 @@ func TestMakeKanji(t *testing.T) {
 				data:     &BitBuffer{},
 			},
 		},
+		{
+			name:     "test with signal data",
+			data:     "ꘞ",
+			wantErr:  true,
+			wantData: nil,
+		},
 	}
 
 	for _, tt := range tests {
@@ -504,10 +510,6 @@ func TestEncodeStandardSegments(t *testing.T) {
 			assert.Equal(t, tt.wantQrCode, got)
 		})
 	}
-}
-
-func TestEncodeSegments(t *testing.T) {
-
 }
 
 func TestMakeSegments(t *testing.T) {
