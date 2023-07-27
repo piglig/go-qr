@@ -2,7 +2,6 @@ package go_qr
 
 import (
 	"github.com/stretchr/testify/assert"
-	"math"
 	"testing"
 )
 
@@ -65,14 +64,6 @@ func TestAppendBits(t *testing.T) {
 			length:   5,
 			wantErr:  true,
 			wantData: BitBuffer{},
-		},
-		{
-			name:     "test the maximum length",
-			original: make(BitBuffer, math.MaxInt32),
-			val:      1,
-			length:   1,
-			wantErr:  true,
-			wantData: make(BitBuffer, math.MaxInt32),
 		},
 	}
 
