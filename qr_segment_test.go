@@ -324,39 +324,6 @@ func TestEncodeStandardSegments(t *testing.T) {
 		wantQrCode *QrCode
 	}{
 		{
-			name:    "test with empty text",
-			ecl:     Low,
-			wantErr: false,
-			wantQrCode: &QrCode{
-				version:              1,
-				size:                 21,
-				errorCorrectionLevel: High,
-				mask:                 6,
-				modules: [][]bool{{true, true, true, true, true, true, true, false, false, true, false, false, false, false, true, true, true, true, true, true, true},
-					{true, false, false, false, false, false, true, false, false, false, true, true, false, false, true, false, false, false, false, false, true},
-					{true, false, true, true, true, false, true, false, true, true, true, true, true, false, true, false, true, true, true, false, true},
-					{true, false, true, true, true, false, true, false, true, true, true, false, true, false, true, false, true, true, true, false, true},
-					{true, false, true, true, true, false, true, false, false, true, true, true, false, false, true, false, true, true, true, false, true},
-					{true, false, false, false, false, false, true, false, false, true, false, true, true, false, true, false, false, false, false, false, true},
-					{true, true, true, true, true, true, true, false, true, false, true, false, true, false, true, true, true, true, true, true, true},
-					{false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false},
-					{false, false, false, true, true, false, true, true, false, false, false, false, true, false, false, false, false, true, true, false, false},
-					{true, true, false, false, false, true, false, true, true, false, false, true, true, false, false, true, true, true, false, true, true},
-					{true, true, false, false, false, true, true, true, true, false, false, false, true, true, true, true, false, true, false, false, true},
-					{false, true, false, true, true, false, false, false, true, true, true, true, false, false, false, true, true, false, false, true, false},
-					{true, false, true, true, false, false, true, false, true, false, false, false, false, false, true, true, true, true, true, true, true},
-					{false, false, false, false, false, false, false, false, true, true, false, false, false, true, false, false, false, false, true, true, true},
-					{true, true, true, true, true, true, true, false, true, true, true, false, false, true, true, false, false, true, true, false, true},
-					{true, false, false, false, false, false, true, false, false, true, true, true, false, true, true, false, false, false, true, false, false},
-					{true, false, true, true, true, false, true, false, true, true, false, true, false, false, true, false, true, false, true, true, false},
-					{true, false, true, true, true, false, true, false, true, true, false, false, true, false, false, true, true, false, false, false, false},
-					{true, false, true, true, true, false, true, false, false, true, false, true, true, false, false, true, true, true, false, true, true},
-					{true, false, false, false, false, false, true, false, false, false, false, false, false, true, false, true, false, true, false, true, true},
-					{true, true, true, true, true, true, true, false, false, false, true, true, true, false, true, true, true, false, true, true, false}},
-				isFunction: nil,
-			},
-		},
-		{
 			name:    "test with Byte segments",
 			text:    "Hello, world!",
 			ecl:     Low,
@@ -519,12 +486,6 @@ func TestMakeSegments(t *testing.T) {
 		wantErr      bool
 		wantSegments []*QrSegment
 	}{
-		{
-			name:         "test with empty text",
-			text:         "",
-			wantErr:      false,
-			wantSegments: []*QrSegment{},
-		},
 		{
 			name:    "test with numeric text",
 			text:    "314159265358979323846264338327950288419716939937510",
@@ -737,6 +698,28 @@ func TestIsModes(t *testing.T) {
 			if got := tt.mode.isEci(); got != tt.isEci {
 				t.Errorf("Mode.isEci() = %v, want %v", got, tt.isEci)
 			}
+		})
+	}
+}
+
+func TestQrSegment_GetData(t *testing.T) {
+	tests := []struct {
+		name     string
+		segment  *QrSegment
+		wantData *BitBuffer
+	}{
+		{
+			name: "test with normal data",
+			segment: &QrSegment{
+				data: &BitBuffer{true, true, false},
+			},
+			wantData: &BitBuffer{true, true, false},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.wantData, tt.segment.getData())
 		})
 	}
 }

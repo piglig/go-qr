@@ -56,9 +56,9 @@ func (m Mode) isEci() bool {
 	return m.modeBits == Eci.getModeBits()
 }
 
-const (
-	numericRegex        = `^\d+$`
-	alphanumericRegex   = `^[0-9A-Z $%*+\-.\/:]*$`
+var (
+	numericRegex        = regexp.MustCompile(`^\d+$`)
+	alphanumericRegex   = regexp.MustCompile(`^[0-9A-Z $%*+\-.\/:]*$`)
 	alphanumericCharset = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ $%*+-./:"
 )
 
@@ -118,7 +118,7 @@ func MakeNumeric(digits string) (*QrSegment, error) {
 }
 
 func isNumeric(numb string) bool {
-	return regexp.MustCompile(numericRegex).MatchString(numb)
+	return numericRegex.MatchString(numb)
 }
 
 func min(a, b int) int {
@@ -169,13 +169,12 @@ func MakeAlphanumeric(text string) (*QrSegment, error) {
 }
 
 func isAlphanumeric(text string) bool {
-	return regexp.MustCompile(alphanumericRegex).MatchString(text)
+	return alphanumericRegex.MatchString(text)
 }
 
 func MakeSegments(text string) ([]*QrSegment, error) {
 	res := make([]*QrSegment, 0)
-	if text == "" {
-	} else if isNumeric(text) {
+	if isNumeric(text) {
 		seg, err := MakeNumeric(text)
 		if err != nil {
 			return nil, err

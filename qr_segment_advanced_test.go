@@ -172,3 +172,30 @@ func TestMakeSegmentsOptimally(t *testing.T) {
 		})
 	}
 }
+
+func TestCountUtf8Bytes(t *testing.T) {
+	tests := []struct {
+		name     string
+		cp       int
+		wantErr  bool
+		wantData int
+	}{
+		{
+			name:     "test with negative value",
+			cp:       -1,
+			wantErr:  true,
+			wantData: 0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := countUtf8Bytes(tt.cp)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("countUtf8Bytes() error = %v, wantErr %v", err, tt.wantErr)
+			}
+
+			assert.Equal(t, tt.wantData, got)
+		})
+	}
+}
