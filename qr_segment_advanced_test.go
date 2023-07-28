@@ -159,6 +159,23 @@ func TestMakeSegmentsOptimally(t *testing.T) {
 			wantErr:      true,
 			wantSegments: nil,
 		},
+		{
+			name:       "test unicode code point near upper limit",
+			text:       "\U0010FFFE",
+			ecl:        Medium,
+			wantErr:    false,
+			minVersion: 5,
+			maxVersion: 5,
+			wantSegments: []*QrSegment{
+				{
+					mode:     Byte,
+					numChars: 4,
+					data: &BitBuffer{true, true, true, true, false, true, false, false, true, false, false, false, true,
+						true, true, true, true, false, true, true, true, true, true, true, true, false, true, true, true,
+						true, true, false},
+				},
+			},
+		},
 	}
 
 	for _, tt := range tests {
