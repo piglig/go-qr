@@ -10,6 +10,10 @@ var M = 100000
 func TestEquivalence(t *testing.T) {
 	s := BitBuffer{}
 
+	if s.getBit(1) {
+		t.Errorf("Expected bit %d not to be set %t, but it is not", 1, true)
+	}
+
 	for j := 2; j < M; j += 13 {
 		s.set(j, true)
 		if !s.getBit(j) {
