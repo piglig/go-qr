@@ -174,7 +174,8 @@ func isAlphanumeric(text string) bool {
 
 func MakeSegments(text string) ([]*QrSegment, error) {
 	res := make([]*QrSegment, 0)
-	if isNumeric(text) {
+	if text == "" {
+	} else if isNumeric(text) {
 		seg, err := MakeNumeric(text)
 		if err != nil {
 			return nil, err
