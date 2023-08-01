@@ -6,26 +6,31 @@ import (
 	"math"
 )
 
+// Ecc is the representation of an error correction level in a QR Code symbol.
 type Ecc int
 
 const (
-	Low Ecc = iota
-	Medium
-	Quartile
-	High
+	Low      Ecc = iota // 7% of codewords can be restored
+	Medium              // 15% of codewords can be restored
+	Quartile            // 25% of codewords can be restored
+	High                // 30% of codewords can be restored
 )
 
+// eccFormats maps the ECC to its respective format bits.
 var eccFormats = [...]int{1, 0, 3, 2}
 
+// FormatBits method gets the format bits associated with the error correction level.
 func (e Ecc) FormatBits() int {
 	return eccFormats[e]
 }
 
+// minimum(1) and Maximum(40) version numbers based on the QR Code Model 2 standard
 const (
 	MinVersion = 1
 	MaxVersion = 40
 )
 
+// penaltyN1 - N4 are constants used in QR Code masking penalty rules.
 const (
 	penaltyN1 = 3
 	penaltyN2 = 3
@@ -33,6 +38,8 @@ const (
 	penaltyN4 = 10
 )
 
+// getEccCodeWordsPerBlock function provides a lookup table for the number of error correction code words per block
+// for different versions and error correction levels of the QR Code.
 func getEccCodeWordsPerBlock() [][]int8 {
 	return [][]int8{
 		// Version: (note that index 0 is for padding, and is set to an illegal value)
@@ -44,6 +51,8 @@ func getEccCodeWordsPerBlock() [][]int8 {
 	}
 }
 
+// getNumErrorCorrectionBlocks function provides a lookup table for the number of error correction blocks required
+// for different versions and error correction levels of the QR Code.
 func getNumErrorCorrectionBlocks() [][]int8 {
 	return [][]int8{
 		// Version: (note that index 0 is for padding, and is set to an illegal value)
@@ -55,14 +64,15 @@ func getNumErrorCorrectionBlocks() [][]int8 {
 	}
 }
 
+// QrCode is the representation of a QR code
 type QrCode struct {
-	version              int
-	size                 int
-	errorCorrectionLevel Ecc
-	mask                 int
+	version              int // Version of the QR Code.
+	size                 int // Size of the QR Code.
+	errorCorrectionLevel Ecc // Error correction level (ECC) of the QR Code.
+	mask                 int // Mask pattern of the QR Code.
 
-	modules    [][]bool
-	isFunction [][]bool
+	modules    [][]bool // 2D boolean matrix representing dark modules in the QR Code.
+	isFunction [][]bool // 2D boolean matrix distinguishing function from data modules.
 }
 
 func newQrCode(ver int, ecl Ecc, dataCodewords []byte, msk int) (*QrCode, error) {
