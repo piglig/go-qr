@@ -218,7 +218,7 @@ func doMaskDemo() {
 		G: 0x60,
 		B: 0x20,
 		A: 0xFF,
-	}), "project-nayuki-automask-QR.png")
+	}), "project-piglig-automask-QR.png")
 	if err != nil {
 		return
 	}
@@ -238,7 +238,7 @@ func doMaskDemo() {
 		G: 0x20,
 		B: 0x20,
 		A: 0xFF,
-	}), "project-nayuki-mask3-QR.png")
+	}), "project-piglig-mask3-QR.png")
 	if err != nil {
 		return
 	}

@@ -8,6 +8,11 @@ import (
 	"unicode/utf16"
 )
 
+// MakeSegmentsOptimally takes a string and error correction level, and attempts to
+// make QR segments in the most efficient way possible. It validates the version
+// range and converts the input text into code points. Then, it loops through
+// each version, attempting to make segments until the data fits within the
+// capacity of the version. Returns an array of pointers to QrSegment or an error.
 func MakeSegmentsOptimally(text string, ecl Ecc, minVersion, maxVersion int) ([]*QrSegment, error) {
 	if !isValidVersion(minVersion, maxVersion) {
 		return nil, errors.New("invalid value")
@@ -41,6 +46,10 @@ func MakeSegmentsOptimally(text string, ecl Ecc, minVersion, maxVersion int) ([]
 	}
 }
 
+// makeSegmentsOptimallyWithVersion takes code points and a version number,
+// computes the character modes suitable for that version, and then splits the
+// code points into segments accordingly. Returns an array of pointers to
+// QrSegment or an error.
 func makeSegmentsOptimallyWithVersion(codePoints []int, version int) ([]*QrSegment, error) {
 	charModes, err := computeCharacterModes(codePoints, version)
 	if err != nil {
@@ -49,7 +58,7 @@ func makeSegmentsOptimallyWithVersion(codePoints []int, version int) ([]*QrSegme
 	return splitIntoSegments(codePoints, charModes)
 }
 
-// Returns a new slice of Unicode code points (effectively
+// toCodePoints returns a new slice of Unicode code points (effectively
 // UTF-32 / UCS-4) representing the given UTF-16 string.
 func toCodePoints(s string) ([]int, error) {
 	runes := []rune(s)
@@ -64,6 +73,7 @@ func toCodePoints(s string) ([]int, error) {
 	return codePoints, nil
 }
 
+// countUtf8Bytes counts the number of bytes required to represent a Unicode code point in UTF-8.
 func countUtf8Bytes(cp int) (int, error) {
 	if cp < 0 {
 		return 0, errors.New("invalid code point")
@@ -80,6 +90,7 @@ func countUtf8Bytes(cp int) (int, error) {
 	}
 }
 
+// computeCharacterModes determines the optimal encoding mode for each character in the input string.
 func computeCharacterModes(codePoints []int, version int) ([]Mode, error) {
 	if len(codePoints) > 7089 {
 		return nil, errors.New("string too long")
@@ -100,6 +111,7 @@ func computeCharacterModes(codePoints []int, version int) ([]Mode, error) {
 	prevCosts := make([]int, numModes)
 	copy(prevCosts, headCosts)
 
+	// Determine the mode type for each character based on cost calculation
 	for i := 0; i < len(codePoints); i++ {
 		c := codePoints[i]
 		curCosts := make([]int, numModes)
@@ -161,6 +173,8 @@ func computeCharacterModes(codePoints []int, version int) ([]Mode, error) {
 	return res, nil
 }
 
+// splitIntoSegments is used to splits the input into multiple QR segments according to the given modes.
+// Each change in mode results in a new segment being created.
 func splitIntoSegments(codePoints []int, charModes []Mode) ([]*QrSegment, error) {
 	res := make([]*QrSegment, 0)
 	curMode := charModes[0]
@@ -177,6 +191,7 @@ func splitIntoSegments(codePoints []int, charModes []Mode) ([]*QrSegment, error)
 
 		s := string(runes)
 
+		// Create a QR segment based on the current mode
 		if curMode.isByte() {
 			qs, err := MakeBytes([]byte(s))
 			if err != nil {
@@ -212,6 +227,8 @@ func splitIntoSegments(codePoints []int, charModes []Mode) ([]*QrSegment, error)
 	}
 }
 
+// MakeKanji converts a string into a QR code segment in Kanji mode
+// It returns an error if the string contains non-kanji characters.
 func MakeKanji(text string) (*QrSegment, error) {
 	bb := &BitBuffer{}
 	runes := []rune(text)
@@ -228,6 +245,7 @@ func MakeKanji(text string) (*QrSegment, error) {
 	return newQrSegment(Kanji, len(runes), bb)
 }
 
+// isKanji function takes a integer as input and returns a boolean indicating whether the integer is Kanji.
 func isKanji(c int) bool {
 	return c < len(unicdeToQRKanji) && unicdeToQRKanji[c] != -1 && c >= 0
 }
