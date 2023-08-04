@@ -24,7 +24,7 @@ func (e Ecc) FormatBits() int {
 	return eccFormats[e]
 }
 
-// minimum(1) and Maximum(40) version numbers based on the QR Code Model 2 standard
+// Minimum(1) and Maximum(40) version numbers based on the QR Code Model 2 standard
 const (
 	MinVersion = 1
 	MaxVersion = 40

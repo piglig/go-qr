@@ -27,7 +27,7 @@ It is mostly a translation of [project Nayuki's Java version of the QR code gene
 go get github.com/piglig/go-qr
 ```
 
-## Examples
+## [Examples](https://github.com/piglig/go-qr/tree/master/example/main.go)
 ```go
 package main
 
