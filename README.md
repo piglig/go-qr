@@ -161,5 +161,35 @@ func toSvgString(qr *go_qr.QrCode, border int, lightColor, darkColor string) (st
 
 ```
 
+## Command Line Tool
+**generator** command line tool to generate the QR Code.
+### Installation
+In order to use the tool, compile it using the following command
+```shell
+go install github.com/piglig/go-qr/tools/generator@latest
+```
+
+### Usage
+```shell
+generator [options] [arguments]
+  -content string
+        Content to encode in the QR code
+  -png string
+        Output PNG file name
+  -svg string
+        Output SVG file name
+```
+
+### Example
+* **Text Art**
+```shell
+$:/usr/local/test# generator -content hello
+```
+
+* **Image Type**
+```shell
+$:/usr/local/test# generator -content hello -png hello.png -svg hello.svg
+```
+
 ## License
 See the [LICENSE](LICENSE) file for license rights and limitations (MIT).

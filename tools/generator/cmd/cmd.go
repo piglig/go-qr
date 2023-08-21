@@ -20,6 +20,11 @@ const (
 	textArtType = "textArt"
 )
 
+const (
+	blackBlock = "\033[40m  \033[0m"
+	whiteBlock = "\033[47m  \033[0m"
+)
+
 type Command struct {
 	Content   string
 	PngOutput string
@@ -60,7 +65,11 @@ func Exec() {
 		}
 	}
 
-	generateQrCode(cmd.Content, textArtType, "")
+	err := generateQrCode(cmd.Content, textArtType, "")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "%s\n", err)
+		return
+	}
 }
 
 func generateQrCode(content, outputType, outputFile string) error {
@@ -187,9 +196,9 @@ func toString(qr *go_qr.QrCode) string {
 	for y := -border; y < qr.GetSize()+border; y++ {
 		for x := -border; x < qr.GetSize()+border; x++ {
 			if !qr.GetModule(x, y) {
-				buf.WriteString("██")
+				buf.WriteString(blackBlock)
 			} else {
-				buf.WriteString("  ")
+				buf.WriteString(whiteBlock)
 			}
 		}
 		buf.WriteString("\n")
