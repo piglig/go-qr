@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bytes"
 	"errors"
 	"flag"
 	"fmt"
@@ -14,8 +15,9 @@ import (
 )
 
 const (
-	pngType = "png"
-	svgType = "svg"
+	pngType     = "png"
+	svgType     = "svg"
+	textArtType = "textArt"
 )
 
 type Command struct {
@@ -57,6 +59,8 @@ func Exec() {
 			return
 		}
 	}
+
+	generateQrCode(cmd.Content, textArtType, "")
 }
 
 func generateQrCode(content, outputType, outputFile string) error {
@@ -87,6 +91,9 @@ func generateQrCode(content, outputType, outputFile string) error {
 		if err != nil {
 			return err
 		}
+	case textArtType:
+		art := toString(qr)
+		fmt.Println(art)
 	default:
 		return fmt.Errorf("unsupported file type: %s", outputType)
 	}
@@ -172,4 +179,21 @@ func toSvgString(qr *go_qr.QrCode, border int, lightColor, darkColor string) (st
 	sb.WriteString("</svg>\n")
 
 	return sb.String(), nil
+}
+
+func toString(qr *go_qr.QrCode) string {
+	buf := bytes.Buffer{}
+	border := 4
+	for y := -border; y < qr.GetSize()+border; y++ {
+		for x := -border; x < qr.GetSize()+border; x++ {
+			if !qr.GetModule(x, y) {
+				buf.WriteString("██")
+			} else {
+				buf.WriteString("  ")
+			}
+		}
+		buf.WriteString("\n")
+	}
+
+	return buf.String()
 }
