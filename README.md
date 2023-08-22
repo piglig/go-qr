@@ -183,13 +183,15 @@ generator [options] [arguments]
 ### Example
 * **Text Art**
 ```shell
-$:/usr/local/test# generator -content hello
+generator -content hello
 ```
+![Gif](/docs/assets/text_art.gif)
 
 * **Image Type**
 ```shell
-$:/usr/local/test# generator -content hello -png hello.png -svg hello.svg
+generator -content hello -png hello.png -svg hello.svg
 ```
+![Gif](/docs/assets/image_type.gif)
 
 ## License
 See the [LICENSE](LICENSE) file for license rights and limitations (MIT).
