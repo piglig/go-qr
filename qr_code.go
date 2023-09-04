@@ -1,7 +1,6 @@
 package go_qr
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"math"
@@ -805,23 +804,6 @@ func (q *QrCode) finderPenaltyAddHistory(currentRunLen int, runHistory []int) {
 	}
 	copy(runHistory[1:], runHistory[:len(runHistory)-1])
 	runHistory[0] = currentRunLen
-}
-
-func (q *QrCode) String() string {
-	buf := bytes.Buffer{}
-	border := 4
-	for y := -border; y < q.size+border; y++ {
-		for x := -border; x < q.size+border; x++ {
-			if !q.GetModule(x, y) {
-				buf.WriteString("██")
-			} else {
-				buf.WriteString("  ")
-			}
-		}
-		buf.WriteString("\n")
-	}
-
-	return buf.String()
 }
 
 // getBit gets the bit at position i from x.
