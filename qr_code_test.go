@@ -2,6 +2,8 @@ package go_qr
 
 import (
 	"github.com/stretchr/testify/assert"
+	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -225,5 +227,81 @@ func TestEncodeText(t *testing.T) {
 
 			assert.Equal(t, tt.wantQrCode, got)
 		})
+	}
+}
+
+func TestQrCode_ToPNG(t *testing.T) {
+	tempDir := t.TempDir()
+	defer os.RemoveAll(tempDir)
+	tests := []struct {
+		text          string
+		wantErr       bool
+		ecl           Ecc
+		dest          string
+		scale, border int
+	}{
+		{
+			text:    "Hello, world!",
+			wantErr: false,
+			ecl:     Low,
+			dest:    "hello-world-QR.png",
+			scale:   10,
+			border:  4,
+		},
+		{
+			text:    "",
+			wantErr: false,
+			ecl:     Low,
+			dest:    "empty-QR.png",
+			scale:   10,
+			border:  4,
+		},
+		{
+			text:    "こんにちwa、世界！ αβγδ",
+			wantErr: false,
+			ecl:     Quartile,
+			dest:    "unicode-QR.png",
+			scale:   10,
+			border:  3,
+		},
+		{
+			text:    "aabbcc",
+			wantErr: true,
+			ecl:     Quartile,
+			dest:    "aabbcc-QR.png",
+			scale:   -10,
+			border:  -3,
+		},
+		{
+			text:    "aabbcc",
+			wantErr: true,
+			ecl:     Low,
+			dest:    "",
+			scale:   10,
+			border:  3,
+		},
+	}
+
+	for _, tt := range tests {
+		qr, err := EncodeText(tt.text, tt.ecl)
+		if err != nil {
+			t.Errorf("EncodeText() error = %v", err)
+			return
+		}
+
+		dest := filepath.Join(tempDir, tt.dest)
+		err = qr.ToPNG(dest, tt.scale, tt.border)
+		if (err != nil) != tt.wantErr {
+			t.Errorf("TestQrCode_ToPNG() error = %v, wantErr %v", err, tt.wantErr)
+			return
+		}
+
+		if err == nil {
+			_, err = os.Stat(dest)
+			if err != nil {
+				t.Errorf("TestQrCode_ToPNG() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+		}
 	}
 }

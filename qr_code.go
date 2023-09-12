@@ -3,7 +3,11 @@ package go_qr
 import (
 	"errors"
 	"fmt"
+	"image"
+	"image/color"
+	"image/png"
 	"math"
+	"os"
 )
 
 // Ecc is the representation of an error correction level in a QR Code symbol.
@@ -809,4 +813,48 @@ func (q *QrCode) finderPenaltyAddHistory(currentRunLen int, runHistory []int) {
 // getBit gets the bit at position i from x.
 func getBit(x, i int) bool {
 	return ((x >> uint(i)) & 1) != 0
+}
+
+func (q *QrCode) ToPNG(dest string, scale, border int) error {
+	if scale <= 0 || border < 0 {
+		return errors.New("invalid input")
+	}
+
+	if border > (math.MaxInt32/2) || int64(q.GetSize())+int64(border)*2 > math.MaxInt32/int64(scale) {
+		return errors.New("scale or border too large")
+	}
+
+	size := q.GetSize() + border*2
+	imageWidth := size * scale
+	imageHeight := size * scale
+	result := image.NewRGBA(image.Rect(0, 0, imageWidth, imageHeight))
+	for y := 0; y < imageHeight; y++ {
+		for x := 0; x < imageWidth; x++ {
+			moduleX := x/scale - border
+			moduleY := y/scale - border
+			isDark := q.GetModule(moduleX, moduleY)
+			if isDark {
+				result.Set(x, y, color.Black)
+			} else {
+				result.Set(x, y, color.White)
+			}
+		}
+	}
+
+	return writePng(result, dest)
+}
+
+func writePng(img *image.RGBA, filepath string) error {
+	file, err := os.Create(filepath)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	err = png.Encode(file, img)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
