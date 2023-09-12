@@ -268,9 +268,17 @@ func TestQrCode_ToPNG(t *testing.T) {
 			text:    "aabbcc",
 			wantErr: true,
 			ecl:     Quartile,
-			dest:    "",
+			dest:    "aabbcc-QR.png",
 			scale:   -10,
 			border:  -3,
+		},
+		{
+			text:    "aabbcc",
+			wantErr: true,
+			ecl:     Low,
+			dest:    "",
+			scale:   10,
+			border:  3,
 		},
 	}
 
