@@ -815,6 +815,7 @@ func getBit(x, i int) bool {
 	return ((x >> uint(i)) & 1) != 0
 }
 
+// ToPNG method converts a QR Code into a PNG image with the given scale and border.
 func (q *QrCode) ToPNG(dest string, scale, border int) error {
 	if scale <= 0 || border < 0 {
 		return errors.New("invalid input")
@@ -828,6 +829,7 @@ func (q *QrCode) ToPNG(dest string, scale, border int) error {
 	imageWidth := size * scale
 	imageHeight := size * scale
 	result := image.NewRGBA(image.Rect(0, 0, imageWidth, imageHeight))
+	// Iterate over each pixel in the image
 	for y := 0; y < imageHeight; y++ {
 		for x := 0; x < imageWidth; x++ {
 			moduleX := x/scale - border
@@ -844,6 +846,8 @@ func (q *QrCode) ToPNG(dest string, scale, border int) error {
 	return writePng(result, dest)
 }
 
+// writePng is a helper function that creates a file with the given path,
+// and writes the provided image into this file as a PNG.
 func writePng(img *image.RGBA, filepath string) error {
 	file, err := os.Create(filepath)
 	if err != nil {
