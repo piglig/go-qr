@@ -68,6 +68,38 @@ func getNumErrorCorrectionBlocks() [][]int8 {
 	}
 }
 
+// QrCodeImgConfig is the representation of the QR Code generation configuration
+type QrCodeImgConfig struct {
+	scale, border int
+	light, dark   color.Color
+}
+
+// NewQrCodeImgConfig is used to create a QR code generation config with the provided scale of image(scale), border of image(border),
+// and the default light and dark color are white and black.
+func NewQrCodeImgConfig(scale int, border int) *QrCodeImgConfig {
+	return &QrCodeImgConfig{scale: scale, border: border, light: color.White, dark: color.Black}
+}
+
+// Light gets light color from QrCodeImgConfig
+func (q *QrCodeImgConfig) Light() color.Color {
+	return q.light
+}
+
+// SetLight sets light color in the QrCodeImgConfig
+func (q *QrCodeImgConfig) SetLight(light color.Color) {
+	q.light = light
+}
+
+// Dark gets dark color from QrCodeImgConfig
+func (q *QrCodeImgConfig) Dark() color.Color {
+	return q.dark
+}
+
+// SetDark sets dark color in the QrCodeImgConfig
+func (q *QrCodeImgConfig) SetDark(dark color.Color) {
+	q.dark = dark
+}
+
 // QrCode is the representation of a QR code
 type QrCode struct {
 	version              int // Version of the QR Code.
@@ -529,6 +561,60 @@ func (q *QrCode) drawFormatBits(msk int) {
 	q.setFunctionModule(8, q.size-8, true)
 }
 
+// PNG generates a PNG image file for the QR code with QrCodeImgConfig and saves it to given file path
+func (q *QrCode) PNG(config *QrCodeImgConfig, filePath string) error {
+	if q == nil || config == nil {
+		return errors.New("qr code or config is nil")
+	}
+
+	if config.scale <= 0 || config.border < 0 {
+		return errors.New("invalid input")
+	}
+
+	// Ensure that the border size combined with QR code size does not exceed the maximum allowed integer value after scaling.
+	if config.border > (math.MaxInt32/2) || int64(q.GetSize())+int64(config.border)*2 > math.MaxInt32/int64(config.scale) {
+		return errors.New("scale or border too large")
+	}
+
+	rgba := q.toImage(config)
+	return q.writePng(rgba, filePath)
+}
+
+// toImage generates an RGBA image based on QrCodeImgConfig
+func (q *QrCode) toImage(config *QrCodeImgConfig) *image.RGBA {
+	size := q.GetSize() + config.border*2
+	imageWidth := size * config.scale
+	imageHeight := size * config.scale
+	result := image.NewRGBA(image.Rect(0, 0, imageWidth, imageHeight))
+	for y := 0; y < imageHeight; y++ {
+		for x := 0; x < imageWidth; x++ {
+			moduleX := x/config.scale - config.border
+			moduleY := y/config.scale - config.border
+			isDark := q.GetModule(moduleX, moduleY)
+			if isDark {
+				result.Set(x, y, config.Dark())
+			} else {
+				result.Set(x, y, config.Light())
+			}
+		}
+	}
+	return result
+}
+
+// writePng writes an RGBA image to the path of the PNG file
+func (q *QrCode) writePng(img *image.RGBA, filepath string) error {
+	file, err := os.Create(filepath)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	if err = png.Encode(file, img); err != nil {
+		return fmt.Errorf("failed to encode PNG: %w", err)
+	}
+	return nil
+}
+
 // EncodeText takes a string and an error correction level (ecl),
 // encodes the text to segments and returns a QR code or an error.
 func EncodeText(text string, ecl Ecc) (*QrCode, error) {
@@ -813,52 +899,4 @@ func (q *QrCode) finderPenaltyAddHistory(currentRunLen int, runHistory []int) {
 // getBit gets the bit at position i from x.
 func getBit(x, i int) bool {
 	return ((x >> uint(i)) & 1) != 0
-}
-
-// ToPNG method converts a QR Code into a PNG image with the given scale and border.
-func (q *QrCode) ToPNG(dest string, scale, border int) error {
-	if scale <= 0 || border < 0 {
-		return errors.New("invalid input")
-	}
-
-	if border > (math.MaxInt32/2) || int64(q.GetSize())+int64(border)*2 > math.MaxInt32/int64(scale) {
-		return errors.New("scale or border too large")
-	}
-
-	size := q.GetSize() + border*2
-	imageWidth := size * scale
-	imageHeight := size * scale
-	result := image.NewRGBA(image.Rect(0, 0, imageWidth, imageHeight))
-	// Iterate over each pixel in the image
-	for y := 0; y < imageHeight; y++ {
-		for x := 0; x < imageWidth; x++ {
-			moduleX := x/scale - border
-			moduleY := y/scale - border
-			isDark := q.GetModule(moduleX, moduleY)
-			if isDark {
-				result.Set(x, y, color.Black)
-			} else {
-				result.Set(x, y, color.White)
-			}
-		}
-	}
-
-	return writePng(result, dest)
-}
-
-// writePng is a helper function that creates a file with the given path,
-// and writes the provided image into this file as a PNG.
-func writePng(img *image.RGBA, filepath string) error {
-	file, err := os.Create(filepath)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-
-	err = png.Encode(file, img)
-	if err != nil {
-		return err
-	}
-
-	return nil
 }
