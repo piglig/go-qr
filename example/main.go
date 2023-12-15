@@ -4,10 +4,7 @@ import (
 	"errors"
 	"fmt"
 	go_qr "github.com/piglig/go-qr"
-	"image"
 	"image/color"
-	"image/png"
-	"math"
 	"os"
 	"strings"
 )
@@ -26,8 +23,8 @@ func doBasicDemo() {
 	if err != nil {
 		return
 	}
-	img := toImageStandard(qr, 10, 4)
-	err = writePng(img, "hello-world-QR.png")
+	config := go_qr.NewQrCodeImgConfig(10, 4)
+	err = qr.PNG(config, "hello-world-QR.png")
 	if err != nil {
 		return
 	}
@@ -54,7 +51,9 @@ func doVarietyDemo() {
 	if err != nil {
 		return
 	}
-	err = writePng(toImageStandard(qr, 13, 1), "pi-digits-QR.png")
+
+	config := go_qr.NewQrCodeImgConfig(13, 1)
+	err = qr.PNG(config, "pi-digits-QR.png")
 	if err != nil {
 		return
 	}
@@ -64,7 +63,8 @@ func doVarietyDemo() {
 	if err != nil {
 		return
 	}
-	err = writePng(toImageStandard(qr, 10, 2), "alphanumeric-QR.png")
+
+	err = qr.PNG(go_qr.NewQrCodeImgConfig(10, 2), "alphanumeric-QR.png")
 	if err != nil {
 		return
 	}
@@ -74,7 +74,7 @@ func doVarietyDemo() {
 	if err != nil {
 		return
 	}
-	err = writePng(toImageStandard(qr, 10, 3), "unicode-QR.png")
+	err = qr.PNG(go_qr.NewQrCodeImgConfig(10, 3), "unicode-QR.png")
 	if err != nil {
 		return
 	}
@@ -88,7 +88,8 @@ func doSegmentDemo() {
 	if err != nil {
 		return
 	}
-	err = writePng(toImageStandard(qr, 10, 3), "sqrt2-monolithic-QR.png")
+
+	err = qr.PNG(go_qr.NewQrCodeImgConfig(10, 3), "sqrt2-monolithic-QR.png")
 	if err != nil {
 		return
 	}
@@ -108,7 +109,7 @@ func doSegmentDemo() {
 	if err != nil {
 		return
 	}
-	err = writePng(toImageStandard(qr, 10, 3), "sqrt2-segmented-QR.png")
+	err = qr.PNG(go_qr.NewQrCodeImgConfig(10, 3), "sqrt2-segmented-QR.png")
 	if err != nil {
 		return
 	}
@@ -120,7 +121,8 @@ func doSegmentDemo() {
 	if err != nil {
 		return
 	}
-	err = writePng(toImageStandard(qr, 8, 5), "phi-monolithic-QR.png")
+
+	err = qr.PNG(go_qr.NewQrCodeImgConfig(8, 5), "phi-monolithic-QR.png")
 	if err != nil {
 		return
 	}
@@ -145,7 +147,7 @@ func doSegmentDemo() {
 	if err != nil {
 		return
 	}
-	err = writePng(toImageStandard(qr, 8, 5), "phi-segmented-QR.png")
+	err = qr.PNG(go_qr.NewQrCodeImgConfig(8, 5), "phi-segmented-QR.png")
 	if err != nil {
 		return
 	}
@@ -156,17 +158,21 @@ func doSegmentDemo() {
 	if err != nil {
 		return
 	}
-	err = writePng(toImage(qr, 9, 4, color.RGBA{
+
+	config := go_qr.NewQrCodeImgConfig(9, 4)
+	config.SetLight(color.RGBA{
 		R: 0xFF,
 		G: 0xFF,
 		B: 0xE0,
 		A: 0xFF,
-	}, color.RGBA{
+	})
+	config.SetDark(color.RGBA{
 		R: 0x30,
 		G: 0x30,
 		B: 0x80,
 		A: 0xFF,
-	}), "madoka-utf8-QR.png")
+	})
+	err = qr.PNG(config, "madoka-utf8-QR.png")
 	if err != nil {
 		return
 	}
@@ -181,17 +187,21 @@ func doSegmentDemo() {
 	if err != nil {
 		return
 	}
-	err = writePng(toImage(qr, 9, 4, color.RGBA{
+
+	config = go_qr.NewQrCodeImgConfig(9, 4)
+	config.SetLight(color.RGBA{
 		R: 0xE0,
 		G: 0xF0,
 		B: 0xEF,
 		A: 0xFF,
-	}, color.RGBA{
+	})
+	config.SetDark(color.RGBA{
 		R: 0x40,
 		G: 0x40,
 		B: 0x40,
 		A: 0xFF,
-	}), "madoka-kanji-QR.png")
+	})
+	err = qr.PNG(config, "madoka-kanji-QR.png")
 	if err != nil {
 		return
 	}
@@ -208,17 +218,20 @@ func doMaskDemo() {
 		return
 	}
 
-	err = writePng(toImage(qr, 8, 6, color.RGBA{
+	config := go_qr.NewQrCodeImgConfig(9, 4)
+	config.SetLight(color.RGBA{
 		R: 0xE0,
 		G: 0xFF,
 		B: 0xE0,
 		A: 0xFF,
-	}, color.RGBA{
+	})
+	config.SetDark(color.RGBA{
 		R: 0x20,
 		G: 0x60,
 		B: 0x20,
 		A: 0xFF,
-	}), "project-piglig-automask-QR.png")
+	})
+	err = qr.PNG(config, "project-piglig-automask-QR.png")
 	if err != nil {
 		return
 	}
@@ -228,17 +241,20 @@ func doMaskDemo() {
 		return
 	}
 
-	err = writePng(toImage(qr, 8, 6, color.RGBA{
+	config = go_qr.NewQrCodeImgConfig(8, 6)
+	config.SetLight(color.RGBA{
 		R: 0xFF,
 		G: 0xE0,
 		B: 0xE0,
 		A: 0xFF,
-	}, color.RGBA{
+	})
+	config.SetDark(color.RGBA{
 		R: 0x60,
 		G: 0x20,
 		B: 0x20,
 		A: 0xFF,
-	}), "project-piglig-mask3-QR.png")
+	})
+	err = qr.PNG(config, "project-piglig-mask3-QR.png")
 	if err != nil {
 		return
 	}
@@ -253,7 +269,7 @@ func doMaskDemo() {
 	if err != nil {
 		return
 	}
-	err = writePng(toImageStandard(qr, 10, 3), "unicode-mask0-QR.png")
+	err = qr.PNG(go_qr.NewQrCodeImgConfig(10, 3), "unicode-mask0-QR.png")
 	if err != nil {
 		return
 	}
@@ -262,7 +278,7 @@ func doMaskDemo() {
 	if err != nil {
 		return
 	}
-	err = writePng(toImageStandard(qr, 10, 3), "unicode-mask1-QR.png")
+	err = qr.PNG(go_qr.NewQrCodeImgConfig(10, 3), "unicode-mask1-QR.png")
 	if err != nil {
 		return
 	}
@@ -271,7 +287,7 @@ func doMaskDemo() {
 	if err != nil {
 		return
 	}
-	err = writePng(toImageStandard(qr, 10, 3), "unicode-mask5-QR.png")
+	err = qr.PNG(go_qr.NewQrCodeImgConfig(10, 3), "unicode-mask5-QR.png")
 	if err != nil {
 		return
 	}
@@ -280,57 +296,10 @@ func doMaskDemo() {
 	if err != nil {
 		return
 	}
-	err = writePng(toImageStandard(qr, 10, 3), "unicode-mask7-QR.png")
+	err = qr.PNG(go_qr.NewQrCodeImgConfig(10, 3), "unicode-mask7-QR.png")
 	if err != nil {
 		return
 	}
-}
-
-func toImageStandard(qr *go_qr.QrCode, scale, border int) *image.RGBA {
-	return toImage(qr, scale, border, color.White, color.Black)
-}
-
-func toImage(qr *go_qr.QrCode, scale, border int, lightColor, darkColor color.Color) *image.RGBA {
-	if scale <= 0 || border < 0 || qr == nil {
-		panic("Invalid input")
-	}
-
-	if border > (math.MaxInt32/2) || int64(qr.GetSize())+int64(border)*2 > math.MaxInt32/int64(scale) {
-		panic("Scale or border too large")
-	}
-
-	size := qr.GetSize() + border*2
-	imageWidth := size * scale
-	imageHeight := size * scale
-	result := image.NewRGBA(image.Rect(0, 0, imageWidth, imageHeight))
-	for y := 0; y < imageHeight; y++ {
-		for x := 0; x < imageWidth; x++ {
-			moduleX := x/scale - border
-			moduleY := y/scale - border
-			isDark := qr.GetModule(moduleX, moduleY)
-			if isDark {
-				result.Set(x, y, darkColor)
-			} else {
-				result.Set(x, y, lightColor)
-			}
-		}
-	}
-	return result
-}
-
-func writePng(img *image.RGBA, filepath string) error {
-	file, err := os.Create(filepath)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-
-	err = png.Encode(file, img)
-	if err != nil {
-		return err
-	}
-
-	return nil
 }
 
 func toSvgString(qr *go_qr.QrCode, border int, lightColor, darkColor string) (string, error) {

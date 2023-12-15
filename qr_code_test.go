@@ -2,6 +2,7 @@ package go_qr
 
 import (
 	"github.com/stretchr/testify/assert"
+	"image/color"
 	"os"
 	"path/filepath"
 	"testing"
@@ -230,55 +231,57 @@ func TestEncodeText(t *testing.T) {
 	}
 }
 
-func TestQrCode_ToPNG(t *testing.T) {
+func TestQrCode_PNG(t *testing.T) {
 	tempDir := t.TempDir()
 	defer os.RemoveAll(tempDir)
 	tests := []struct {
-		text          string
-		wantErr       bool
-		ecl           Ecc
-		dest          string
-		scale, border int
+		text    string
+		wantErr bool
+		ecl     Ecc
+		dest    string
+		config  *QrCodeImgConfig
 	}{
 		{
 			text:    "Hello, world!",
 			wantErr: false,
 			ecl:     Low,
 			dest:    "hello-world-QR.png",
-			scale:   10,
-			border:  4,
+			config:  NewQrCodeImgConfig(10, 4),
 		},
 		{
 			text:    "",
 			wantErr: false,
 			ecl:     Low,
 			dest:    "empty-QR.png",
-			scale:   10,
-			border:  4,
+			config:  NewQrCodeImgConfig(10, 4),
 		},
 		{
 			text:    "こんにちwa、世界！ αβγδ",
 			wantErr: false,
 			ecl:     Quartile,
 			dest:    "unicode-QR.png",
-			scale:   10,
-			border:  3,
+			config:  NewQrCodeImgConfig(10, 3),
 		},
 		{
 			text:    "aabbcc",
 			wantErr: true,
 			ecl:     Quartile,
 			dest:    "aabbcc-QR.png",
-			scale:   -10,
-			border:  -3,
+			config:  NewQrCodeImgConfig(-10, -3),
 		},
 		{
 			text:    "aabbcc",
 			wantErr: true,
 			ecl:     Low,
 			dest:    "",
-			scale:   10,
-			border:  3,
+			config:  NewQrCodeImgConfig(10, 3),
+		},
+		{
+			text:    "",
+			wantErr: true,
+			ecl:     Low,
+			dest:    "",
+			config:  nil,
 		},
 	}
 
@@ -290,7 +293,7 @@ func TestQrCode_ToPNG(t *testing.T) {
 		}
 
 		dest := filepath.Join(tempDir, tt.dest)
-		err = qr.ToPNG(dest, tt.scale, tt.border)
+		err = qr.PNG(tt.config, dest)
 		if (err != nil) != tt.wantErr {
 			t.Errorf("TestQrCode_ToPNG() error = %v, wantErr %v", err, tt.wantErr)
 			return
@@ -303,5 +306,105 @@ func TestQrCode_ToPNG(t *testing.T) {
 				return
 			}
 		}
+	}
+}
+
+func TestNewQrCodeImgConfig(t *testing.T) {
+	colorSetterFunc := func(config *QrCodeImgConfig, light, dark color.Color) {
+		if light != nil {
+			config.SetLight(light)
+		}
+
+		if dark != nil {
+			config.SetDark(dark)
+		}
+	}
+
+	tests := []struct {
+		name        string
+		scale       int
+		border      int
+		light, dark color.Color
+		colorSetter func(config *QrCodeImgConfig, light, dark color.Color)
+		want        *QrCodeImgConfig
+	}{
+		{
+			name:        "Default colors",
+			scale:       5,
+			border:      10,
+			light:       color.White,
+			dark:        color.Black,
+			colorSetter: colorSetterFunc,
+			want: &QrCodeImgConfig{
+				scale:  5,
+				border: 10,
+				light:  color.White,
+				dark:   color.Black,
+			},
+		},
+		{
+			name:        "Change dark color",
+			scale:       5,
+			border:      10,
+			light:       color.White,
+			dark:        color.White,
+			colorSetter: colorSetterFunc,
+			want: &QrCodeImgConfig{
+				scale:  5,
+				border: 10,
+				light:  color.White,
+				dark:   color.White,
+			},
+		},
+		{
+			name:        "Change light color",
+			scale:       5,
+			border:      10,
+			light:       color.Black,
+			dark:        color.Black,
+			colorSetter: colorSetterFunc,
+			want: &QrCodeImgConfig{
+				scale:  5,
+				border: 10,
+				light:  color.Black,
+				dark:   color.Black,
+			},
+		},
+		{
+			name:        "Change light and dark colors",
+			scale:       5,
+			border:      10,
+			light:       color.Black,
+			dark:        color.White,
+			colorSetter: colorSetterFunc,
+			want: &QrCodeImgConfig{
+				scale:  5,
+				border: 10,
+				light:  color.Black,
+				dark:   color.White,
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := NewQrCodeImgConfig(tt.scale, tt.border)
+			tt.colorSetter(got, tt.light, tt.dark)
+			if got.scale != tt.want.scale {
+				t.Errorf("scale = %v, want %v", got, &tt.want)
+			}
+
+			if got.border != tt.want.border {
+				t.Errorf("border = %v, want %v", got, &tt.want)
+			}
+
+			if got.Light() != tt.want.Light() {
+				t.Errorf("light color = %v, want %v", got, &tt.want)
+			}
+
+			if got.Dark() != tt.want.Dark() {
+				t.Errorf("dark color = %v, want %v", got, &tt.want)
+			}
+		})
 	}
 }
