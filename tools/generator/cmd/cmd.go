@@ -5,19 +5,21 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	go_qr "github.com/piglig/go-qr"
 	"image"
 	"image/color"
 	"image/png"
 	"math"
 	"os"
 	"strings"
+
+	go_qr "github.com/piglig/go-qr"
 )
 
 const (
-	pngType     = "png"
-	svgType     = "svg"
-	textArtType = "textArt"
+	pngType          = "png"
+	svgType          = "svg"
+	svgOptimizedType = "svg-optimized"
+	textArtType      = "textArt"
 )
 
 const (
@@ -26,9 +28,10 @@ const (
 )
 
 type Command struct {
-	Content   string
-	PngOutput string
-	SvgOutput string
+	Content            string
+	PngOutput          string
+	SvgOutput          string
+	SvgOptimizedOutput string
 }
 
 func newCommand() *Command {
@@ -36,6 +39,7 @@ func newCommand() *Command {
 	flag.StringVar(&cmd.Content, "content", "", "Content to encode in the QR code")
 	flag.StringVar(&cmd.PngOutput, "png", "", "Output PNG file name")
 	flag.StringVar(&cmd.SvgOutput, "svg", "", "Output SVG file name")
+	flag.StringVar(&cmd.SvgOptimizedOutput, "svg-optimized", "", "Output SVG (optimized) file name - regions with connected black pixels are merged into a single path")
 
 	flag.Parse()
 	return cmd
@@ -65,6 +69,14 @@ func Exec() {
 		}
 	}
 
+	if cmd.SvgOptimizedOutput != "" {
+		err := generateQrCode(cmd.Content, svgOptimizedType, cmd.SvgOptimizedOutput)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "%s\n", err)
+			return
+		}
+	}
+
 	err := generateQrCode(cmd.Content, textArtType, "")
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "%s\n", err)
@@ -87,6 +99,21 @@ func generateQrCode(content, outputType, outputFile string) error {
 		}
 	case svgType:
 		svg, err := toSvgString(qr, 4, "#FFFFFF", "#000000")
+		if err != nil {
+			return err
+		}
+
+		svgFile, err := os.Create(outputFile)
+		if err != nil {
+			return err
+		}
+		defer svgFile.Close()
+		_, err = svgFile.WriteString(svg)
+		if err != nil {
+			return err
+		}
+	case svgOptimizedType:
+		svg := toSvgOptimizedString(qr, 4, 1, "#FFFFFF", "#000000")
 		if err != nil {
 			return err
 		}

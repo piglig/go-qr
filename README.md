@@ -178,6 +178,8 @@ generator [options] [arguments]
         Output PNG file name
   -svg string
         Output SVG file name
+  -svg-optimized
+		Output optimized SVG file name - regions with connected black pixels are merged into a single path
 ```
 
 ### Example
@@ -192,6 +194,13 @@ generator -content hello
 generator -content hello -png hello.png -svg hello.svg
 ```
 ![Gif](/docs/assets/image_type.gif)
+
+* **Optimized SVG Type**
+```shell
+generator -content hello -svg hello.svg -svg-optimized hello-optimized.svg 
+```
+The optimized svg output create paths around connected black regions. This reduces the file size and rendering artifacts.
+![svg](/docs/assets/optimized_path.svg)
 
 ## License
 See the [LICENSE](LICENSE) file for license rights and limitations (MIT).
