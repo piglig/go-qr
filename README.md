@@ -132,7 +132,7 @@ generator [options] [arguments]
   -svg string
         Output SVG file name
   -svg-optimized
-		Output optimized SVG file name - regions with connected black pixels are merged into a single path
+        Output optimized SVG file name - regions with connected black pixels are merged into a single path
 ```
 
 ### Example
