@@ -8,6 +8,8 @@ import (
 	"image/png"
 	"math"
 	"os"
+	"path/filepath"
+	"strings"
 )
 
 // Ecc is the representation of an error correction level in a QR Code symbol.
@@ -78,6 +80,18 @@ type QrCodeImgConfig struct {
 // and the default light and dark color are white and black.
 func NewQrCodeImgConfig(scale int, border int) *QrCodeImgConfig {
 	return &QrCodeImgConfig{scale: scale, border: border, light: color.White, dark: color.Black}
+}
+
+func (q *QrCodeImgConfig) Valid() error {
+	if q.scale <= 0 {
+		return errors.New("scale must be positive")
+	}
+
+	if q.border < 0 {
+		return errors.New("border must be non-negative")
+	}
+
+	return nil
 }
 
 // Light gets light color from QrCodeImgConfig
@@ -563,12 +577,9 @@ func (q *QrCode) drawFormatBits(msk int) {
 
 // PNG generates a PNG image file for the QR code with QrCodeImgConfig and saves it to given file path
 func (q *QrCode) PNG(config *QrCodeImgConfig, filePath string) error {
-	if q == nil || config == nil {
-		return errors.New("qr code or config is nil")
-	}
-
-	if config.scale <= 0 || config.border < 0 {
-		return errors.New("invalid input")
+	err := config.Valid()
+	if err != nil {
+		return err
 	}
 
 	// Ensure that the border size combined with QR code size does not exceed the maximum allowed integer value after scaling.
@@ -611,6 +622,70 @@ func (q *QrCode) writePng(img *image.RGBA, filepath string) error {
 
 	if err = png.Encode(file, img); err != nil {
 		return fmt.Errorf("failed to encode PNG: %w", err)
+	}
+	return nil
+}
+
+// SVG generates a SVG file for the QR code with QrCodeImgConfig, light, dark color and saves it to given file path
+func (q *QrCode) SVG(config *QrCodeImgConfig, filePath, light, dark string) error {
+	err := config.Valid()
+	if err != nil {
+		return err
+	}
+
+	if ext := filepath.Ext(filePath); ext != ".svg" {
+		return fmt.Errorf("file type:%v invalid", ext)
+	}
+
+	svg := q.toSVGString(config, light, dark)
+	return q.writeSVG(svg, filePath)
+}
+
+// toSVGString generates a SVG string image with QrCodeImgConfig, light and dark color
+func (q *QrCode) toSVGString(config *QrCodeImgConfig, lightColor, darkColor string) string {
+	brd := int64(config.border)
+	scl := int64(config.scale)
+	size := int64(q.GetSize())
+
+	sb := strings.Builder{}
+	sb.Grow(128)
+	sb.WriteString("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n")
+	sb.WriteString("<!DOCTYPE svg PUBLIC \"-//W3C//DTD SVG 1.1//EN\" \"http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd\">\n")
+	sb.WriteString(fmt.Sprintf("<svg xmlns=\"http://www.w3.org/2000/svg\" version=\"1.1\" viewBox=\"0 0 %d %d\" stroke=\"none\">\n",
+		(size*scl)+brd*2, (size*scl)+brd*2))
+	sb.WriteString(fmt.Sprintf("\t<rect width=\"%d\" height=\"%d\" fill=\"%s\"/>\n", (size*scl)+brd*2, (size*scl)+brd*2, lightColor))
+	sb.WriteString("\t<path d=\"")
+
+	for y := int64(0); y < size; y++ {
+		for x := int64(0); x < size; x++ {
+			if q.GetModule(int(x), int(y)) {
+				sb.WriteString(fmt.Sprintf("M%d,%dh%dv%dh-%dz ", (x*scl)+brd, (y*scl)+brd, scl, scl, scl))
+			}
+		}
+	}
+
+	// Trim the last space for neatness
+	pathData := strings.TrimSpace(sb.String())
+	sb.Reset() // Reset the builder before writing the final path data
+	sb.WriteString(pathData)
+
+	sb.WriteString(fmt.Sprintf("\" fill=\"%s\"/>\n", darkColor))
+	sb.WriteString("</svg>\n")
+
+	return sb.String()
+}
+
+// writeSVG writes a SVG file to the path of the SVG file
+func (q *QrCode) writeSVG(svgStr, filePath string) error {
+	svgFile, err := os.Create(filePath)
+	if err != nil {
+		return err
+	}
+	defer svgFile.Close()
+
+	_, err = svgFile.WriteString(svgStr)
+	if err != nil {
+		return fmt.Errorf("failed to write SVG: %w", err)
 	}
 	return nil
 }

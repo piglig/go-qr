@@ -276,13 +276,6 @@ func TestQrCode_PNG(t *testing.T) {
 			dest:    "",
 			config:  NewQrCodeImgConfig(10, 3),
 		},
-		{
-			text:    "",
-			wantErr: true,
-			ecl:     Low,
-			dest:    "",
-			config:  nil,
-		},
 	}
 
 	for _, tt := range tests {
@@ -295,14 +288,14 @@ func TestQrCode_PNG(t *testing.T) {
 		dest := filepath.Join(tempDir, tt.dest)
 		err = qr.PNG(tt.config, dest)
 		if (err != nil) != tt.wantErr {
-			t.Errorf("TestQrCode_ToPNG() error = %v, wantErr %v", err, tt.wantErr)
+			t.Errorf("TestQrCode_PNG() error = %v, wantErr %v", err, tt.wantErr)
 			return
 		}
 
 		if err == nil {
 			_, err = os.Stat(dest)
 			if err != nil {
-				t.Errorf("TestQrCode_ToPNG() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("TestQrCode_PNG() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 		}
@@ -406,5 +399,76 @@ func TestNewQrCodeImgConfig(t *testing.T) {
 				t.Errorf("dark color = %v, want %v", got, &tt.want)
 			}
 		})
+	}
+}
+
+func TestQrCode_SVG(t *testing.T) {
+	tempDir := t.TempDir()
+	defer os.RemoveAll(tempDir)
+	tests := []struct {
+		text    string
+		wantErr bool
+		ecl     Ecc
+		dest    string
+		config  *QrCodeImgConfig
+	}{
+		{
+			text:    "Hello, world!",
+			wantErr: false,
+			ecl:     Low,
+			dest:    "hello-world-QR.svg",
+			config:  NewQrCodeImgConfig(10, 4),
+		},
+		{
+			text:    "",
+			wantErr: false,
+			ecl:     Low,
+			dest:    "empty-QR.svg",
+			config:  NewQrCodeImgConfig(10, 4),
+		},
+		{
+			text:    "こんにちwa、世界！ αβγδ",
+			wantErr: false,
+			ecl:     Quartile,
+			dest:    "unicode-QR.svg",
+			config:  NewQrCodeImgConfig(10, 3),
+		},
+		{
+			text:    "aabbcc",
+			wantErr: true,
+			ecl:     Quartile,
+			dest:    "aabbcc-QR.svg",
+			config:  NewQrCodeImgConfig(-10, -3),
+		},
+		{
+			text:    "aabbcc",
+			wantErr: true,
+			ecl:     Low,
+			dest:    "",
+			config:  NewQrCodeImgConfig(10, 3),
+		},
+	}
+
+	for _, tt := range tests {
+		qr, err := EncodeText(tt.text, tt.ecl)
+		if err != nil {
+			t.Errorf("EncodeText() error = %v", err)
+			return
+		}
+
+		dest := filepath.Join(tempDir, tt.dest)
+		err = qr.SVG(tt.config, dest, "#FFFFFF", "#000000")
+		if (err != nil) != tt.wantErr {
+			t.Errorf("TestQrCode_SVG() error = %v, text = %v, wantErr %v", err, tt.text, tt.wantErr)
+			return
+		}
+
+		if err == nil {
+			_, err = os.Stat(dest)
+			if err != nil {
+				t.Errorf("TestQrCode_SVG() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+		}
 	}
 }
