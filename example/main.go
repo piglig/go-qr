@@ -5,7 +5,6 @@ import (
 	"fmt"
 	go_qr "github.com/piglig/go-qr"
 	"image/color"
-	"os"
 	"strings"
 )
 
@@ -29,17 +28,7 @@ func doBasicDemo() {
 		return
 	}
 
-	svg, err := toSvgString(qr, 4, "#FFFFFF", "#000000")
-	if err != nil {
-		return
-	}
-
-	svgFile, err := os.Create("hello-world-QR.svg")
-	if err != nil {
-		return
-	}
-	defer svgFile.Close()
-	_, err = svgFile.WriteString(svg)
+	err = qr.SVG(config, "hello-world-QR.svg", "#FFFFFF", "#000000")
 	if err != nil {
 		return
 	}
