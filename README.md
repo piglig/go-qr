@@ -34,15 +34,8 @@ go get github.com/piglig/go-qr
 package main
 
 import (
-	"errors"
-	"fmt"
 	go_qr "github.com/piglig/go-qr"
-	"image"
 	"image/color"
-	"image/png"
-	"math"
-	"os"
-	"strings"
 )
 
 func main() {
@@ -62,56 +55,11 @@ func doBasicDemo() {
 		return
 	}
 
-	svg, err := toSvgString(qr, 4, "#FFFFFF", "#000000")
-	if err != nil {
-		return
-	}
-
-	svgFile, err := os.Create("hello-world-QR.svg")
-	if err != nil {
-		return
-	}
-	defer svgFile.Close()
-	_, err = svgFile.WriteString(svg)
+	err = qr.SVG(config, "hello-world-QR.svg", "#FFFFFF", "#000000")
 	if err != nil {
 		return
 	}
 }
-
-func toSvgString(qr *go_qr.QrCode, border int, lightColor, darkColor string) (string, error) {
-	if border < 0 {
-		return "", errors.New("border must be non-negative")
-	}
-
-	if qr == nil {
-		return "", errors.New("qr is nil")
-	}
-
-	var brd = int64(border)
-	sb := strings.Builder{}
-	sb.WriteString("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n")
-	sb.WriteString("<!DOCTYPE svg PUBLIC \"-//W3C//DTD SVG 1.1//EN\" \"http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd\">\n")
-	sb.WriteString(fmt.Sprintf("<svg xmlns=\"http://www.w3.org/2000/svg\" version=\"1.1\" viewBox=\"0 0 %d %d\" stroke=\"none\">\n",
-		int64(qr.GetSize())+brd*2, int64(qr.GetSize())+brd*2))
-	sb.WriteString("\t<rect width=\"100%\" height=\"100%\" fill=\"" + lightColor + "\"/>\n")
-	sb.WriteString("\t<path d=\"")
-
-	for y := 0; y < qr.GetSize(); y++ {
-		for x := 0; x < qr.GetSize(); x++ {
-			if qr.GetModule(x, y) {
-				if x != 0 || y != 0 {
-					sb.WriteString(" ")
-				}
-				sb.WriteString(fmt.Sprintf("M%d,%dh1v1h-1z", int64(x)+brd, int64(y)+brd))
-			}
-		}
-	}
-	sb.WriteString("\" fill=\"" + darkColor + "\"/>\n")
-	sb.WriteString("</svg>\n")
-
-	return sb.String(), nil
-}
-
 ```
 
 ## Command Line Tool
@@ -140,20 +88,20 @@ generator [options] [arguments]
 ```shell
 generator -content hello
 ```
-![Gif](/docs/assets/text_art.gif)
+![Gif](./docs/assets/text_art.gif)
 
 * **Image Type**
 ```shell
 generator -content hello -png hello.png -svg hello.svg
 ```
-![Gif](/docs/assets/image_type.gif)
+![Gif](./docs/assets/image_type.gif)
 
 * **Optimized SVG Type**
 ```shell
 generator -content hello -svg hello.svg -svg-optimized hello-optimized.svg 
 ```
 The optimized svg output create paths around connected black regions. This reduces the file size and rendering artifacts.
-![svg](/docs/assets/optimized_path.svg)
+![svg](./docs/assets/optimized_path.svg)
 
 ## License
 See the [LICENSE](LICENSE) file for license rights and limitations (MIT).
