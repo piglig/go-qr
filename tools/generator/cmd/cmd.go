@@ -2,13 +2,10 @@ package cmd
 
 import (
 	"bytes"
-	"errors"
 	"flag"
 	"fmt"
-	"os"
-	"strings"
-
 	go_qr "github.com/piglig/go-qr"
+	"os"
 )
 
 const (
@@ -94,17 +91,8 @@ func generateQrCode(content, outputType, outputFile string) error {
 			return err
 		}
 	case svgType:
-		svg, err := toSvgString(qr, 4, "#FFFFFF", "#000000")
-		if err != nil {
-			return err
-		}
-
-		svgFile, err := os.Create(outputFile)
-		if err != nil {
-			return err
-		}
-		defer svgFile.Close()
-		_, err = svgFile.WriteString(svg)
+		config := go_qr.NewQrCodeImgConfig(10, 4)
+		err = qr.SVG(config, outputFile, "#FFFFFF", "#000000")
 		if err != nil {
 			return err
 		}
@@ -130,41 +118,6 @@ func generateQrCode(content, outputType, outputFile string) error {
 		return fmt.Errorf("unsupported file type: %s", outputType)
 	}
 	return nil
-}
-
-func toSvgString(qr *go_qr.QrCode, border int, lightColor, darkColor string) (string, error) {
-	if border < 0 {
-		return "", errors.New("border must be non-negative")
-	}
-
-	if qr == nil {
-		return "", errors.New("qr is nil")
-	}
-
-	var brd = int64(border)
-	sb := strings.Builder{}
-	sb.WriteString("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n")
-	sb.WriteString("<!DOCTYPE svg PUBLIC \"-//W3C//DTD SVG 1.1//EN\" \"http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd\">\n")
-	sb.WriteString(fmt.Sprintf("<svg xmlns=\"http://www.w3.org/2000/svg\" version=\"1.1\" viewBox=\"0 0 %d %d\" stroke=\"none\">\n",
-		int64(qr.GetSize())+brd*2, int64(qr.GetSize())+brd*2))
-	sb.WriteString("\t<rect width=\"100%\" height=\"100%\" fill=\"" + lightColor + "\"/>\n")
-	sb.WriteString("\t<path d=\"")
-
-	for y := 0; y < qr.GetSize(); y++ {
-		for x := 0; x < qr.GetSize(); x++ {
-			if qr.GetModule(x, y) {
-				if x != 0 || y != 0 {
-					sb.WriteString(" ")
-				}
-				sb.WriteString(fmt.Sprintf("M%d,%dh1v1h-1z", int64(x)+brd, int64(y)+brd))
-			}
-		}
-	}
-
-	sb.WriteString("\" fill=\"" + darkColor + "\"/>\n")
-	sb.WriteString("</svg>\n")
-
-	return sb.String(), nil
 }
 
 func toString(qr *go_qr.QrCode) string {
