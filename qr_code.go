@@ -578,6 +578,32 @@ func (q *QrCode) drawFormatBits(msk int) {
 
 // PNG generates a PNG image file for the QR code with QrCodeImgConfig and saves it to given file path
 func (q *QrCode) PNG(config *QrCodeImgConfig, filePath string) error {
+	err := q.validateWritePNGConfig(config)
+	if err != nil {
+		return err
+	}
+
+	pngFile, err := os.Create(filePath)
+	if err != nil {
+		return fmt.Errorf("error creating PNG file: %w", err)
+	}
+	defer pngFile.Close()
+
+	return q.doWriteAsPNG(config, pngFile)
+}
+
+// WriteAsPNG writes the QR code as PNG with QrCodeImgConfig to the provided io.Writer.
+func (q *QrCode) WriteAsPNG(config *QrCodeImgConfig, writer io.Writer) error {
+	err := q.validateWritePNGConfig(config)
+	if err != nil {
+		return err
+	}
+
+	return q.doWriteAsPNG(config, writer)
+}
+
+// validateWritePNGConfig validates the parameters to write the QR code as PNG
+func (q *QrCode) validateWritePNGConfig(config *QrCodeImgConfig) error {
 	err := config.Valid()
 	if err != nil {
 		return err
@@ -588,8 +614,18 @@ func (q *QrCode) PNG(config *QrCodeImgConfig, filePath string) error {
 		return errors.New("scale or border too large")
 	}
 
+	return nil
+}
+
+// doWriteAsPNG writes the QR code as PNG with QrCodeImgConfig to the provided io.Writer.
+func (q *QrCode) doWriteAsPNG(config *QrCodeImgConfig, writer io.Writer) error {
 	rgba := q.toImage(config)
-	return q.writePng(rgba, filePath)
+
+	if err := png.Encode(writer, rgba); err != nil {
+		return fmt.Errorf("failed to encode PNG: %w", err)
+	}
+
+	return nil
 }
 
 // toImage generates an RGBA image based on QrCodeImgConfig
@@ -611,20 +647,6 @@ func (q *QrCode) toImage(config *QrCodeImgConfig) *image.RGBA {
 		}
 	}
 	return result
-}
-
-// writePng writes an RGBA image to the path of the PNG file
-func (q *QrCode) writePng(img *image.RGBA, filepath string) error {
-	file, err := os.Create(filepath)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-
-	if err = png.Encode(file, img); err != nil {
-		return fmt.Errorf("failed to encode PNG: %w", err)
-	}
-	return nil
 }
 
 // SVG generates a SVG file for the QR code with QrCodeImgConfig, light, dark color and saves it to given file path

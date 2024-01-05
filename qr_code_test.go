@@ -304,6 +304,59 @@ func TestQrCode_PNG(t *testing.T) {
 	}
 }
 
+func TestQrCode_WriteAsPNG(t *testing.T) {
+	tests := []struct {
+		text    string
+		wantErr bool
+		ecl     Ecc
+		dest    *bytes.Buffer
+		config  *QrCodeImgConfig
+	}{
+		{
+			text:    "Hello, world!",
+			wantErr: false,
+			ecl:     Low,
+			dest:    &bytes.Buffer{},
+			config:  NewQrCodeImgConfig(10, 4),
+		},
+		{
+			text:    "",
+			wantErr: false,
+			ecl:     Low,
+			dest:    &bytes.Buffer{},
+			config:  NewQrCodeImgConfig(10, 4),
+		},
+		{
+			text:    "こんにちwa、世界！ αβγδ",
+			wantErr: false,
+			ecl:     Quartile,
+			dest:    &bytes.Buffer{},
+			config:  NewQrCodeImgConfig(10, 3),
+		},
+		{
+			text:    "aabbcc",
+			wantErr: true,
+			ecl:     Quartile,
+			dest:    nil,
+			config:  NewQrCodeImgConfig(-10, -3),
+		},
+	}
+
+	for _, tt := range tests {
+		qr, err := EncodeText(tt.text, tt.ecl)
+		if err != nil {
+			t.Errorf("EncodeText() error = %v", err)
+			return
+		}
+
+		err = qr.WriteAsPNG(tt.config, tt.dest)
+		if (err != nil) != tt.wantErr {
+			t.Errorf("TestQrCode_WriteAsPNG() error = %v, wantErr %v", err, tt.wantErr)
+			return
+		}
+	}
+}
+
 func TestNewQrCodeImgConfig(t *testing.T) {
 	colorSetterFunc := func(config *QrCodeImgConfig, light, dark color.Color) {
 		if light != nil {
