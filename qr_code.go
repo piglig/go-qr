@@ -6,6 +6,7 @@ import (
 	"image"
 	"image/color"
 	"image/png"
+	"io"
 	"math"
 	"os"
 	"path/filepath"
@@ -637,8 +638,41 @@ func (q *QrCode) SVG(config *QrCodeImgConfig, filePath, light, dark string) erro
 		return fmt.Errorf("file type:%v invalid", ext)
 	}
 
+	svgFile, err := os.Create(filePath)
+	if err != nil {
+		return fmt.Errorf("error creating SVG file: %w", err)
+	}
+	defer svgFile.Close()
+
+	return q.doWriteAsSVG(config, svgFile, light, dark)
+}
+
+// WriteAsSVG writes the QR code as SVG with QrCodeImgConfig, light, dark color to the provided io.Writer.
+//
+// light is the color to use for light sections of the QR code, for example, "#FFFFFF".
+// dark is the color to use for dark sections of the QR code, for example, "#000000".
+func (q *QrCode) WriteAsSVG(config *QrCodeImgConfig, writer io.Writer, light, dark string) error {
+	err := config.Valid()
+	if err != nil {
+		return err
+	}
+
+	return q.doWriteAsSVG(config, writer, light, dark)
+}
+
+// doWriteAsSVG writes the QR code as SVG with QrCodeImgConfig, light, dark color to the provided io.Writer.
+//
+// light is the color to use for light sections of the QR code, for example, "#FFFFFF".
+// dark is the color to use for dark sections of the QR code, for example, "#000000".
+func (q *QrCode) doWriteAsSVG(config *QrCodeImgConfig, writer io.Writer, light, dark string) error {
 	svg := q.toSVGString(config, light, dark)
-	return q.writeSVG(svg, filePath)
+
+	_, err := writer.Write([]byte(svg))
+	if err != nil {
+		return fmt.Errorf("error writing SVG: %w", err)
+	}
+
+	return nil
 }
 
 // toSVGString generates a SVG string image with QrCodeImgConfig, light and dark color
@@ -673,21 +707,6 @@ func (q *QrCode) toSVGString(config *QrCodeImgConfig, lightColor, darkColor stri
 	sb.WriteString("</svg>\n")
 
 	return sb.String()
-}
-
-// writeSVG writes a SVG file to the path of the SVG file
-func (q *QrCode) writeSVG(svgStr, filePath string) error {
-	svgFile, err := os.Create(filePath)
-	if err != nil {
-		return err
-	}
-	defer svgFile.Close()
-
-	_, err = svgFile.WriteString(svgStr)
-	if err != nil {
-		return fmt.Errorf("failed to write SVG: %w", err)
-	}
-	return nil
 }
 
 // EncodeText takes a string and an error correction level (ecl),
