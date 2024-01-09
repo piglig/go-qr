@@ -1,12 +1,23 @@
 package go_qr
 
 import (
-	"github.com/stretchr/testify/assert"
+	"bytes"
+	"errors"
 	"image/color"
+	"io"
+	"math"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
+
+type badWriter struct{}
+
+func (bw *badWriter) Write(p []byte) (n int, err error) {
+	return -1, errors.New("sorry, all I do is fail")
+}
 
 func TestEncodeStandardSegments(t *testing.T) {
 	cases := []struct {
@@ -270,10 +281,10 @@ func TestQrCode_PNG(t *testing.T) {
 			config:  NewQrCodeImgConfig(-10, -3),
 		},
 		{
-			text:    "aabbcc",
+			text:    "non-existent path",
 			wantErr: true,
 			ecl:     Low,
-			dest:    "",
+			dest:    "../../not/existing.png",
 			config:  NewQrCodeImgConfig(10, 3),
 		},
 	}
@@ -298,6 +309,80 @@ func TestQrCode_PNG(t *testing.T) {
 				t.Errorf("TestQrCode_PNG() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
+		}
+	}
+}
+
+func TestQrCode_WriteAsPNG(t *testing.T) {
+	tests := []struct {
+		text    string
+		wantErr bool
+		ecl     Ecc
+		dest    io.Writer
+		config  *QrCodeImgConfig
+	}{
+		{
+			text:    "Hello, world!",
+			wantErr: false,
+			ecl:     Low,
+			dest:    &bytes.Buffer{},
+			config:  NewQrCodeImgConfig(10, 4),
+		},
+		{
+			text:    "",
+			wantErr: false,
+			ecl:     Low,
+			dest:    &bytes.Buffer{},
+			config:  NewQrCodeImgConfig(10, 4),
+		},
+		{
+			text:    "こんにちwa、世界！ αβγδ",
+			wantErr: false,
+			ecl:     Quartile,
+			dest:    &bytes.Buffer{},
+			config:  NewQrCodeImgConfig(10, 3),
+		},
+		{
+			text:    "Negative scale",
+			wantErr: true,
+			ecl:     Quartile,
+			dest:    nil,
+			config:  NewQrCodeImgConfig(-10, 3),
+		},
+		{
+			text:    "Negative border",
+			wantErr: true,
+			ecl:     Quartile,
+			dest:    nil,
+			config:  NewQrCodeImgConfig(10, -3),
+		},
+		{
+			text:    "Too large border",
+			wantErr: true,
+			ecl:     Quartile,
+			dest:    nil,
+			config:  NewQrCodeImgConfig(10, math.MaxInt32),
+		},
+		{
+			text:    "Fail on write",
+			wantErr: true,
+			ecl:     Quartile,
+			dest:    &badWriter{},
+			config:  NewQrCodeImgConfig(10, 3),
+		},
+	}
+
+	for _, tt := range tests {
+		qr, err := EncodeText(tt.text, tt.ecl)
+		if err != nil {
+			t.Errorf("EncodeText() error = %v", err)
+			return
+		}
+
+		err = qr.WriteAsPNG(tt.config, tt.dest)
+		if (err != nil) != tt.wantErr {
+			t.Errorf("TestQrCode_WriteAsPNG() error = %v, wantErr %v", err, tt.wantErr)
+			return
 		}
 	}
 }
@@ -441,10 +526,17 @@ func TestQrCode_SVG(t *testing.T) {
 			config:  NewQrCodeImgConfig(-10, -3),
 		},
 		{
-			text:    "aabbcc",
+			text:    "invalid file name",
 			wantErr: true,
 			ecl:     Low,
-			dest:    "",
+			dest:    "test.other",
+			config:  NewQrCodeImgConfig(10, 3),
+		},
+		{
+			text:    "non-existent path",
+			wantErr: true,
+			ecl:     Low,
+			dest:    "../../not/existing.svg",
 			config:  NewQrCodeImgConfig(10, 3),
 		},
 	}
@@ -467,6 +559,84 @@ func TestQrCode_SVG(t *testing.T) {
 			_, err = os.Stat(dest)
 			if err != nil {
 				t.Errorf("TestQrCode_SVG() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+		}
+	}
+}
+
+func TestQrCode_WriteAsSVG(t *testing.T) {
+	tests := []struct {
+		text    string
+		wantErr bool
+		ecl     Ecc
+		dest    io.Writer
+		config  *QrCodeImgConfig
+	}{
+		{
+			text:    "Hello, world!",
+			wantErr: false,
+			ecl:     Low,
+			dest:    &bytes.Buffer{},
+			config:  NewQrCodeImgConfig(10, 4),
+		},
+		{
+			text:    "",
+			wantErr: false,
+			ecl:     Low,
+			dest:    &bytes.Buffer{},
+			config:  NewQrCodeImgConfig(10, 4),
+		},
+		{
+			text:    "こんにちwa、世界！ αβγδ",
+			wantErr: false,
+			ecl:     Quartile,
+			dest:    &bytes.Buffer{},
+			config:  NewQrCodeImgConfig(10, 3),
+		},
+		{
+			text:    "Negative scale",
+			wantErr: true,
+			ecl:     Quartile,
+			dest:    nil,
+			config:  NewQrCodeImgConfig(-10, 3),
+		},
+		{
+			text:    "Negative border",
+			wantErr: true,
+			ecl:     Quartile,
+			dest:    nil,
+			config:  NewQrCodeImgConfig(10, -3),
+		},
+		{
+			text:    "Fail on write",
+			wantErr: true,
+			ecl:     Quartile,
+			dest:    &badWriter{},
+			config:  NewQrCodeImgConfig(10, 3),
+		},
+	}
+
+	light, dark := "#FFFFFF", "#000000"
+	for _, tt := range tests {
+		qr, err := EncodeText(tt.text, tt.ecl)
+		if err != nil {
+			t.Errorf("EncodeText() error = %v", err)
+			return
+		}
+
+		err = qr.WriteAsSVG(tt.config, tt.dest, light, dark)
+		if (err != nil) != tt.wantErr {
+			t.Errorf("TestQrCode_WriteAsSVG() error = %v, wantErr %v", err, tt.wantErr)
+			return
+		}
+
+		if !tt.wantErr {
+			actualSVGString := tt.dest.(*bytes.Buffer).String()
+			expectedSVGString := qr.toSVGString(tt.config, light, dark)
+
+			if actualSVGString != expectedSVGString {
+				t.Error("TestQrCode_WriteAsSVG() svg string does not match the content of the io.Writer")
 				return
 			}
 		}

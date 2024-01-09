@@ -6,6 +6,7 @@ import (
 	"image"
 	"image/color"
 	"image/png"
+	"io"
 	"math"
 	"os"
 	"path/filepath"
@@ -577,6 +578,32 @@ func (q *QrCode) drawFormatBits(msk int) {
 
 // PNG generates a PNG image file for the QR code with QrCodeImgConfig and saves it to given file path
 func (q *QrCode) PNG(config *QrCodeImgConfig, filePath string) error {
+	err := q.validateWritePNGConfig(config)
+	if err != nil {
+		return err
+	}
+
+	pngFile, err := os.Create(filePath)
+	if err != nil {
+		return fmt.Errorf("error creating PNG file: %w", err)
+	}
+	defer pngFile.Close()
+
+	return q.doWriteAsPNG(config, pngFile)
+}
+
+// WriteAsPNG writes the QR code as PNG with QrCodeImgConfig to the provided io.Writer.
+func (q *QrCode) WriteAsPNG(config *QrCodeImgConfig, writer io.Writer) error {
+	err := q.validateWritePNGConfig(config)
+	if err != nil {
+		return err
+	}
+
+	return q.doWriteAsPNG(config, writer)
+}
+
+// validateWritePNGConfig validates the parameters to write the QR code as PNG
+func (q *QrCode) validateWritePNGConfig(config *QrCodeImgConfig) error {
 	err := config.Valid()
 	if err != nil {
 		return err
@@ -587,8 +614,18 @@ func (q *QrCode) PNG(config *QrCodeImgConfig, filePath string) error {
 		return errors.New("scale or border too large")
 	}
 
+	return nil
+}
+
+// doWriteAsPNG writes the QR code as PNG with QrCodeImgConfig to the provided io.Writer.
+func (q *QrCode) doWriteAsPNG(config *QrCodeImgConfig, writer io.Writer) error {
 	rgba := q.toImage(config)
-	return q.writePng(rgba, filePath)
+
+	if err := png.Encode(writer, rgba); err != nil {
+		return fmt.Errorf("failed to encode PNG: %w", err)
+	}
+
+	return nil
 }
 
 // toImage generates an RGBA image based on QrCodeImgConfig
@@ -612,20 +649,6 @@ func (q *QrCode) toImage(config *QrCodeImgConfig) *image.RGBA {
 	return result
 }
 
-// writePng writes an RGBA image to the path of the PNG file
-func (q *QrCode) writePng(img *image.RGBA, filepath string) error {
-	file, err := os.Create(filepath)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-
-	if err = png.Encode(file, img); err != nil {
-		return fmt.Errorf("failed to encode PNG: %w", err)
-	}
-	return nil
-}
-
 // SVG generates a SVG file for the QR code with QrCodeImgConfig, light, dark color and saves it to given file path
 func (q *QrCode) SVG(config *QrCodeImgConfig, filePath, light, dark string) error {
 	err := config.Valid()
@@ -637,8 +660,41 @@ func (q *QrCode) SVG(config *QrCodeImgConfig, filePath, light, dark string) erro
 		return fmt.Errorf("file type:%v invalid", ext)
 	}
 
+	svgFile, err := os.Create(filePath)
+	if err != nil {
+		return fmt.Errorf("error creating SVG file: %w", err)
+	}
+	defer svgFile.Close()
+
+	return q.doWriteAsSVG(config, svgFile, light, dark)
+}
+
+// WriteAsSVG writes the QR code as SVG with QrCodeImgConfig, light, dark color to the provided io.Writer.
+//
+// light is the color to use for light sections of the QR code, for example, "#FFFFFF".
+// dark is the color to use for dark sections of the QR code, for example, "#000000".
+func (q *QrCode) WriteAsSVG(config *QrCodeImgConfig, writer io.Writer, light, dark string) error {
+	err := config.Valid()
+	if err != nil {
+		return err
+	}
+
+	return q.doWriteAsSVG(config, writer, light, dark)
+}
+
+// doWriteAsSVG writes the QR code as SVG with QrCodeImgConfig, light, dark color to the provided io.Writer.
+//
+// light is the color to use for light sections of the QR code, for example, "#FFFFFF".
+// dark is the color to use for dark sections of the QR code, for example, "#000000".
+func (q *QrCode) doWriteAsSVG(config *QrCodeImgConfig, writer io.Writer, light, dark string) error {
 	svg := q.toSVGString(config, light, dark)
-	return q.writeSVG(svg, filePath)
+
+	_, err := writer.Write([]byte(svg))
+	if err != nil {
+		return fmt.Errorf("error writing SVG: %w", err)
+	}
+
+	return nil
 }
 
 // toSVGString generates a SVG string image with QrCodeImgConfig, light and dark color
@@ -673,21 +729,6 @@ func (q *QrCode) toSVGString(config *QrCodeImgConfig, lightColor, darkColor stri
 	sb.WriteString("</svg>\n")
 
 	return sb.String()
-}
-
-// writeSVG writes a SVG file to the path of the SVG file
-func (q *QrCode) writeSVG(svgStr, filePath string) error {
-	svgFile, err := os.Create(filePath)
-	if err != nil {
-		return err
-	}
-	defer svgFile.Close()
-
-	_, err = svgFile.WriteString(svgStr)
-	if err != nil {
-		return fmt.Errorf("failed to write SVG: %w", err)
-	}
-	return nil
 }
 
 // EncodeText takes a string and an error correction level (ecl),
