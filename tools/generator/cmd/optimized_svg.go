@@ -28,7 +28,7 @@ func toSvgOptimizedString(qr *go_qr.QrCode, border uint, scale uint, lightColor,
 	// Create a path consisting of several closed loops, which connect all the
 	// just determined nodes along their edges.
 	sb.WriteString("\t<path d=\"")
-	connectedNodes := make(map[node]bool, len(nodes))
+	connectedNodes := make(map[node]bool)
 	for startNode, edges := range nodes {
 		// Skip the node if it is already connected to a drawn path.
 		if connected, ok := connectedNodes[startNode]; ok && connected {
@@ -124,8 +124,7 @@ func (n node) imageXY(border uint, scale uint) (x int, y int) {
 // edges attached to it. For the edges only the nodes to which they connect are
 // stored.
 type edges struct {
-	first  node
-	second node
+	first, second node
 }
 
 // formCorner yields true if the edges of of a node form a corner and not a
@@ -139,13 +138,14 @@ func (e edges) formCorner() bool {
 // addEdge adds an edge to toNode to the set of edges of fromNode.
 func addEdge(nodes map[node]edges, fromNode node, toNode node) {
 	// Check if an edge for fromNode has already been added.
-	fromEdges, ok := nodes[fromNode]
-	if !ok {
+	fromEdges, ex := nodes[fromNode]
+	if !ex {
 		// If not add an edge to toNode for it as its first edge.
 		nodes[fromNode] = edges{first: toNode}
 	} else {
 		// Otherwise add an edge to toNode for it as its second edge.
-		nodes[fromNode] = edges{first: fromEdges.first, second: toNode}
+		fromEdges.second = toNode
+		nodes[fromNode] = fromEdges
 	}
 }
 
@@ -158,44 +158,37 @@ func assembleBorderGraph(qr *go_qr.QrCode) map[node]edges {
 	for y := 0; y < n; y++ {
 		for x := 0; x < n; x++ {
 			if qr.GetModule(x, y) {
-				// Select which edges of the module have to be in the svg path.
-				// These are all edges which are not adjacent to another filled
-				// module.
-				top := y == 0 || !qr.GetModule(x, y-1)
-				right := x == n-1 || !qr.GetModule(x+1, y)
-				bottom := y == n-1 || !qr.GetModule(x, y+1)
-				left := x == 0 || !qr.GetModule(x-1, y)
-				// Store edges in both directions.
-				if top {
-					leftNode := node{x: x, y: y}
-					rightNode := node{x: x + 1, y: y}
-					addEdge(nodes, leftNode, rightNode)
-					addEdge(nodes, rightNode, leftNode)
-				}
-				// If both edges of a bottom corner of the module have to be
-				// drawn, the coordinates could coincided with the a corner
-				// of another module. To distinguish the corners, this node
-				// is marked as belonging to the upper module.
-				if left {
-					topNode := node{x: x, y: y}
-					bottomNode := node{x: x, y: y + 1, top: bottom}
-					addEdge(nodes, topNode, bottomNode)
-					addEdge(nodes, bottomNode, topNode)
-				}
-				if bottom {
-					leftNode := node{x: x, y: y + 1, top: left}
-					rightNode := node{x: x + 1, y: y + 1, top: right}
-					addEdge(nodes, leftNode, rightNode)
-					addEdge(nodes, rightNode, leftNode)
-				}
-				if right {
-					topNode := node{x: x + 1, y: y}
-					bottomNode := node{x: x + 1, y: y + 1, top: bottom}
-					addEdge(nodes, topNode, bottomNode)
-					addEdge(nodes, bottomNode, topNode)
-				}
+				addEdgesForModule(nodes, x, y, qr)
 			}
 		}
 	}
 	return nodes
+}
+
+func addEdgesForModule(nodes map[node]edges, x, y int, qr *go_qr.QrCode) {
+	// Select which edges of the module have to be in the svg path.
+	// These are all edges which are not adjacent to another filled
+	// module.
+	top := y == 0 || !qr.GetModule(x, y-1)
+	right := x == qr.GetSize()-1 || !qr.GetModule(x+1, y)
+	bottom := y == qr.GetSize()-1 || !qr.GetModule(x, y+1)
+	left := x == 0 || !qr.GetModule(x-1, y)
+
+	// Store edges in both directions.
+	if top {
+		addEdge(nodes, node{x: x, y: y}, node{x: x + 1, y: y})
+	}
+	// If both edges of a bottom corner of the module have to be
+	// drawn, the coordinates could coincided with the a corner
+	// of another module. To distinguish the corners, this node
+	// is marked as belonging to the upper module.
+	if right {
+		addEdge(nodes, node{x: x + 1, y: y}, node{x: x + 1, y: y + 1, top: bottom})
+	}
+	if bottom {
+		addEdge(nodes, node{x: x, y: y + 1, top: left}, node{x: x + 1, y: y + 1, top: right})
+	}
+	if left {
+		addEdge(nodes, node{x: x, y: y}, node{x: x, y: y + 1, top: bottom})
+	}
 }
