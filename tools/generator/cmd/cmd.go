@@ -90,34 +90,37 @@ func generateQrCode(content, outputType, outputFile string) error {
 		if err != nil {
 			return err
 		}
-	case svgType:
-		config := go_qr.NewQrCodeImgConfig(10, 4)
-		err = qr.SVG(config, outputFile, "#FFFFFF", "#000000")
-		if err != nil {
-			return err
-		}
-	case svgOptimizedType:
-		svg := toSvgOptimizedString(qr, 4, 1, "#FFFFFF", "#000000")
-		if err != nil {
-			return err
-		}
-
-		svgFile, err := os.Create(outputFile)
-		if err != nil {
-			return err
-		}
-		defer svgFile.Close()
-		_, err = svgFile.WriteString(svg)
-		if err != nil {
-			return err
-		}
+	case svgType, svgOptimizedType:
+		return generateSVG(qr, outputType, outputFile)
 	case textArtType:
-		art := toString(qr)
-		fmt.Println(art)
+		printTextArt(qr)
 	default:
 		return fmt.Errorf("unsupported file type: %s", outputType)
 	}
 	return nil
+}
+
+func generateSVG(qr *go_qr.QrCode, outputType, outputFile string) error {
+	if outputType == svgOptimizedType {
+		return generateSvgOptimized(qr, outputFile)
+	}
+	config := go_qr.NewQrCodeImgConfig(10, 4)
+	return qr.SVG(config, outputFile, "#FFFFFF", "#000000")
+}
+
+func generateSvgOptimized(qr *go_qr.QrCode, outputFile string) error {
+	svg := toSvgOptimizedString(qr, 4, 1, "#FFFFFF", "#000000")
+	svgFile, err := os.Create(outputFile)
+	if err != nil {
+		return err
+	}
+	defer svgFile.Close()
+	_, err = svgFile.WriteString(svg)
+	return err
+}
+
+func printTextArt(qr *go_qr.QrCode) {
+	fmt.Println(toString(qr))
 }
 
 func toString(qr *go_qr.QrCode) string {
