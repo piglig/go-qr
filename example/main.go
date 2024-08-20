@@ -29,6 +29,11 @@ func doBasicDemo() {
 	if err != nil {
 		return
 	}
+
+	err = qr.SVG(go_qr.NewQrCodeImgConfig(10, 4, go_qr.WithSVGXMLHeader(true)), "hello-world-QR-xml-header.svg", "#FFFFFF", "#000000")
+	if err != nil {
+		return
+	}
 }
 
 func doVarietyDemo() {

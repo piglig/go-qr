@@ -403,6 +403,7 @@ func TestNewQrCodeImgConfig(t *testing.T) {
 		scale       int
 		border      int
 		light, dark color.Color
+		options     []func(config *QrCodeImgConfig)
 		colorSetter func(config *QrCodeImgConfig, light, dark color.Color)
 		want        *QrCodeImgConfig
 	}{
@@ -412,12 +413,16 @@ func TestNewQrCodeImgConfig(t *testing.T) {
 			border:      10,
 			light:       color.White,
 			dark:        color.Black,
+			options:     nil,
 			colorSetter: colorSetterFunc,
 			want: &QrCodeImgConfig{
 				scale:  5,
 				border: 10,
 				light:  color.White,
 				dark:   color.Black,
+				options: &qrCodeConfig{
+					svgXMLHeader: false,
+				},
 			},
 		},
 		{
@@ -432,6 +437,9 @@ func TestNewQrCodeImgConfig(t *testing.T) {
 				border: 10,
 				light:  color.White,
 				dark:   color.White,
+				options: &qrCodeConfig{
+					svgXMLHeader: false,
+				},
 			},
 		},
 		{
@@ -446,6 +454,9 @@ func TestNewQrCodeImgConfig(t *testing.T) {
 				border: 10,
 				light:  color.Black,
 				dark:   color.Black,
+				options: &qrCodeConfig{
+					svgXMLHeader: false,
+				},
 			},
 		},
 		{
@@ -460,13 +471,34 @@ func TestNewQrCodeImgConfig(t *testing.T) {
 				border: 10,
 				light:  color.Black,
 				dark:   color.White,
+				options: &qrCodeConfig{
+					svgXMLHeader: false,
+				},
+			},
+		},
+		{
+			name:        "Valid config with options",
+			scale:       5,
+			border:      10,
+			light:       color.White,
+			dark:        color.Black,
+			options:     []func(config *QrCodeImgConfig){WithSVGXMLHeader(true)},
+			colorSetter: colorSetterFunc,
+			want: &QrCodeImgConfig{
+				scale:  5,
+				border: 10,
+				light:  color.White,
+				dark:   color.Black,
+				options: &qrCodeConfig{
+					svgXMLHeader: true,
+				},
 			},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := NewQrCodeImgConfig(tt.scale, tt.border)
+			got := NewQrCodeImgConfig(tt.scale, tt.border, tt.options...)
 			tt.colorSetter(got, tt.light, tt.dark)
 			if got.scale != tt.want.scale {
 				t.Errorf("scale = %v, want %v", got, &tt.want)
@@ -483,6 +515,7 @@ func TestNewQrCodeImgConfig(t *testing.T) {
 			if got.Dark() != tt.want.Dark() {
 				t.Errorf("dark color = %v, want %v", got, &tt.want)
 			}
+			assert.Equal(t, tt.want.options, got.options)
 		})
 	}
 }
@@ -503,6 +536,13 @@ func TestQrCode_SVG(t *testing.T) {
 			ecl:     Low,
 			dest:    "hello-world-QR.svg",
 			config:  NewQrCodeImgConfig(10, 4),
+		},
+		{
+			text:    "Hello, world!",
+			wantErr: false,
+			ecl:     Low,
+			dest:    "hello-world-QR-with-svg-xml.svg",
+			config:  NewQrCodeImgConfig(10, 4, WithSVGXMLHeader(true)),
 		},
 		{
 			text:    "",

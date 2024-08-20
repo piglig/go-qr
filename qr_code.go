@@ -10,6 +10,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 )
 
@@ -75,12 +76,17 @@ func getNumErrorCorrectionBlocks() [][]int8 {
 type QrCodeImgConfig struct {
 	scale, border int
 	light, dark   color.Color
+	options       *qrCodeConfig
 }
 
 // NewQrCodeImgConfig is used to create a QR code generation config with the provided scale of image(scale), border of image(border),
 // and the default light and dark color are white and black.
-func NewQrCodeImgConfig(scale int, border int) *QrCodeImgConfig {
-	return &QrCodeImgConfig{scale: scale, border: border, light: color.White, dark: color.Black}
+func NewQrCodeImgConfig(scale int, border int, options ...func(config *QrCodeImgConfig)) *QrCodeImgConfig {
+	config := &QrCodeImgConfig{scale: scale, border: border, light: color.White, dark: color.Black, options: &qrCodeConfig{}}
+	for _, o := range options {
+		o(config)
+	}
+	return config
 }
 
 func (q *QrCodeImgConfig) Valid() error {
@@ -699,23 +705,35 @@ func (q *QrCode) doWriteAsSVG(config *QrCodeImgConfig, writer io.Writer, light, 
 
 // toSVGString generates a SVG string image with QrCodeImgConfig, light and dark color
 func (q *QrCode) toSVGString(config *QrCodeImgConfig, lightColor, darkColor string) string {
-	brd := int64(config.border)
-	scl := int64(config.scale)
-	size := int64(q.GetSize())
+	brd := config.border
+	scl := config.scale
+	size := q.GetSize()
 
 	sb := strings.Builder{}
 	sb.Grow(128)
-	sb.WriteString("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n")
-	sb.WriteString("<!DOCTYPE svg PUBLIC \"-//W3C//DTD SVG 1.1//EN\" \"http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd\">\n")
+	if config.options.svgXMLHeader {
+		sb.WriteString("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n")
+		sb.WriteString("<!DOCTYPE svg PUBLIC \"-//W3C//DTD SVG 1.1//EN\" \"http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd\">\n")
+	}
 	sb.WriteString(fmt.Sprintf("<svg xmlns=\"http://www.w3.org/2000/svg\" version=\"1.1\" viewBox=\"0 0 %d %d\" stroke=\"none\">\n",
 		(size*scl)+brd*2, (size*scl)+brd*2))
 	sb.WriteString(fmt.Sprintf("\t<rect width=\"%d\" height=\"%d\" fill=\"%s\"/>\n", (size*scl)+brd*2, (size*scl)+brd*2, lightColor))
 	sb.WriteString("\t<path d=\"")
 
-	for y := int64(0); y < size; y++ {
-		for x := int64(0); x < size; x++ {
-			if q.GetModule(int(x), int(y)) {
-				sb.WriteString(fmt.Sprintf("M%d,%dh%dv%dh-%dz ", (x*scl)+brd, (y*scl)+brd, scl, scl, scl))
+	for y := 0; y < size; y++ {
+		for x := 0; x < size; x++ {
+			if q.GetModule(x, y) {
+				sb.WriteString("M")
+				sb.WriteString(strconv.Itoa((x * scl) + brd))
+				sb.WriteString(",")
+				sb.WriteString(strconv.Itoa((y * scl) + brd))
+				sb.WriteString("h")
+				sb.WriteString(strconv.Itoa(scl))
+				sb.WriteString("v")
+				sb.WriteString(strconv.Itoa(scl))
+				sb.WriteString("h-")
+				sb.WriteString(strconv.Itoa(scl))
+				sb.WriteString("z ")
 			}
 		}
 	}
