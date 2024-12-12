@@ -1,19 +1,19 @@
-package cmd
+package go_qr
 
 import (
 	"fmt"
 	"strings"
-
-	go_qr "github.com/piglig/go-qr"
 )
 
-func toSvgOptimizedString(qr *go_qr.QrCode, border uint, scale uint, lightColor, darkColor string) string {
+func (q *QrCode) toSvgOptimizedString(config *QrCodeImgConfig, lightColor, darkColor string) string {
+	scale := config.scale
+	border := config.border
 	// Write the header of the svg.
 	sb := strings.Builder{}
 	sb.WriteString("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n")
 	sb.WriteString("<!DOCTYPE svg PUBLIC \"-//W3C//DTD SVG 1.1//EN\" \"http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd\">\n")
 	// Determine the size of the svg.
-	n := qr.GetSize()*int(scale) + int(border*2)
+	n := q.GetSize()*scale + border*2
 	sb.WriteString(fmt.Sprintf("<svg xmlns=\"http://www.w3.org/2000/svg\" version=\"1.1\" viewBox=\"0 0 %d %d\" stroke=\"none\" style=\"fill-rule:evenodd;clip-rule:evenodd\">\n",
 		n, n))
 	// If light color is set, the background layer is omitted to yield a
@@ -23,12 +23,12 @@ func toSvgOptimizedString(qr *go_qr.QrCode, border uint, scale uint, lightColor,
 	}
 
 	// Create a graph representing the border of all areas with filled modules.
-	nodes := assembleBorderGraph(qr)
+	nodes := q.assembleBorderGraph()
 
 	// Create a path consisting of several closed loops, which connect all the
 	// just determined nodes along their edges.
 	sb.WriteString("\t<path d=\"")
-	connectedNodes := make(map[node]bool)
+	connectedNodes := make(map[node]bool, len(nodes))
 	for startNode, edges := range nodes {
 		// Skip the node if it is already connected to a drawn path.
 		if connected, ok := connectedNodes[startNode]; ok && connected {
@@ -113,9 +113,9 @@ type node struct {
 // imageXY converts the coordinates of a node in the QR code to the coordinates
 // of a point in the svg image taking the border around the QR code and the
 // scale applied to the code into account.
-func (n node) imageXY(border uint, scale uint) (x int, y int) {
-	x = n.x*int(scale) + int(border)
-	y = n.y*int(scale) + int(border)
+func (n node) imageXY(border int, scale int) (x int, y int) {
+	x = n.x*scale + border
+	y = n.y*scale + border
 	return
 }
 
@@ -138,57 +138,63 @@ func (e edges) formCorner() bool {
 // addEdge adds an edge to toNode to the set of edges of fromNode.
 func addEdge(nodes map[node]edges, fromNode node, toNode node) {
 	// Check if an edge for fromNode has already been added.
-	fromEdges, ex := nodes[fromNode]
-	if !ex {
+	fromEdges, ok := nodes[fromNode]
+	if !ok {
 		// If not add an edge to toNode for it as its first edge.
 		nodes[fromNode] = edges{first: toNode}
 	} else {
 		// Otherwise add an edge to toNode for it as its second edge.
-		fromEdges.second = toNode
-		nodes[fromNode] = fromEdges
+		nodes[fromNode] = edges{first: fromEdges.first, second: toNode}
 	}
 }
 
 // assembleBorderGraph create a graph data structure representing the border of
 // all connected areas in the QR code with filled modules. The borders between
 // two filled and adjacent modules are all removed.
-func assembleBorderGraph(qr *go_qr.QrCode) map[node]edges {
+func (q *QrCode) assembleBorderGraph() map[node]edges {
 	nodes := make(map[node]edges)
-	n := qr.GetSize()
+	n := q.GetSize()
 	for y := 0; y < n; y++ {
 		for x := 0; x < n; x++ {
-			if qr.GetModule(x, y) {
-				addEdgesForModule(nodes, x, y, qr)
+			if q.GetModule(x, y) {
+				// Select which edges of the module have to be in the svg path.
+				// These are all edges which are not adjacent to another filled
+				// module.
+				top := y == 0 || !q.GetModule(x, y-1)
+				right := x == n-1 || !q.GetModule(x+1, y)
+				bottom := y == n-1 || !q.GetModule(x, y+1)
+				left := x == 0 || !q.GetModule(x-1, y)
+				// Store edges in both directions.
+				if top {
+					leftNode := node{x: x, y: y}
+					rightNode := node{x: x + 1, y: y}
+					addEdge(nodes, leftNode, rightNode)
+					addEdge(nodes, rightNode, leftNode)
+				}
+				// If both edges of a bottom corner of the module have to be
+				// drawn, the coordinates could coincided with the a corner
+				// of another module. To distinguish the corners, this node
+				// is marked as belonging to the upper module.
+				if left {
+					topNode := node{x: x, y: y}
+					bottomNode := node{x: x, y: y + 1, top: bottom}
+					addEdge(nodes, topNode, bottomNode)
+					addEdge(nodes, bottomNode, topNode)
+				}
+				if bottom {
+					leftNode := node{x: x, y: y + 1, top: left}
+					rightNode := node{x: x + 1, y: y + 1, top: right}
+					addEdge(nodes, leftNode, rightNode)
+					addEdge(nodes, rightNode, leftNode)
+				}
+				if right {
+					topNode := node{x: x + 1, y: y}
+					bottomNode := node{x: x + 1, y: y + 1, top: bottom}
+					addEdge(nodes, topNode, bottomNode)
+					addEdge(nodes, bottomNode, topNode)
+				}
 			}
 		}
 	}
 	return nodes
-}
-
-func addEdgesForModule(nodes map[node]edges, x, y int, qr *go_qr.QrCode) {
-	// Select which edges of the module have to be in the svg path.
-	// These are all edges which are not adjacent to another filled
-	// module.
-	top := y == 0 || !qr.GetModule(x, y-1)
-	right := x == qr.GetSize()-1 || !qr.GetModule(x+1, y)
-	bottom := y == qr.GetSize()-1 || !qr.GetModule(x, y+1)
-	left := x == 0 || !qr.GetModule(x-1, y)
-
-	// Store edges in both directions.
-	if top {
-		addEdge(nodes, node{x: x, y: y}, node{x: x + 1, y: y})
-	}
-	// If both edges of a bottom corner of the module have to be
-	// drawn, the coordinates could coincided with the a corner
-	// of another module. To distinguish the corners, this node
-	// is marked as belonging to the upper module.
-	if right {
-		addEdge(nodes, node{x: x + 1, y: y}, node{x: x + 1, y: y + 1, top: bottom})
-	}
-	if bottom {
-		addEdge(nodes, node{x: x, y: y + 1, top: left}, node{x: x + 1, y: y + 1, top: right})
-	}
-	if left {
-		addEdge(nodes, node{x: x, y: y}, node{x: x, y: y + 1, top: bottom})
-	}
 }

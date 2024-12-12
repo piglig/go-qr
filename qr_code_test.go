@@ -545,6 +545,13 @@ func TestQrCode_SVG(t *testing.T) {
 			config:  NewQrCodeImgConfig(10, 4, WithSVGXMLHeader(true)),
 		},
 		{
+			text:    "Hello, world!",
+			wantErr: false,
+			ecl:     Low,
+			dest:    "hello-world-QR-with-optimal-svg-xml.svg",
+			config:  NewQrCodeImgConfig(10, 4, WithSVGXMLHeader(true), WithOptimalSVG()),
+		},
+		{
 			text:    "",
 			wantErr: false,
 			ecl:     Low,
@@ -680,5 +687,25 @@ func TestQrCode_WriteAsSVG(t *testing.T) {
 				return
 			}
 		}
+	}
+}
+
+func BenchmarkToSVGString(b *testing.B) {
+	text := "WIFI:S:mYwIfI;T:WPA;P:secret_passwordt;H:false;;"
+	ecl := Medium
+	light, dark := "#FFFFFF", "#000000"
+	for i := 0; i < b.N; i++ {
+		qr, _ := EncodeText(text, ecl)
+		qr.toSVGString(NewQrCodeImgConfig(10, 4), light, dark)
+	}
+}
+
+func BenchmarkToOptimalSVGString(b *testing.B) {
+	text := "WIFI:S:mYwIfI;T:WPA;P:secret_passwordt;H:false;;"
+	ecl := Medium
+	light, dark := "#FFFFFF", "#000000"
+	for i := 0; i < b.N; i++ {
+		qr, _ := EncodeText(text, ecl)
+		qr.toSvgOptimizedString(NewQrCodeImgConfig(10, 4), light, dark)
 	}
 }

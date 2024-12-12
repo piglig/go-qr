@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"flag"
 	"fmt"
+
 	go_qr "github.com/piglig/go-qr"
+
 	"os"
 )
 
@@ -102,21 +104,9 @@ func generateQrCode(content, outputType, outputFile string) error {
 
 func generateSVG(qr *go_qr.QrCode, outputType, outputFile string) error {
 	if outputType == svgOptimizedType {
-		return generateSvgOptimized(qr, outputFile)
+		return qr.SVG(go_qr.NewQrCodeImgConfig(10, 4, go_qr.WithOptimalSVG()), outputFile, "#FFFFFF", "#000000")
 	}
-	config := go_qr.NewQrCodeImgConfig(10, 4)
-	return qr.SVG(config, outputFile, "#FFFFFF", "#000000")
-}
-
-func generateSvgOptimized(qr *go_qr.QrCode, outputFile string) error {
-	svg := toSvgOptimizedString(qr, 4, 1, "#FFFFFF", "#000000")
-	svgFile, err := os.Create(outputFile)
-	if err != nil {
-		return err
-	}
-	defer svgFile.Close()
-	_, err = svgFile.WriteString(svg)
-	return err
+	return qr.SVG(go_qr.NewQrCodeImgConfig(10, 4), outputFile, "#FFFFFF", "#000000")
 }
 
 func printTextArt(qr *go_qr.QrCode) {
