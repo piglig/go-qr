@@ -25,12 +25,12 @@ func doBasicDemo() {
 		return
 	}
 
-	err = qr.SVG(config, "hello-world-QR.svg", "#FFFFFF", "#000000")
+	err = qr.SVG(config, "hello-world-QR.svg")
 	if err != nil {
 		return
 	}
 
-	err = qr.SVG(go_qr.NewQrCodeImgConfig(10, 4, go_qr.WithSVGXMLHeader(true)), "hello-world-QR-xml-header.svg", "#FFFFFF", "#000000")
+	err = qr.SVG(go_qr.NewQrCodeImgConfig(10, 4, go_qr.WithSVGXMLHeader()), "hello-world-QR-xml-header.svg")
 	if err != nil {
 		return
 	}
