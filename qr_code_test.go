@@ -482,7 +482,7 @@ func TestNewQrCodeImgConfig(t *testing.T) {
 			border:      10,
 			light:       color.White,
 			dark:        color.Black,
-			options:     []func(config *QrCodeImgConfig){WithSVGXMLHeader(true)},
+			options:     []func(config *QrCodeImgConfig){WithSVGXMLHeader()},
 			colorSetter: colorSetterFunc,
 			want: &QrCodeImgConfig{
 				scale:  5,
@@ -542,14 +542,14 @@ func TestQrCode_SVG(t *testing.T) {
 			wantErr: false,
 			ecl:     Low,
 			dest:    "hello-world-QR-with-svg-xml.svg",
-			config:  NewQrCodeImgConfig(10, 4, WithSVGXMLHeader(true)),
+			config:  NewQrCodeImgConfig(10, 4, WithSVGXMLHeader()),
 		},
 		{
 			text:    "Hello, world!",
 			wantErr: false,
 			ecl:     Low,
 			dest:    "hello-world-QR-with-optimal-svg-xml.svg",
-			config:  NewQrCodeImgConfig(10, 4, WithSVGXMLHeader(true), WithOptimalSVG()),
+			config:  NewQrCodeImgConfig(10, 4, WithSVGXMLHeader(), WithOptimalSVG()),
 		},
 		{
 			text:    "",
@@ -596,7 +596,7 @@ func TestQrCode_SVG(t *testing.T) {
 		}
 
 		dest := filepath.Join(tempDir, tt.dest)
-		err = qr.SVG(tt.config, dest, "#FFFFFF", "#000000")
+		err = qr.SVG(tt.config, dest)
 		if (err != nil) != tt.wantErr {
 			t.Errorf("TestQrCode_SVG() error = %v, text = %v, wantErr %v", err, tt.text, tt.wantErr)
 			return
@@ -672,7 +672,7 @@ func TestQrCode_WriteAsSVG(t *testing.T) {
 			return
 		}
 
-		err = qr.WriteAsSVG(tt.config, tt.dest, light, dark)
+		err = qr.WriteAsSVG(tt.config, tt.dest)
 		if (err != nil) != tt.wantErr {
 			t.Errorf("TestQrCode_WriteAsSVG() error = %v, wantErr %v", err, tt.wantErr)
 			return
@@ -691,13 +691,91 @@ func TestQrCode_WriteAsSVG(t *testing.T) {
 }
 
 func BenchmarkToSVGString(b *testing.B) {
-	text := "WIFI:S:mYwIfI;T:WPA;P:secret_passwordt;H:false;;"
-	ecl := Medium
+	qr, _ := EncodeText("WIFI:S:mYwIfI;T:WPA;P:secret_passwordt;H:false;;", Medium)
+	cfg := NewQrCodeImgConfig(10, 4)
 	light, dark := "#FFFFFF", "#000000"
+	b.ReportAllocs()
+	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		qr, _ := EncodeText(text, ecl)
-		qr.toSVGString(NewQrCodeImgConfig(10, 4), light, dark)
+		qr.toSVGString(cfg, light, dark)
 	}
+}
+
+func TestToPNGBytes(t *testing.T) {
+	qr, err := EncodeText("Hello, world!", Low)
+	assert.NoError(t, err)
+
+	t.Run("returns valid PNG bytes", func(t *testing.T) {
+		b, err := qr.ToPNGBytes(NewQrCodeImgConfig(10, 4))
+		assert.NoError(t, err)
+		assert.NotEmpty(t, b)
+		// PNG signature: 89 50 4E 47 0D 0A 1A 0A
+		assert.Equal(t, []byte{0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A}, b[:8])
+	})
+
+	t.Run("matches WriteAsPNG output", func(t *testing.T) {
+		cfg := NewQrCodeImgConfig(10, 4)
+		var buf bytes.Buffer
+		assert.NoError(t, qr.WriteAsPNG(cfg, &buf))
+		b, err := qr.ToPNGBytes(cfg)
+		assert.NoError(t, err)
+		assert.Equal(t, buf.Bytes(), b)
+	})
+
+	t.Run("rejects invalid config", func(t *testing.T) {
+		_, err := qr.ToPNGBytes(NewQrCodeImgConfig(-1, 4))
+		assert.Error(t, err)
+	})
+}
+
+func TestToSVGBytes(t *testing.T) {
+	qr, err := EncodeText("Hello, world!", Low)
+	assert.NoError(t, err)
+
+	t.Run("returns valid SVG bytes", func(t *testing.T) {
+		b, err := qr.ToSVGBytes(NewQrCodeImgConfig(10, 4))
+		assert.NoError(t, err)
+		assert.Contains(t, string(b), "<svg")
+		assert.Contains(t, string(b), "</svg>")
+	})
+
+	t.Run("honors optimal option", func(t *testing.T) {
+		b, err := qr.ToSVGBytes(NewQrCodeImgConfig(10, 4, WithOptimalSVG()))
+		assert.NoError(t, err)
+		assert.Contains(t, string(b), "fill-rule=\"evenodd\"")
+	})
+
+	t.Run("matches WriteAsSVG output", func(t *testing.T) {
+		cfg := NewQrCodeImgConfig(10, 4)
+		var buf bytes.Buffer
+		assert.NoError(t, qr.WriteAsSVG(cfg, &buf))
+		b, err := qr.ToSVGBytes(cfg)
+		assert.NoError(t, err)
+		assert.Equal(t, buf.Bytes(), b)
+	})
+
+	t.Run("rejects invalid config", func(t *testing.T) {
+		_, err := qr.ToSVGBytes(NewQrCodeImgConfig(0, 4))
+		assert.Error(t, err)
+	})
+}
+
+func TestToImage(t *testing.T) {
+	qr, err := EncodeText("Hello, world!", Low)
+	assert.NoError(t, err)
+
+	t.Run("returns image with expected dimensions", func(t *testing.T) {
+		img, err := qr.ToImage(NewQrCodeImgConfig(10, 4))
+		assert.NoError(t, err)
+		expected := (qr.GetSize() + 8) * 10
+		assert.Equal(t, expected, img.Bounds().Dx())
+		assert.Equal(t, expected, img.Bounds().Dy())
+	})
+
+	t.Run("rejects invalid config", func(t *testing.T) {
+		_, err := qr.ToImage(NewQrCodeImgConfig(-1, 4))
+		assert.Error(t, err)
+	})
 }
 
 func BenchmarkToOptimalSVGString(b *testing.B) {
