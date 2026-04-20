@@ -2,7 +2,6 @@ package go_qr
 
 import (
 	"encoding/base64"
-	"errors"
 	"fmt"
 	"reflect"
 	"unicode/utf16"
@@ -15,7 +14,7 @@ import (
 // capacity of the version. Returns an array of pointers to QrSegment or an error.
 func MakeSegmentsOptimally(text string, ecl Ecc, minVersion, maxVersion int) ([]*QrSegment, error) {
 	if !isValidVersion(minVersion, maxVersion) {
-		return nil, errors.New("invalid value")
+		return nil, fmt.Errorf("%w: minVersion=%d maxVersion=%d", ErrInvalidVersion, minVersion, maxVersion)
 	}
 
 	codePoints, err := toCodePoints(text)
@@ -65,7 +64,7 @@ func toCodePoints(s string) ([]int, error) {
 	codePoints := make([]int, len(runes))
 	for i, r := range runes {
 		if utf16.IsSurrogate(r) {
-			return nil, errors.New("invalid UTF-16 string")
+			return nil, fmt.Errorf("%w: invalid UTF-16 surrogate", ErrUnencodableChar)
 		}
 		codePoints[i] = int(r)
 	}
@@ -76,7 +75,7 @@ func toCodePoints(s string) ([]int, error) {
 // countUtf8Bytes counts the number of bytes required to represent a Unicode code point in UTF-8.
 func countUtf8Bytes(cp int) (int, error) {
 	if cp < 0 {
-		return 0, errors.New("invalid code point")
+		return 0, fmt.Errorf("%w: negative code point %d", ErrUnencodableChar, cp)
 	} else if cp < 0x80 {
 		return 1, nil
 	} else if cp < 0x800 {
@@ -86,14 +85,14 @@ func countUtf8Bytes(cp int) (int, error) {
 	} else if cp < 0x110000 {
 		return 4, nil
 	} else {
-		return 0, errors.New("invalid code point")
+		return 0, fmt.Errorf("%w: code point %d out of range", ErrUnencodableChar, cp)
 	}
 }
 
 // computeCharacterModes determines the optimal encoding mode for each character in the input string.
 func computeCharacterModes(codePoints []int, version int) ([]Mode, error) {
 	if len(codePoints) > 7089 {
-		return nil, errors.New("string too long")
+		return nil, fmt.Errorf("%w: string exceeds 7089 code points", ErrDataTooLong)
 	}
 	modeTypes := []Mode{Byte, Alphanumeric, Numeric, Kanji}
 	numModes := len(modeTypes)
@@ -217,7 +216,7 @@ func splitIntoSegments(codePoints []int, charModes []Mode) ([]*QrSegment, error)
 			}
 			res = append(res, qs)
 		} else {
-			return nil, errors.New("invalid mode")
+			return nil, fmt.Errorf("%w: unknown segment mode", ErrInvalidArgument)
 		}
 		if i >= len(codePoints) {
 			return res, nil
@@ -234,7 +233,7 @@ func MakeKanji(text string) (*QrSegment, error) {
 	runes := []rune(text)
 	for _, c := range text {
 		if !isKanji(int(c)) {
-			return nil, errors.New("string contains non-kanji-mode characters")
+			return nil, fmt.Errorf("%w: kanji mode", ErrUnencodableChar)
 		}
 		val := unicdeToQRKanji[c]
 		err := bb.appendBits(val, 13)

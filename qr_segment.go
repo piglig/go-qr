@@ -1,7 +1,7 @@
 package go_qr
 
 import (
-	"errors"
+	"fmt"
 	"math"
 	"regexp"
 	"strconv"
@@ -99,7 +99,7 @@ type QrSegment struct {
 // newQrSegment function creates a new QR segment with the given mode, number of characters, and data.
 func newQrSegment(mode Mode, numCh int, data *BitBuffer) (*QrSegment, error) {
 	if numCh < 0 {
-		return nil, errors.New("invalid value")
+		return nil, fmt.Errorf("%w: numChars %d is negative", ErrInvalidArgument, numCh)
 	}
 	return &QrSegment{
 		mode:     mode,
@@ -117,7 +117,7 @@ func (q *QrSegment) getData() *BitBuffer {
 // It returns an error if the input data is nil.
 func MakeBytes(data []byte) (*QrSegment, error) {
 	if data == nil {
-		return nil, errors.New("data is nil")
+		return nil, fmt.Errorf("%w: data is nil", ErrInvalidArgument)
 	}
 
 	bb := &BitBuffer{}
@@ -134,7 +134,7 @@ func MakeBytes(data []byte) (*QrSegment, error) {
 // It returns an error if the string contains non-numeric characters.
 func MakeNumeric(digits string) (*QrSegment, error) {
 	if !isNumeric(digits) {
-		return nil, errors.New("string contains non-numeric characters")
+		return nil, fmt.Errorf("%w: numeric mode", ErrUnencodableChar)
 	}
 
 	bb := &BitBuffer{}
@@ -188,7 +188,7 @@ func abs(x int) int {
 // It returns an error if the string contains non-alphanumeric characters.
 func MakeAlphanumeric(text string) (*QrSegment, error) {
 	if !isAlphanumeric(text) {
-		return nil, errors.New("string contains unencodable characters in alphanumeric mode")
+		return nil, fmt.Errorf("%w: alphanumeric mode", ErrUnencodableChar)
 	}
 
 	bb := &BitBuffer{}
@@ -245,7 +245,7 @@ func MakeSegments(text string) ([]*QrSegment, error) {
 func MakeEci(val int) (*QrSegment, error) {
 	bb := &BitBuffer{}
 	if val < 0 {
-		return nil, errors.New("ECI assignment value out of range")
+		return nil, fmt.Errorf("%w: ECI assignment value out of range", ErrInvalidArgument)
 	} else if val < (1 << 7) {
 		err := bb.appendBits(val, 8)
 		if err != nil {
@@ -272,7 +272,7 @@ func MakeEci(val int) (*QrSegment, error) {
 			return nil, err
 		}
 	} else {
-		return nil, errors.New("ECI assignment value out of range")
+		return nil, fmt.Errorf("%w: ECI assignment value out of range", ErrInvalidArgument)
 	}
 	return newQrSegment(Eci, 0, bb)
 }
