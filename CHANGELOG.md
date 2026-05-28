@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Native QR decoder** (zero dependencies). `Decode(image.Image) (string,
+  error)` and `DecodeDetailed` recover text, version, ECC level, mask, and
+  per-segment info. A fast path handles crisp, axis-aligned images (the shape
+  this library's renderers emit); a robust fallback locates finder patterns and
+  corrects for rotation/noise via an affine transform. `WithFastPathOnly`
+  disables the fallback. New sentinels: `ErrNoQRCode`, `ErrDecodeFailed`,
+  `ErrUnsupportedSymbol`.
+- Reed-Solomon decoding (syndromes, Berlekamp-Massey, Chien, Forney) sharing
+  the encoder's GF(2^8) arithmetic.
+- `generator -decode <image>` CLI flag to decode an image and print its text.
+- Fuzz tests for the decoder (`FuzzDecodeRoundTrip`, `FuzzDecodeNoPanic`) and a
+  comparative decode benchmark harness under `tools/bench`.
+
+### Changed
+
+- `tools/verify` now wraps the native `go_qr.Decode` instead of gozxing; the
+  verify path is dependency-free. gozxing remains only in `tools/bench` as a
+  benchmark oracle.
+
 ## [1.0.0] - 2026-04-21
 
 ### Breaking changes

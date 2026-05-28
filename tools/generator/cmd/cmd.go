@@ -28,6 +28,8 @@ type Command struct {
 	Payload string // wifi|vcard|email|sms|tel|geo|url; interprets Content as key=val pairs
 	ECC     string // low|medium|quartile|high
 
+	Decode string // path to an image to decode (png/jpeg/gif); standalone mode
+
 	Scale, Border int
 
 	PngOutput          string
@@ -49,6 +51,7 @@ func newCommand(args []string) (*Command, error) {
 	fs.StringVar(&cmd.Content, "content", "", "Content to encode (raw text, or key=val,... when -payload is set)")
 	fs.StringVar(&cmd.Payload, "payload", "", "Structured payload type: wifi, vcard, email, sms, tel, geo, url")
 	fs.StringVar(&cmd.ECC, "ecc", "high", "Error correction: low, medium, quartile, high")
+	fs.StringVar(&cmd.Decode, "decode", "", "Decode a QR image file (png/jpeg/gif) and print its text; ignores encoding flags")
 	fs.IntVar(&cmd.Scale, "scale", 10, "Scale (pixels per module for PNG / units per module for SVG)")
 	fs.IntVar(&cmd.Border, "border", 4, "Quiet-zone border, in modules")
 	fs.StringVar(&cmd.PngOutput, "png", "", "Output PNG file path")
@@ -80,6 +83,11 @@ func run(args []string, stdout, stderr io.Writer) error {
 	if err != nil {
 		return err
 	}
+
+	if cmd.Decode != "" {
+		return runDecode(cmd.Decode, stdout)
+	}
+
 	if cmd.Content == "" {
 		return fmt.Errorf("please provide content to encode via -content")
 	}
@@ -157,6 +165,21 @@ func run(args []string, stdout, stderr io.Writer) error {
 		fmt.Fprint(stderr, renderPreview(qr))
 	}
 
+	return nil
+}
+
+// runDecode reads an image file, decodes the QR code it contains, and writes
+// the decoded text (followed by a newline) to w.
+func runDecode(path string, w io.Writer) error {
+	img, err := loadImage(path)
+	if err != nil {
+		return fmt.Errorf("decode: load image: %w", err)
+	}
+	text, err := verify.Decode(img)
+	if err != nil {
+		return fmt.Errorf("decode: %w", err)
+	}
+	fmt.Fprintln(w, text)
 	return nil
 }
 

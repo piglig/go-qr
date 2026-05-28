@@ -1,0 +1,5 @@
+# Golden SVG fixtures are byte-compared against renderer output, which emits
+# LF. Pin them to LF in the working tree on every platform so the comparison
+# is stable regardless of core.autocrlf (otherwise Windows checks them out as
+# CRLF and TestGoldenSVG fails locally while passing on CI).
+testdata/golden/*.svg text eol=lf

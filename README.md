@@ -9,16 +9,18 @@
 > 🎶 Go Community Minimalist QR Code Generator Library.
 
 ## Overview
-Native, zero-dependency QR code generation for Go. Mostly a translation of
+Native, zero-dependency QR code generation **and decoding** for Go. The encoder
+is mostly a translation of
 [Nayuki's Java QR code generator](https://www.nayuki.io/page/qr-code-generator-library),
 extended with PNG/SVG rendering, logo embedding, structured payloads, a
-concurrent batch API, and a command-line tool.
+concurrent batch API, a native decoder, and a command-line tool.
 
 ## Features
 - QR Code Model 2, all 40 versions, all 4 error-correction levels
 - Optimal segment-mode switching for mixed numeric / alphanumeric / byte / kanji input
 - PNG, SVG, and compact SVG (`fill-rule="evenodd"` single-path) output
 - In-memory rendering: `ToPNGBytes`, `ToSVGBytes`, `ToImage`
+- Native zero-dependency decoding: `Decode` / `DecodeDetailed` (fast axis-aligned path + rotation/noise-tolerant fallback)
 - Logo embedding with ECC-budget validation
 - Structured payloads: Wi-Fi, vCard/MECARD, email, SMS, tel, geo, URL
 - Concurrent batch encoding and rendering
@@ -95,6 +97,27 @@ library draws a 1-module-wide light padding around the logo and rejects ratios
 that exceed the current ECC level's recovery budget — use `High` ECC for ratios
 above ~0.22.
 
+## Decoding
+Native, zero-dependency QR decoding — the inverse of the encoder:
+
+```go
+img, _ := png.Decode(f)
+text, err := go_qr.Decode(img)        // image.Image -> text
+```
+
+`Decode` first tries a fast path that assumes a crisp, axis-aligned image (the
+shape this library's renderers produce), then falls back to a robust path that
+locates the finder patterns and corrects for rotation/noise via an affine
+transform. For structured output use `DecodeDetailed`:
+
+```go
+res, _ := go_qr.DecodeDetailed(img)
+// res.Text, res.Version, res.Ecc, res.Mask, res.Segments
+```
+
+Pass `WithFastPathOnly()` to skip the robust fallback when inputs are known to
+be freshly rendered (e.g. CI round-trip checks) for maximum speed.
+
 ## Structured Payloads
 The `payload` sub-package builds canonical strings for common QR use cases:
 
@@ -153,6 +176,7 @@ go install github.com/piglig/go-qr/tools/generator@latest
 Flags:
 ```
 -content string         Content to encode (raw text, or key=val,... when -payload is set)
+-decode string          Decode a QR image file (png/jpeg/gif) and print its text; ignores encoding flags
 -payload string         Structured payload: wifi, vcard, email, sms, tel, geo, url
 -ecc string             Error correction: low, medium, quartile, high (default "high")
 -scale int              Pixels per module for PNG / units per module for SVG (default 10)
@@ -176,11 +200,12 @@ generator -content hello -svg-optimized hello.svg     # compact single-path SVG
 generator -payload wifi -content "ssid=home,password=s3cret,auth=WPA" -png wifi.png
 generator -content hello -png hello.png -verify       # round-trip decode check
 generator -content hello -stdout png > hello.png
+generator -decode hello.png                           # decode an image, print text
 ```
 
 ## Verifying Output
-The `tools/verify` sub-module wraps gozxing to decode rendered output. It is a
-separate Go module so the main library stays dependency-free.
+The `tools/verify` sub-module wraps the native `go_qr.Decode` for round-trip
+assertions in tests and CI.
 ```go
 import "github.com/piglig/go-qr/tools/verify"
 

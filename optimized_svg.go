@@ -11,8 +11,12 @@ func (q *QrCode) toSvgOptimizedString(config *QrCodeImgConfig, lightColor, darkC
 	border := config.border
 	sb := strings.Builder{}
 	sb.Grow(1024)
-	sb.WriteString("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n")
-	sb.WriteString("<!DOCTYPE svg PUBLIC \"-//W3C//DTD SVG 1.1//EN\" \"http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd\">\n")
+	// Emit the XML + DOCTYPE prolog only when requested, matching the
+	// non-optimal renderer and the documented WithSVGXMLHeader contract.
+	if config.options.svgXMLHeader {
+		sb.WriteString("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n")
+		sb.WriteString("<!DOCTYPE svg PUBLIC \"-//W3C//DTD SVG 1.1//EN\" \"http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd\">\n")
+	}
 	n := q.GetSize()*scale + border*2
 	sb.WriteString(fmt.Sprintf("<svg xmlns=\"http://www.w3.org/2000/svg\" version=\"1.1\" viewBox=\"0 0 %d %d\" stroke=\"none\">\n",
 		n, n))

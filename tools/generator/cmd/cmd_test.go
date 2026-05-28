@@ -29,6 +29,24 @@ func TestRun_StdoutPNG(t *testing.T) {
 	}
 }
 
+func TestRun_Decode(t *testing.T) {
+	dir := t.TempDir()
+	pngPath := filepath.Join(dir, "qr.png")
+
+	var out, errOut bytes.Buffer
+	if err := run([]string{"-content", "decode round trip 7", "-png", pngPath, "-quiet"}, &out, &errOut); err != nil {
+		t.Fatalf("encode run: %v", err)
+	}
+
+	out.Reset()
+	if err := run([]string{"-decode", pngPath}, &out, &errOut); err != nil {
+		t.Fatalf("decode run: %v", err)
+	}
+	if got := strings.TrimRight(out.String(), "\n"); got != "decode round trip 7" {
+		t.Fatalf("want %q, got %q", "decode round trip 7", got)
+	}
+}
+
 func TestRun_Verify(t *testing.T) {
 	var out, errOut bytes.Buffer
 	err := run([]string{"-content", "verify-me", "-verify"}, &out, &errOut)

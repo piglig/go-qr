@@ -28,6 +28,18 @@ var (
 	// ErrInvalidImageOutput is returned when the output file path has an
 	// unsupported extension or the output target is misconfigured.
 	ErrInvalidImageOutput = errors.New("go_qr: invalid image output")
+
+	// ErrNoQRCode is returned when no QR code could be located in the image.
+	ErrNoQRCode = errors.New("go_qr: no QR code found")
+
+	// ErrDecodeFailed is returned when a QR code was located but could not be
+	// decoded (uncorrectable errors, malformed format/version info, or a
+	// bitstream that does not parse).
+	ErrDecodeFailed = errors.New("go_qr: decode failed")
+
+	// ErrUnsupportedSymbol is returned for symbols this decoder does not
+	// support (Micro QR, segment modes not yet implemented, etc.).
+	ErrUnsupportedSymbol = errors.New("go_qr: unsupported symbol")
 )
 
 // DataTooLongException is the legacy typed error for data-too-long cases.
