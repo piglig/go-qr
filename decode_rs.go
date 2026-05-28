@@ -43,18 +43,6 @@ func gfInv(a byte) byte {
 	return gfExp[255-int(gfLog[a])]
 }
 
-// gfPow returns a^n.
-func gfPow(a byte, n int) byte {
-	if a == 0 {
-		return 0
-	}
-	l := (int(gfLog[a]) * n) % 255
-	if l < 0 {
-		l += 255
-	}
-	return gfExp[l]
-}
-
 // rsCorrect corrects in place a received codeword block of the form
 // [data... | ecc...] with eccLen ECC bytes, using up to eccLen/2 error
 // corrections. It returns an error if the block is uncorrectable.
