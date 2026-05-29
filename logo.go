@@ -27,9 +27,9 @@ type logoConfig struct {
 // to remain scannable. Higher error correction levels tolerate larger logos;
 // rendering will fail if the occluded area exceeds what the chosen ECC can
 // realistically recover.
-func WithLogo(img image.Image, sizeRatio float64) func(*QrCodeImgConfig) {
+func WithLogo(img image.Image, sizeRatio float64) Option {
 	return func(q *QrCodeImgConfig) {
-		q.options.logo = &logoConfig{img: img, sizeRatio: sizeRatio}
+		q.logo = &logoConfig{img: img, sizeRatio: sizeRatio}
 	}
 }
 
@@ -94,7 +94,7 @@ func (l *logoConfig) logoRect(qrSize, scale, border int) (image.Rectangle, float
 // validate checks that the logo configuration is compatible with the QR code's
 // error correction level.
 func (l *logoConfig) validate(q *QrCode, scale, border int) error {
-	_, ratio, err := l.logoRect(q.GetSize(), scale, border)
+	_, ratio, err := l.logoRect(q.Size(), scale, border)
 	if err != nil {
 		return err
 	}

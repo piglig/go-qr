@@ -35,11 +35,10 @@ func MakeSegmentsOptimally(text string, ecl Ecc, minVersion, maxVersion int) ([]
 				return segs, nil
 			}
 			if version >= maxVersion {
-				msg := "segment too long"
 				if dataUsedBits != -1 {
-					msg = fmt.Sprintf("data length = %d bits, max capacity = %d bits", dataUsedBits, dataCapacityBits)
+					return nil, fmt.Errorf("%w: data length %d bits exceeds capacity %d bits", ErrDataTooLong, dataUsedBits, dataCapacityBits)
 				}
-				return nil, &DataTooLongException{Msg: msg}
+				return nil, fmt.Errorf("%w: segment too long", ErrDataTooLong)
 			}
 		}
 	}
@@ -141,7 +140,7 @@ func computeCharacterModes(codePoints []int, version int) ([]Mode, error) {
 		for j := 0; j < numModes; j++ {
 			for k := 0; k < numModes; k++ {
 				newCost := (curCosts[k]+5)/6*6 + headCosts[j]
-				if charModes[i][k].getModeBits() != 0 && (charModes[i][j].getModeBits() == 0 || newCost < curCosts[j]) {
+				if charModes[i][k].bits() != 0 && (charModes[i][j].bits() == 0 || newCost < curCosts[j]) {
 					curCosts[j] = newCost
 					charModes[i][j] = modeTypes[k]
 				}
@@ -153,7 +152,7 @@ func computeCharacterModes(codePoints []int, version int) ([]Mode, error) {
 
 	curMode := Mode{}
 	for i, minCost := 0, 0; i < numModes; i++ {
-		if curMode.getModeBits() == 0 || prevCosts[i] < minCost {
+		if curMode.bits() == 0 || prevCosts[i] < minCost {
 			minCost = prevCosts[i]
 			curMode = modeTypes[i]
 		}

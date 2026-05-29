@@ -13,11 +13,11 @@ func (q *QrCode) toSvgOptimizedString(config *QrCodeImgConfig, lightColor, darkC
 	sb.Grow(1024)
 	// Emit the XML + DOCTYPE prolog only when requested, matching the
 	// non-optimal renderer and the documented WithSVGXMLHeader contract.
-	if config.options.svgXMLHeader {
+	if config.svgXMLHeader {
 		sb.WriteString("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n")
 		sb.WriteString("<!DOCTYPE svg PUBLIC \"-//W3C//DTD SVG 1.1//EN\" \"http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd\">\n")
 	}
-	n := q.GetSize()*scale + border*2
+	n := q.Size()*scale + border*2
 	sb.WriteString(fmt.Sprintf("<svg xmlns=\"http://www.w3.org/2000/svg\" version=\"1.1\" viewBox=\"0 0 %d %d\" stroke=\"none\">\n",
 		n, n))
 	if lightColor != "" {
@@ -175,17 +175,17 @@ func writeInt(sb *strings.Builder, v int) {
 // assembleBorderGraph builds the border graph of all connected filled regions
 // in the QR code. Borders between two adjacent filled modules are omitted.
 func (q *QrCode) assembleBorderGraph() *borderGraph {
-	n := q.GetSize()
+	n := q.Size()
 	g := newBorderGraph(n)
 	for y := 0; y < n; y++ {
 		for x := 0; x < n; x++ {
-			if !q.GetModule(x, y) {
+			if !q.Module(x, y) {
 				continue
 			}
-			top := y == 0 || !q.GetModule(x, y-1)
-			right := x == n-1 || !q.GetModule(x+1, y)
-			bottom := y == n-1 || !q.GetModule(x, y+1)
-			left := x == 0 || !q.GetModule(x-1, y)
+			top := y == 0 || !q.Module(x, y-1)
+			right := x == n-1 || !q.Module(x+1, y)
+			bottom := y == n-1 || !q.Module(x, y+1)
+			left := x == 0 || !q.Module(x-1, y)
 
 			if top {
 				l := node{x: x, y: y}

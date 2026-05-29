@@ -5,77 +5,72 @@ import (
 	"math"
 )
 
-// BitSet defines an interface that allows manipulation of a bitset.
-type BitSet interface {
-	getBit(i int) bool
-	set(i int, value bool)
-	len() int
+// BitBuffer is an append-only sequence of bits, packed eight to a byte
+// (most-significant bit first). It is used to assemble QR segment and codeword
+// data before it is read back out into the module matrix. Packing into bytes
+// (rather than one bool per bit) keeps it compact, and append-based growth keeps
+// appends amortized O(1).
+type BitBuffer struct {
+	data []byte // packed bits; bit i lives at data[i/8], MSB-first
+	n    int    // number of valid bits
 }
 
-type BitBuffer []bool
+// len returns the number of bits in the buffer.
+func (b *BitBuffer) len() int { return b.n }
 
-// len returns the length of the BitBuffer.
-func (b *BitBuffer) len() int {
-	return len(*b)
-}
-
-// set sets the bit at position i in the BitBuffer to value.
-func (b *BitBuffer) set(i int, value bool) {
-	if i >= len(*b) {
-		b.grow(1 + i) // If index is beyond current length, grow buffer.
-	}
-	(*b)[i] = value
-}
-
-// getBit returns the bit at position i in the BitBuffer.
+// getBit returns the i-th bit. Out-of-range indices read as 0.
 func (b *BitBuffer) getBit(i int) bool {
-	if i >= len(*b) {
+	if i < 0 || i >= b.n {
 		return false
 	}
-	return (*b)[i]
+	return b.data[i>>3]&(0x80>>uint(i&7)) != 0
 }
 
-// grow increases the size of the BitBuffer.
-func (b *BitBuffer) grow(size int) {
-	res := make(BitBuffer, size)
-	copy(res, *b)
-	*b = res
+// appendBit appends a single bit to the end of the buffer.
+func (b *BitBuffer) appendBit(set bool) {
+	if b.n>>3 >= len(b.data) {
+		b.data = append(b.data, 0)
+	}
+	if set {
+		b.data[b.n>>3] |= 0x80 >> uint(b.n&7)
+	}
+	b.n++
 }
 
-// appendBits appends val as a binary number of length bits to the end of the BitBuffer.
+// appendBits appends the low length bits of val, most-significant bit first.
 func (b *BitBuffer) appendBits(val, length int) error {
-	if length < 0 || length > 31 || (val>>uint(length)) != 0 {
+	if length < 0 || length > 31 || val>>uint(length) != 0 {
 		return fmt.Errorf("value out of range")
 	}
-	if math.MaxInt32-b.len() < length {
+	if math.MaxInt32-b.n < length {
 		return fmt.Errorf("maximum length reached")
 	}
 	for i := length - 1; i >= 0; i-- {
-		b.set(b.len(), getBit(val, i))
+		b.appendBit((val>>uint(i))&1 != 0)
 	}
 	return nil
 }
 
-// appendData appends another BitBuffer to this BitBuffer.
+// appendData appends every bit of other to this buffer.
 func (b *BitBuffer) appendData(other *BitBuffer) error {
 	if other == nil {
 		return fmt.Errorf("BitBuffer is nil")
 	}
-
-	if math.MaxInt32-b.len() < other.len() {
+	if math.MaxInt32-b.n < other.n {
 		return fmt.Errorf("maximum length reached")
 	}
-
-	for i := 0; i < other.len(); i++ {
-		bit := other.getBit(i)
-		b.set(b.len(), bit)
+	for i := 0; i < other.n; i++ {
+		b.appendBit(other.getBit(i))
 	}
 	return nil
 }
 
-// clone creates a copy of the BitBuffer.
+// clone returns a deep copy of the buffer.
 func (b *BitBuffer) clone() *BitBuffer {
-	clone := make(BitBuffer, len(*b))
-	copy(clone, *b)
-	return &clone
+	if b.data == nil {
+		return &BitBuffer{n: b.n}
+	}
+	d := make([]byte, len(b.data))
+	copy(d, b.data)
+	return &BitBuffer{data: d, n: b.n}
 }

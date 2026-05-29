@@ -19,7 +19,7 @@ func TestMakeAlphanumeric(t *testing.T) {
 			wantData: &QrSegment{
 				mode:     Alphanumeric,
 				numChars: 1,
-				data:     &BitBuffer{false, false, false, false, false, false},
+				data:     bufFromBits(false, false, false, false, false, false),
 			},
 		},
 		{
@@ -29,9 +29,9 @@ func TestMakeAlphanumeric(t *testing.T) {
 			wantData: &QrSegment{
 				mode:     Alphanumeric,
 				numChars: 6,
-				data: &BitBuffer{false, false, false, false, false, true, false, true, true, true, true, false, false,
+				data: bufFromBits(false, false, false, false, false, true, false, true, true, true, true, false, false,
 					false, true, false, false, false, true, false, true, true, false, false, false, true, true, true, false,
-					false, true, true, true},
+					false, true, true, true),
 			},
 		},
 		{
@@ -41,7 +41,7 @@ func TestMakeAlphanumeric(t *testing.T) {
 			wantData: &QrSegment{
 				mode:     Alphanumeric,
 				numChars: 0,
-				data:     &BitBuffer{},
+				data:     bufFromBits(),
 			},
 		},
 		{
@@ -57,7 +57,7 @@ func TestMakeAlphanumeric(t *testing.T) {
 			wantData: &QrSegment{
 				mode:     Alphanumeric,
 				numChars: 1,
-				data:     &BitBuffer{false, false, true, false, true, false},
+				data:     bufFromBits(false, false, true, false, true, false),
 			},
 		},
 	}
@@ -89,7 +89,7 @@ func TestMakeNumeric(t *testing.T) {
 			wantData: &QrSegment{
 				mode:     Numeric,
 				numChars: 51,
-				data: &BitBuffer{false, true, false, false, true, true, true, false, true, false, false, false, true,
+				data: bufFromBits(false, true, false, false, true, true, true, false, true, false, false, false, true,
 					false, false, true, true, true, true, true, false, true, false, false, false, false, true, false, false,
 					true, false, true, false, true, true, false, false, true, true, false, true, true, true, true, false,
 					true, false, false, true, true, false, true, false, true, false, false, false, false, true, true, true,
@@ -99,7 +99,7 @@ func TestMakeNumeric(t *testing.T) {
 					false, false, true, false, false, true, false, false, false, false, false, false, true, true, false,
 					true, false, false, false, true, true, true, false, true, true, false, false, true, true, false, false,
 					true, true, true, false, true, false, true, false, true, true, true, true, true, false, true, false, true,
-					false, false, true, false, true, true, true, true, true, true, true, true, false},
+					false, false, true, false, true, true, true, true, true, true, true, true, false),
 			},
 		},
 		{
@@ -137,7 +137,7 @@ func TestMakeBytes(t *testing.T) {
 			wantData: &QrSegment{
 				mode:     Byte,
 				numChars: 29,
-				data: &BitBuffer{false, true, true, false, true, false, false, false, false, true, true, true, false, true,
+				data: bufFromBits(false, true, true, false, true, false, false, false, false, true, true, true, false, true,
 					false, false, false, true, true, true, false, true, false, false, false, true, true, true, false, false,
 					false, false, false, true, true, true, false, false, true, true, false, false, true, true, true, false,
 					true, false, false, false, true, false, true, true, true, true, false, false, true, false, true, true,
@@ -151,7 +151,7 @@ func TestMakeBytes(t *testing.T) {
 					false, false, true, false, true, true, true, true, false, true, true, true, false, false, false, false,
 					false, true, true, false, true, false, false, true, false, true, true, false, false, true, true, true,
 					false, true, true, false, true, true, false, false, false, true, true, false, true, false, false, true,
-					false, true, true, false, false, true, true, true},
+					false, true, true, false, false, true, true, true),
 			},
 		},
 		{
@@ -188,7 +188,7 @@ func TestMakeKanji(t *testing.T) {
 			wantData: &QrSegment{
 				mode:     Kanji,
 				numChars: 29,
-				data: &BitBuffer{false, false, false, false, false, false, false, true, true, false, true, false, true, true,
+				data: bufFromBits(false, false, false, false, false, false, false, true, true, false, true, false, true, true,
 					false, false, false, false, false, false, false, false, false, false, true, false, false, true, true,
 					true, true, true, true, false, false, false, false, false, false, false, true, false, true, false, true,
 					true, true, false, true, true, false, true, false, true, false, true, false, true, true, false, true,
@@ -212,7 +212,7 @@ func TestMakeKanji(t *testing.T) {
 					false, true, false, true, false, false, false, false, false, false, false, false, false, false, false,
 					false, false, false, false, false, true, false, false, false, false, false, true, false, false, false,
 					false, false, false, false, true, true, true, true, true, true, true, true, true, false, false, false,
-					false, false, false, false, false, false, true, false, false, false},
+					false, false, false, false, false, false, true, false, false, false),
 			},
 		},
 		{
@@ -222,7 +222,7 @@ func TestMakeKanji(t *testing.T) {
 			wantData: &QrSegment{
 				mode:     Kanji,
 				numChars: 0,
-				data:     &BitBuffer{},
+				data:     bufFromBits(),
 			},
 		},
 		{
@@ -258,48 +258,48 @@ func TestNewQrSegment(t *testing.T) {
 			name:     "test with one numCh and no BitBuffer",
 			mode:     Numeric,
 			numCh:    1,
-			data:     &BitBuffer{},
+			data:     bufFromBits(),
 			wantErr:  false,
-			wantData: &QrSegment{mode: Numeric, numChars: 1, data: &BitBuffer{}},
+			wantData: &QrSegment{mode: Numeric, numChars: 1, data: bufFromBits()},
 		},
 		{
 			name:     "test with one numCh",
 			mode:     Numeric,
 			numCh:    1,
-			data:     &BitBuffer{true},
+			data:     bufFromBits(true),
 			wantErr:  false,
-			wantData: &QrSegment{mode: Numeric, numChars: 1, data: &BitBuffer{true}},
+			wantData: &QrSegment{mode: Numeric, numChars: 1, data: bufFromBits(true)},
 		},
 		{
 			name:     "test with positive numCh",
 			mode:     Numeric,
 			numCh:    10,
-			data:     &BitBuffer{true, true, false},
+			data:     bufFromBits(true, true, false),
 			wantErr:  false,
-			wantData: &QrSegment{mode: Numeric, numChars: 10, data: &BitBuffer{true, true, false}},
+			wantData: &QrSegment{mode: Numeric, numChars: 10, data: bufFromBits(true, true, false)},
 		},
 		{
 			name:     "test with positive numCh and no BitBuffer",
 			mode:     Numeric,
 			numCh:    10,
-			data:     &BitBuffer{},
+			data:     bufFromBits(),
 			wantErr:  false,
-			wantData: &QrSegment{mode: Numeric, numChars: 10, data: &BitBuffer{}},
+			wantData: &QrSegment{mode: Numeric, numChars: 10, data: bufFromBits()},
 		},
 		{
 			name:     "test with negative numCh",
 			mode:     Numeric,
 			numCh:    -1,
-			data:     &BitBuffer{},
+			data:     bufFromBits(),
 			wantErr:  true,
 			wantData: nil,
 		}, {
 			name:     "test with zero numCh",
 			mode:     Numeric,
 			numCh:    0,
-			data:     &BitBuffer{},
+			data:     bufFromBits(),
 			wantErr:  false,
-			wantData: &QrSegment{mode: Numeric, numChars: 0, data: &BitBuffer{}},
+			wantData: &QrSegment{mode: Numeric, numChars: 0, data: bufFromBits()},
 		},
 	}
 
@@ -329,7 +329,7 @@ func TestMakeSegments(t *testing.T) {
 			wantSegments: []*QrSegment{{
 				mode:     Numeric,
 				numChars: 51,
-				data: &BitBuffer{false, true, false, false, true, true, true, false, true, false, false, false, true,
+				data: bufFromBits(false, true, false, false, true, true, true, false, true, false, false, false, true,
 					false, false, true, true, true, true, true, false, true, false, false, false, false, true, false, false,
 					true, false, true, false, true, true, false, false, true, true, false, true, true, true, true, false,
 					true, false, false, true, true, false, true, false, true, false, false, false, false, true, true, true,
@@ -339,7 +339,7 @@ func TestMakeSegments(t *testing.T) {
 					false, false, true, false, false, true, false, false, false, false, false, false, true, true, false,
 					true, false, false, false, true, true, true, false, true, true, false, false, true, true, false, false,
 					true, true, true, false, true, false, true, false, true, true, true, true, true, false, true, false, true,
-					false, false, true, false, true, true, true, true, true, true, true, true, false},
+					false, false, true, false, true, true, true, true, true, true, true, true, false),
 			}},
 		},
 		{
@@ -348,7 +348,7 @@ func TestMakeSegments(t *testing.T) {
 			wantSegments: []*QrSegment{{
 				mode:     Byte,
 				numChars: 29,
-				data: &BitBuffer{false, true, true, false, true, false, false, false, false, true, true, true, false, true,
+				data: bufFromBits(false, true, true, false, true, false, false, false, false, true, true, true, false, true,
 					false, false, false, true, true, true, false, true, false, false, false, true, true, true, false, false,
 					false, false, false, true, true, true, false, false, true, true, false, false, true, true, true, false,
 					true, false, false, false, true, false, true, true, true, true, false, false, true, false, true, true,
@@ -362,7 +362,7 @@ func TestMakeSegments(t *testing.T) {
 					false, false, true, false, true, true, true, true, false, true, true, true, false, false, false, false,
 					false, true, true, false, true, false, false, true, false, true, true, false, false, true, true, true,
 					false, true, true, false, true, true, false, false, false, true, true, false, true, false, false, true,
-					false, true, true, false, false, true, true, true},
+					false, true, true, false, false, true, true, true),
 			}},
 		},
 		{
@@ -371,7 +371,7 @@ func TestMakeSegments(t *testing.T) {
 			wantSegments: []*QrSegment{{
 				mode:     Alphanumeric,
 				numChars: 55,
-				data: &BitBuffer{false, true, false, false, true, true, false, false, false, false, true, false, true,
+				data: bufFromBits(false, true, false, false, true, true, false, false, false, false, true, false, true,
 					true, true, true, false, false, false, true, true, false, false, false, true, true, true, false, true,
 					true, true, false, true, true, true, true, false, false, true, true, true, true, true, true, false, true,
 					true, true, true, true, true, false, true, true, false, true, false, true, false, true, false, true,
@@ -390,7 +390,7 @@ func TestMakeSegments(t *testing.T) {
 					true, true, false, true, false, false, false, false, true, false, true, false, false, false, false, true,
 					false, false, true, true, true, true, true, true, true, true, true, false, false, true, false, false,
 					true, true, true, false, true, false, true, true, true, false, false, true, false, true, false, true, true,
-				},
+				),
 			}},
 		},
 	}
@@ -433,7 +433,7 @@ func TestMakeEci(t *testing.T) {
 			wantSegment: &QrSegment{
 				mode:     Eci,
 				numChars: 0,
-				data:     &BitBuffer{false, true, true, false, false, true, false, false},
+				data:     bufFromBits(false, true, true, false, false, true, false, false),
 			},
 		},
 		{
@@ -443,7 +443,7 @@ func TestMakeEci(t *testing.T) {
 			wantSegment: &QrSegment{
 				mode:     Eci,
 				numChars: 0,
-				data:     &BitBuffer{true, false, false, false, false, false, true, true, true, true, true, false, true, false, false, false},
+				data:     bufFromBits(true, false, false, false, false, false, true, true, true, true, true, false, true, false, false, false),
 			},
 		},
 		{
@@ -453,7 +453,7 @@ func TestMakeEci(t *testing.T) {
 			wantSegment: &QrSegment{
 				mode:     Eci,
 				numChars: 0,
-				data:     &BitBuffer{true, true, false, false, false, false, false, true, true, false, false, false, false, true, true, false, true, false, false, true, true, true, true, true},
+				data:     bufFromBits(true, true, false, false, false, false, false, true, true, false, false, false, false, true, true, false, true, false, false, true, true, true, true, true),
 			},
 		},
 	}
@@ -547,15 +547,15 @@ func TestQrSegment_GetData(t *testing.T) {
 		{
 			name: "test with normal data",
 			segment: &QrSegment{
-				data: &BitBuffer{true, true, false},
+				data: bufFromBits(true, true, false),
 			},
-			wantData: &BitBuffer{true, true, false},
+			wantData: bufFromBits(true, true, false),
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.wantData, tt.segment.getData())
+			assert.Equal(t, tt.wantData, tt.segment.cloneData())
 		})
 	}
 }

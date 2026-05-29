@@ -150,19 +150,10 @@ func doSegmentDemo() {
 		return
 	}
 
-	config := go_qr.NewQrCodeImgConfig(9, 4)
-	config.SetLight(color.RGBA{
-		R: 0xFF,
-		G: 0xFF,
-		B: 0xE0,
-		A: 0xFF,
-	})
-	config.SetDark(color.RGBA{
-		R: 0x30,
-		G: 0x30,
-		B: 0x80,
-		A: 0xFF,
-	})
+	config := go_qr.NewQrCodeImgConfig(9, 4,
+		go_qr.WithLight(color.RGBA{R: 0xFF, G: 0xFF, B: 0xE0, A: 0xFF}),
+		go_qr.WithDark(color.RGBA{R: 0x30, G: 0x30, B: 0x80, A: 0xFF}),
+	)
 	err = qr.PNG(config, "madoka-utf8-QR.png")
 	if err != nil {
 		return
@@ -179,19 +170,10 @@ func doSegmentDemo() {
 		return
 	}
 
-	config = go_qr.NewQrCodeImgConfig(9, 4)
-	config.SetLight(color.RGBA{
-		R: 0xE0,
-		G: 0xF0,
-		B: 0xEF,
-		A: 0xFF,
-	})
-	config.SetDark(color.RGBA{
-		R: 0x40,
-		G: 0x40,
-		B: 0x40,
-		A: 0xFF,
-	})
+	config = go_qr.NewQrCodeImgConfig(9, 4,
+		go_qr.WithLight(color.RGBA{R: 0xE0, G: 0xF0, B: 0xEF, A: 0xFF}),
+		go_qr.WithDark(color.RGBA{R: 0x40, G: 0x40, B: 0x40, A: 0xFF}),
+	)
 	err = qr.PNG(config, "madoka-kanji-QR.png")
 	if err != nil {
 		return
@@ -209,19 +191,10 @@ func doMaskDemo() {
 		return
 	}
 
-	config := go_qr.NewQrCodeImgConfig(9, 4)
-	config.SetLight(color.RGBA{
-		R: 0xE0,
-		G: 0xFF,
-		B: 0xE0,
-		A: 0xFF,
-	})
-	config.SetDark(color.RGBA{
-		R: 0x20,
-		G: 0x60,
-		B: 0x20,
-		A: 0xFF,
-	})
+	config := go_qr.NewQrCodeImgConfig(9, 4,
+		go_qr.WithLight(color.RGBA{R: 0xE0, G: 0xFF, B: 0xE0, A: 0xFF}),
+		go_qr.WithDark(color.RGBA{R: 0x20, G: 0x60, B: 0x20, A: 0xFF}),
+	)
 	err = qr.PNG(config, "project-piglig-automask-QR.png")
 	if err != nil {
 		return
@@ -232,19 +205,10 @@ func doMaskDemo() {
 		return
 	}
 
-	config = go_qr.NewQrCodeImgConfig(8, 6)
-	config.SetLight(color.RGBA{
-		R: 0xFF,
-		G: 0xE0,
-		B: 0xE0,
-		A: 0xFF,
-	})
-	config.SetDark(color.RGBA{
-		R: 0x60,
-		G: 0x20,
-		B: 0x20,
-		A: 0xFF,
-	})
+	config = go_qr.NewQrCodeImgConfig(8, 6,
+		go_qr.WithLight(color.RGBA{R: 0xFF, G: 0xE0, B: 0xE0, A: 0xFF}),
+		go_qr.WithDark(color.RGBA{R: 0x60, G: 0x20, B: 0x20, A: 0xFF}),
+	)
 	err = qr.PNG(config, "project-piglig-mask3-QR.png")
 	if err != nil {
 		return
