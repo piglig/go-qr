@@ -41,20 +41,3 @@ var (
 	// support (Micro QR, segment modes not yet implemented, etc.).
 	ErrUnsupportedSymbol = errors.New("go_qr: unsupported symbol")
 )
-
-// DataTooLongException is the legacy typed error for data-too-long cases.
-// It wraps ErrDataTooLong so callers can use either the type assertion or
-// errors.Is to detect it.
-type DataTooLongException struct {
-	Msg string
-}
-
-func (d *DataTooLongException) Error() string {
-	if d.Msg == "" {
-		return ErrDataTooLong.Error()
-	}
-	return d.Msg
-}
-
-// Unwrap lets errors.Is match ErrDataTooLong.
-func (d *DataTooLongException) Unwrap() error { return ErrDataTooLong }

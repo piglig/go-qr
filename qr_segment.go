@@ -3,22 +3,23 @@ package go_qr
 import (
 	"fmt"
 	"math"
-	"regexp"
 	"strconv"
 	"strings"
 )
 
-// Mode is the representation of the mode of a QR code character.
+// Mode is the representation of the mode of a QR code character. It is
+// comparable, so modes can be checked with ==.
 type Mode struct {
-	modeBits         int   // 4-bit mode indicator used in QR Code's data encoding
-	numBitsCharCount []int // number of bits used for character count indicator for different versions
+	modeBits         int    // 4-bit mode indicator used in QR Code's data encoding
+	numBitsCharCount [3]int // char-count-indicator bits for the three version ranges
 }
 
-// newMode creates a new Mode with a given mode indicator and character count bits
-func newMode(mode int, ccbits ...int) Mode {
+// newMode creates a new Mode with a given mode indicator and the character count
+// bits for the three version ranges (1-9, 10-26, 27-40).
+func newMode(mode, cc1, cc2, cc3 int) Mode {
 	return Mode{
 		modeBits:         mode,
-		numBitsCharCount: ccbits,
+		numBitsCharCount: [3]int{cc1, cc2, cc3},
 	}
 }
 
@@ -47,47 +48,29 @@ var (
 	Eci = newMode(0x7, 0, 0, 0)
 )
 
-// getModeBits function to return the bits representing a particular mode
-func (m Mode) getModeBits() int {
+// bits returns the 4-bit mode indicator.
+func (m Mode) bits() int {
 	return m.modeBits
 }
 
 // isNumeric checks if the mode is Numeric.
-func (m Mode) isNumeric() bool {
-	return m.modeBits == Numeric.getModeBits()
-}
+func (m Mode) isNumeric() bool { return m == Numeric }
 
 // isAlphanumeric checks if the mode is Alphanumeric.
-func (m Mode) isAlphanumeric() bool {
-	return m.modeBits == Alphanumeric.getModeBits()
-}
+func (m Mode) isAlphanumeric() bool { return m == Alphanumeric }
 
 // isByte checks if the mode is Byte.
-func (m Mode) isByte() bool {
-	return m.modeBits == Byte.getModeBits()
-}
+func (m Mode) isByte() bool { return m == Byte }
 
 // isKanji checks if the mode is Kanji.
-func (m Mode) isKanji() bool {
-	return m.modeBits == Kanji.getModeBits()
-}
+func (m Mode) isKanji() bool { return m == Kanji }
 
 // isEci checks if the mode is ECI.
-func (m Mode) isEci() bool {
-	return m.modeBits == Eci.getModeBits()
-}
+func (m Mode) isEci() bool { return m == Eci }
 
-var (
-	// numericRegex is a regular expression that matches strings consisting only of numbers (0-9).
-	numericRegex = regexp.MustCompile(`^\d+$`)
-
-	// alphanumericRegex is a regular expression that matches strings
-	// consisting only of numeric characters, uppercase alphabets, and certain special characters ($%*+-./:).
-	alphanumericRegex = regexp.MustCompile(`^[0-9A-Z $%*+\-.\/:]*$`)
-
-	// alphanumericCharset is a string listing all the characters that can be used in an alphanumeric string in QR codes.
-	alphanumericCharset = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ $%*+-./:"
-)
+// alphanumericCharset lists every character encodable in alphanumeric mode; the
+// index of a character is also its alphanumeric value.
+const alphanumericCharset = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ $%*+-./:"
 
 // QrSegment is the representation of a segment of a QR code.
 type QrSegment struct {
@@ -108,8 +91,8 @@ func newQrSegment(mode Mode, numCh int, data *BitBuffer) (*QrSegment, error) {
 	}, nil
 }
 
-// getData method clones and returns the BitBuffer data of the QR segment.
-func (q *QrSegment) getData() *BitBuffer {
+// cloneData returns a copy of the segment's BitBuffer data.
+func (q *QrSegment) cloneData() *BitBuffer {
 	return q.data.clone()
 }
 
@@ -151,37 +134,28 @@ func MakeNumeric(digits string) (*QrSegment, error) {
 	return newQrSegment(Numeric, len(digits), bb)
 }
 
-// isNumeric function takes a string as input and returns a boolean indicating whether the string is numeric.
-// It uses the MatchString method on the numericRegex to check the input string.
-func isNumeric(numb string) bool {
-	return numericRegex.MatchString(numb)
-}
-
-// isAlphanumeric function takes a string as input and returns a boolean indicating whether the string is alphanumeric.
-// It uses the MatchString method on the alphanumericRegex to check the input string.
-func isAlphanumeric(text string) bool {
-	return alphanumericRegex.MatchString(text)
-}
-
-func min(a, b int) int {
-	if a < b {
-		return a
+// isNumeric reports whether s is non-empty and contains only ASCII digits.
+func isNumeric(s string) bool {
+	if s == "" {
+		return false
 	}
-	return b
+	for i := 0; i < len(s); i++ {
+		if s[i] < '0' || s[i] > '9' {
+			return false
+		}
+	}
+	return true
 }
 
-func max(a, b int) int {
-	if a < b {
-		return b
+// isAlphanumeric reports whether every byte of s is encodable in alphanumeric
+// mode (digits, uppercase letters, and the nine symbols in alphanumericCharset).
+func isAlphanumeric(s string) bool {
+	for i := 0; i < len(s); i++ {
+		if strings.IndexByte(alphanumericCharset, s[i]) < 0 {
+			return false
+		}
 	}
-	return a
-}
-
-func abs(x int) int {
-	if x < 0 {
-		return -x
-	}
-	return x
+	return true
 }
 
 // MakeAlphanumeric converts a string into a QR code segment in Alphanumeric mode

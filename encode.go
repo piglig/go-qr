@@ -52,11 +52,10 @@ func EncodeSegments(segs []*QrSegment, ecl Ecc, minVer, maxVer, mask int, boostE
 		}
 
 		if version >= maxVer {
-			msg := "Segment too long"
 			if dataUsedBits != -1 {
-				msg = fmt.Sprintf("Data length = %d bits, Max capacity = %d bits", dataUsedBits, dataCapacityBits)
+				return nil, fmt.Errorf("%w: data length %d bits exceeds capacity %d bits", ErrDataTooLong, dataUsedBits, dataCapacityBits)
 			}
-			return nil, &DataTooLongException{Msg: msg}
+			return nil, fmt.Errorf("%w: segment too long", ErrDataTooLong)
 		}
 	}
 
@@ -124,9 +123,6 @@ func isValidVersion(minVer, maxVer int) bool {
 
 // getNumDataCodewords returns the number of data codewords for a given version and ECC level.
 func getNumDataCodewords(ver int, ecl Ecc) int {
-	eccCodewordsPerBlock := getEccCodeWordsPerBlock()
-	numRawDataModules := getNumRawDataModules(ver)
-	numErrorCorrectionBlocks := getNumErrorCorrectionBlocks()
-	return numRawDataModules/8 -
-		int(eccCodewordsPerBlock[ecl][ver])*int(numErrorCorrectionBlocks[ecl][ver])
+	return getNumRawDataModules(ver)/8 -
+		int(eccCodeWordsPerBlock[ecl][ver])*int(numErrorCorrectionBlocks[ecl][ver])
 }

@@ -1,6 +1,10 @@
 package go_qr
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/piglig/go-qr/internal/reedsolomon"
+)
 
 // decodeMatrix takes a fully sampled module grid (modules[y][x] == dark) and
 // recovers the data codewords: read format info, undo the mask, walk the
@@ -25,24 +29,18 @@ func decodeMatrix(modules [][]bool) (data []byte, ver int, ecl Ecc, mask int, er
 		return nil, 0, 0, 0, err
 	}
 
-	// Build a skeleton purely to obtain the isFunction map for this version,
-	// then overlay the sampled modules and undo the mask.
-	q := &QrCode{version: ver, size: size, errorCorrectionLevel: ecl}
-	q.modules = make([][]bool, size)
-	q.isFunction = make([][]bool, size)
-	for i := 0; i < size; i++ {
-		q.modules[i] = make([]bool, size)
-		q.isFunction[i] = make([]bool, size)
-	}
-	q.drawFunctionPatterns() // populates isFunction (modules get overwritten next)
+	// Reuse a builder purely to rebuild the version's function-pattern map, then
+	// overlay the sampled modules and undo the mask.
+	b := newBuilder(ver, ecl)
+	b.drawFunctionPatterns() // populates isFunction (modules get overwritten next)
 	for y := 0; y < size; y++ {
-		copy(q.modules[y], modules[y])
+		copy(b.modules[y], modules[y])
 	}
-	if err = q.applyMask(mask); err != nil { // XOR is self-inverse → unmask
+	if err = b.applyMask(mask); err != nil { // XOR is self-inverse → unmask
 		return nil, 0, 0, 0, err
 	}
 
-	raw := readCodewords(q)
+	raw := b.readCodewords()
 	data, err = deinterleaveAndCorrect(raw, ver, ecl)
 	if err != nil {
 		return nil, 0, 0, 0, err
@@ -90,7 +88,7 @@ func readFormat(modules [][]bool, size int) (Ecc, int, error) {
 	}
 
 	formatVal := data >> 3 // 2 bits
-	mask := data & 0x7      // 3 bits
+	mask := data & 0x7     // 3 bits
 	// eccFormats {Low:1, Medium:0, Quartile:3, High:2} is an involution, so the
 	// same table maps the 2-bit format value back to an Ecc.
 	ecl := Ecc(eccFormats[formatVal])
@@ -137,7 +135,7 @@ func bitCount(x int) int {
 
 // readCodewords reverses drawCodewords: walk columns right-to-left in pairs,
 // zig-zagging, reading 8 bits per codeword from non-function modules.
-func readCodewords(q *QrCode) []byte {
+func (q *builder) readCodewords() []byte {
 	n := getNumRawDataModules(q.version) / 8
 	data := make([]byte, n)
 	i := 0
@@ -169,8 +167,8 @@ func readCodewords(q *QrCode) []byte {
 // blocks (reverse of addEccAndInterLeave), Reed-Solomon corrects each block,
 // and concatenates the corrected data codewords in order.
 func deinterleaveAndCorrect(raw []byte, ver int, ecl Ecc) ([]byte, error) {
-	numBlocks := int(getNumErrorCorrectionBlocks()[ecl][ver])
-	blockEccLen := int(getEccCodeWordsPerBlock()[ecl][ver])
+	numBlocks := int(numErrorCorrectionBlocks[ecl][ver])
+	blockEccLen := int(eccCodeWordsPerBlock[ecl][ver])
 	rawCodewords := getNumRawDataModules(ver) / 8
 
 	numShortBlocks := numBlocks - rawCodewords%numBlocks
@@ -203,10 +201,10 @@ func deinterleaveAndCorrect(raw []byte, ver int, ecl Ecc) ([]byte, error) {
 			dataLen = shortDataLen + 1 // long block has one extra data byte
 		}
 		codeword := make([]byte, 0, dataLen+blockEccLen)
-		codeword = append(codeword, block[:dataLen]...)         // data (gap excluded)
+		codeword = append(codeword, block[:dataLen]...)                     // data (gap excluded)
 		codeword = append(codeword, block[shortBlockLen+1-blockEccLen:]...) // ecc
-		if err := rsCorrect(codeword, blockEccLen); err != nil {
-			return nil, err
+		if err := reedsolomon.Correct(codeword, blockEccLen); err != nil {
+			return nil, fmt.Errorf("%w: %v", ErrDecodeFailed, err)
 		}
 		out = append(out, codeword[:dataLen]...)
 	}

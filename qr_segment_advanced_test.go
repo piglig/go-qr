@@ -25,7 +25,7 @@ func TestMakeSegmentsOptimally(t *testing.T) {
 				{
 					mode:     Byte,
 					numChars: 13,
-					data: &BitBuffer{
+					data: bufFromBits(
 						false, true, false, false, true, false, false, false, false, true, true, false, false, true, false,
 						true, false, true, true, false, true, true, false, false, false, true, true, false, true, true, false,
 						false, false, true, true, false, true, true, true, true, false, false, true, false, true, true, false,
@@ -33,7 +33,7 @@ func TestMakeSegmentsOptimally(t *testing.T) {
 						true, true, false, true, true, false, true, true, true, true, false, true, true, true, false, false,
 						true, false, false, true, true, false, true, true, false, false, false, true, true, false, false, true,
 						false, false, false, false, true, false, false, false, false, true,
-					},
+					),
 				},
 			},
 		},
@@ -48,7 +48,7 @@ func TestMakeSegmentsOptimally(t *testing.T) {
 				{
 					mode:     Numeric,
 					numChars: 51,
-					data: &BitBuffer{
+					data: bufFromBits(
 						false, true, false, false, true, true, true, false, true, false, false, false, true, false, false,
 						true, true, true, true, true, false, true, false, false, false, false, true, false, false, true,
 						false, true, false, true, true, false, false, true, true, false, true, true, true, true, false,
@@ -60,7 +60,7 @@ func TestMakeSegmentsOptimally(t *testing.T) {
 						true, true, false, true, false, false, false, true, true, true, false, true, true, false, false, true,
 						true, false, false, true, true, true, false, true, false, true, false, true, true, true, true, true,
 						false, true, false, true, false, false, true, false, true, true, true, true, true, true, true, true, false,
-					},
+					),
 				},
 			},
 		},
@@ -75,7 +75,7 @@ func TestMakeSegmentsOptimally(t *testing.T) {
 				{
 					mode:     Alphanumeric,
 					numChars: 55,
-					data: &BitBuffer{
+					data: bufFromBits(
 						false, true, false, false, true, true, false, false, false, false, true, false, true, true, true,
 						true, false, false, false, true, true, false, false, false, true, true, true, false, true, true,
 						true, false, true, true, true, true, false, false, true, true, true, true, true, true, false, true,
@@ -96,7 +96,7 @@ func TestMakeSegmentsOptimally(t *testing.T) {
 						false, false, true, false, true, false, false, false, false, true, false, false, true, true, true,
 						true, true, true, true, true, true, false, false, true, false, false, true, true, true, false, true,
 						false, true, true, true, false, false, true, false, true, false, true, true,
-					},
+					),
 				},
 			},
 		},
@@ -111,7 +111,7 @@ func TestMakeSegmentsOptimally(t *testing.T) {
 				{
 					mode:     Kanji,
 					numChars: 29,
-					data: &BitBuffer{
+					data: bufFromBits(
 						false, false, false, false, false, false, false, true, true, false, true, false, true, true, false,
 						false, false, false, false, false, false, false, false, false, true, false, false, true, true, true,
 						true, true, true, false, false, false, false, false, false, false, true, false, true, false, true,
@@ -137,7 +137,7 @@ func TestMakeSegmentsOptimally(t *testing.T) {
 						false, false, false, false, false, false, false, false, true, false, false, false, false, false, true,
 						false, false, false, false, false, false, false, true, true, true, true, true, true, true, true, true,
 						false, false, false, false, false, false, false, false, false, true, false, false, false,
-					},
+					),
 				},
 			},
 		},
@@ -170,9 +170,9 @@ func TestMakeSegmentsOptimally(t *testing.T) {
 				{
 					mode:     Byte,
 					numChars: 4,
-					data: &BitBuffer{true, true, true, true, false, true, false, false, true, false, false, false, true,
+					data: bufFromBits(true, true, true, true, false, true, false, false, true, false, false, false, true,
 						true, true, true, true, false, true, true, true, true, true, true, true, false, true, true, true,
-						true, true, false},
+						true, true, false),
 				},
 			},
 		},

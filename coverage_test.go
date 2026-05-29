@@ -27,7 +27,7 @@ func TestEncodeBinary(t *testing.T) {
 	qr, err := EncodeBinary([]byte("hello binary"), Low)
 	assert.NoError(t, err)
 	assert.NotNil(t, qr)
-	assert.Greater(t, qr.GetSize(), 0)
+	assert.Greater(t, qr.Size(), 0)
 
 	_, err = EncodeBinary(nil, Low)
 	assert.Error(t, err)
@@ -49,8 +49,8 @@ func TestColorToSVGHexAndTransparent(t *testing.T) {
 // Covers batch.go: default config branch, invalid format error, nil cfg path.
 func TestRenderBatchInvalidFormatAndDefaults(t *testing.T) {
 	jobs := []BatchJob{
-		{Text: "ok", Ecc: Low, Format: FormatSVG},           // nil config → default
-		{Text: "bad", Ecc: Low, Format: Format(99)},         // invalid format
+		{Text: "ok", Ecc: Low, Format: FormatSVG},   // nil config → default
+		{Text: "bad", Ecc: Low, Format: Format(99)}, // invalid format
 		{Text: "ok", Ecc: Low, Format: FormatPNG, Config: NewQrCodeImgConfig(4, 2)},
 	}
 	results := RenderBatch(jobs, 2)

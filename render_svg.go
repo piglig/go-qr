@@ -13,7 +13,7 @@ import (
 // SVG renders the QR code to the given file path. Colors are taken from the
 // config (WithLight / WithDark). Default colors are white/black.
 func (q *QrCode) SVG(config *QrCodeImgConfig, filePath string) error {
-	if err := config.Valid(); err != nil {
+	if err := config.valid(); err != nil {
 		return err
 	}
 
@@ -33,7 +33,7 @@ func (q *QrCode) SVG(config *QrCodeImgConfig, filePath string) error {
 // WriteAsSVG renders the QR code as SVG to the provided io.Writer.
 // Colors are taken from the config.
 func (q *QrCode) WriteAsSVG(config *QrCodeImgConfig, writer io.Writer) error {
-	if err := config.Valid(); err != nil {
+	if err := config.valid(); err != nil {
 		return err
 	}
 	return q.doWriteAsSVG(config, writer)
@@ -42,7 +42,7 @@ func (q *QrCode) WriteAsSVG(config *QrCodeImgConfig, writer io.Writer) error {
 // ToSVGBytes renders the QR code as SVG and returns the bytes in memory.
 // Colors are taken from the config.
 func (q *QrCode) ToSVGBytes(config *QrCodeImgConfig) ([]byte, error) {
-	if err := config.Valid(); err != nil {
+	if err := config.valid(); err != nil {
 		return nil, err
 	}
 	var buf bytes.Buffer
@@ -62,17 +62,17 @@ func (q *QrCode) doWriteAsSVG(config *QrCodeImgConfig, writer io.Writer) error {
 	dark := colorToSVGHex(config.Dark())
 
 	svg := ""
-	if config.options.optimalSVG {
+	if config.optimalSVG {
 		svg = q.toSvgOptimizedString(config, light, dark)
 	} else {
 		svg = q.toSVGString(config, light, dark)
 	}
 
-	if logo := config.options.logo; logo != nil {
+	if logo := config.logo; logo != nil {
 		if err := logo.validate(q, config.scale, config.border); err != nil {
 			return err
 		}
-		fragment, err := logo.svgEmbed(q.GetSize(), config.scale, config.border)
+		fragment, err := logo.svgEmbed(q.Size(), config.scale, config.border)
 		if err != nil {
 			return err
 		}
@@ -102,7 +102,7 @@ func injectSVGFragment(svg, fragment string) string {
 func (q *QrCode) toSVGString(config *QrCodeImgConfig, lightColor, darkColor string) string {
 	brd := config.border
 	scl := config.scale
-	size := q.GetSize()
+	size := q.Size()
 	dim := size*scl + brd*2
 	dimStr := strconv.Itoa(dim)
 	sclStr := strconv.Itoa(scl)
@@ -113,7 +113,7 @@ func (q *QrCode) toSVGString(config *QrCodeImgConfig, lightColor, darkColor stri
 	// dark modules, so this over-allocates but avoids repeated regrowth.
 	sb.Grow(256 + size*size*20)
 
-	if config.options.svgXMLHeader {
+	if config.svgXMLHeader {
 		sb.WriteString("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n")
 		sb.WriteString("<!DOCTYPE svg PUBLIC \"-//W3C//DTD SVG 1.1//EN\" \"http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd\">\n")
 	}
@@ -138,7 +138,7 @@ func (q *QrCode) toSVGString(config *QrCodeImgConfig, lightColor, darkColor stri
 	first := true
 	for y := 0; y < size; y++ {
 		for x := 0; x < size; x++ {
-			if !q.GetModule(x, y) {
+			if !q.Module(x, y) {
 				continue
 			}
 			if !first {

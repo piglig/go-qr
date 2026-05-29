@@ -156,8 +156,8 @@ func rotateGray(src *image.RGBA, theta float64) *image.Gray {
 	for y := 0; y < h; y++ {
 		for x := 0; x < w; x++ {
 			dx, dy := float64(x)-cx, float64(y)-cy
-			sx := int(cos*dx+sin*dy+cx + 0.5)
-			sy := int(-sin*dx+cos*dy+cy + 0.5)
+			sx := int(cos*dx + sin*dy + cx + 0.5)
+			sy := int(-sin*dx + cos*dy + cy + 0.5)
 			if sx < 0 || sx >= w || sy < 0 || sy >= h {
 				dst.SetGray(x, y, color.Gray{Y: 255})
 				continue

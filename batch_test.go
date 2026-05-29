@@ -23,10 +23,10 @@ func TestEncodeBatch_PreservesOrder(t *testing.T) {
 		assert.NoError(t, r.Err)
 		want, err := EncodeText(inputs[i].Text, inputs[i].Ecc)
 		assert.NoError(t, err)
-		assert.Equal(t, want.GetSize(), r.QR.GetSize())
-		for y := 0; y < want.GetSize(); y++ {
-			for x := 0; x < want.GetSize(); x++ {
-				if want.GetModule(x, y) != r.QR.GetModule(x, y) {
+		assert.Equal(t, want.Size(), r.QR.Size())
+		for y := 0; y < want.Size(); y++ {
+			for x := 0; x < want.Size(); x++ {
+				if want.Module(x, y) != r.QR.Module(x, y) {
 					t.Fatalf("item %d: module mismatch at (%d,%d)", i, x, y)
 				}
 			}

@@ -46,7 +46,4 @@
 //
 //	ErrInvalidConfig, ErrInvalidArgument, ErrInvalidVersion,
 //	ErrDataTooLong, ErrUnencodableChar, ErrInvalidImageOutput
-//
-// DataTooLongException is retained for API compatibility and unwraps to
-// ErrDataTooLong.
 package go_qr

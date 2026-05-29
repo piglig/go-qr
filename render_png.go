@@ -63,11 +63,11 @@ func (q *QrCode) ToImage(config *QrCodeImgConfig) (*image.RGBA, error) {
 // caller has already validated the config.
 func (q *QrCode) renderImage(config *QrCodeImgConfig) (*image.RGBA, error) {
 	rgba := q.paintModules(config)
-	if logo := config.options.logo; logo != nil {
+	if logo := config.logo; logo != nil {
 		if err := logo.validate(q, config.scale, config.border); err != nil {
 			return nil, err
 		}
-		if err := logo.overlayOnImage(rgba, q.GetSize(), config.scale, config.border); err != nil {
+		if err := logo.overlayOnImage(rgba, q.Size(), config.scale, config.border); err != nil {
 			return nil, err
 		}
 	}
@@ -88,12 +88,12 @@ func (q *QrCode) encodePNG(config *QrCodeImgConfig, writer io.Writer) error {
 
 // validateWritePNGConfig validates the parameters to write the QR code as an image.
 func (q *QrCode) validateWritePNGConfig(config *QrCodeImgConfig) error {
-	if err := config.Valid(); err != nil {
+	if err := config.valid(); err != nil {
 		return err
 	}
 	// Ensure that the border size combined with QR code size does not exceed
 	// the maximum allowed integer value after scaling.
-	if config.border > (math.MaxInt32/2) || int64(q.GetSize())+int64(config.border)*2 > math.MaxInt32/int64(config.scale) {
+	if config.border > (math.MaxInt32/2) || int64(q.Size())+int64(config.border)*2 > math.MaxInt32/int64(config.scale) {
 		return fmt.Errorf("%w: scale or border too large", ErrInvalidConfig)
 	}
 	return nil
@@ -102,7 +102,7 @@ func (q *QrCode) validateWritePNGConfig(config *QrCodeImgConfig) error {
 // paintModules allocates an RGBA image and fills each pixel with the dark or
 // light color according to the QR module at that position.
 func (q *QrCode) paintModules(config *QrCodeImgConfig) *image.RGBA {
-	size := q.GetSize() + config.border*2
+	size := q.Size() + config.border*2
 	imageWidth := size * config.scale
 	imageHeight := size * config.scale
 	result := image.NewRGBA(image.Rect(0, 0, imageWidth, imageHeight))
@@ -110,7 +110,7 @@ func (q *QrCode) paintModules(config *QrCodeImgConfig) *image.RGBA {
 		for x := 0; x < imageWidth; x++ {
 			moduleX := x/config.scale - config.border
 			moduleY := y/config.scale - config.border
-			if q.GetModule(moduleX, moduleY) {
+			if q.Module(moduleX, moduleY) {
 				result.Set(x, y, config.Dark())
 			} else {
 				result.Set(x, y, config.Light())
