@@ -49,7 +49,7 @@ batch API, a native decoder, and a command-line tool.
 ```shell
 go get github.com/piglig/go-qr
 ```
-Requires Go 1.18+. The library itself has **zero third-party runtime
+Requires Go 1.21+. The library itself has **zero third-party runtime
 dependencies** (only the standard library); the comparison and verification
 helpers under [`tools/`](tools) live in a separate module and are never pulled
 into your build. See the [CHANGELOG](CHANGELOG.md) for release notes.
