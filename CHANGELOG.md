@@ -11,6 +11,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `generator encode -optimal` to use optimal mixed-mode segmentation.
 
+### Fixed
+
+- Check capacity at every version in `MakeSegmentsOptimally`, preventing hangs
+  for large payloads, enforcing the maximum version, and retaining optimal
+  segmentation for the first version that fits.
+
 ## [1.1.0] - 2026-05-29
 
 ### Added

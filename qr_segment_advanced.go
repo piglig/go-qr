@@ -22,24 +22,25 @@ func MakeSegmentsOptimally(text string, ecl Ecc, minVersion, maxVersion int) ([]
 		return nil, err
 	}
 
+	var segs []*QrSegment
 	for version := minVersion; ; version++ {
 		if version == minVersion || version == 10 || version == 27 {
-			segs, err := makeSegmentsOptimallyWithVersion(codePoints, version)
+			segs, err = makeSegmentsOptimallyWithVersion(codePoints, version)
 			if err != nil {
 				return nil, err
 			}
+		}
 
-			dataCapacityBits := getNumDataCodewords(version, ecl) * 8
-			dataUsedBits := getTotalBits(segs, version)
-			if dataUsedBits != -1 && dataUsedBits <= dataCapacityBits {
-				return segs, nil
+		dataCapacityBits := getNumDataCodewords(version, ecl) * 8
+		dataUsedBits := getTotalBits(segs, version)
+		if dataUsedBits != -1 && dataUsedBits <= dataCapacityBits {
+			return segs, nil
+		}
+		if version >= maxVersion {
+			if dataUsedBits != -1 {
+				return nil, fmt.Errorf("%w: data length %d bits exceeds capacity %d bits", ErrDataTooLong, dataUsedBits, dataCapacityBits)
 			}
-			if version >= maxVersion {
-				if dataUsedBits != -1 {
-					return nil, fmt.Errorf("%w: data length %d bits exceeds capacity %d bits", ErrDataTooLong, dataUsedBits, dataCapacityBits)
-				}
-				return nil, fmt.Errorf("%w: segment too long", ErrDataTooLong)
-			}
+			return nil, fmt.Errorf("%w: segment too long", ErrDataTooLong)
 		}
 	}
 }
