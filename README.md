@@ -252,6 +252,10 @@ pushes the finder patterns out of the frame.
 go install github.com/piglig/go-qr/tools/generator@latest
 ```
 
+The `tools` module pins the released library. To build it against a local
+checkout, for example while changing the library, create a workspace at the
+repository root with `go work init . ./tools`.
+
 ```
 generator <command> [flags] [args]
 

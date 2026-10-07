@@ -42,6 +42,7 @@ var decoders = []decoderImpl{
 ## Running
 
 ```shell
+go work init . ./tools   # once, at the repository root, to bench the local library
 cd tools
 
 # Encoder and decoder throughput + allocations

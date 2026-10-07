@@ -34,6 +34,11 @@ jobs:
             echo "Run gofmt -w on:"; echo "$unformatted"; exit 1
           fi
 
+      # tools/go.mod pins the released library so `go install` works; the
+      # workspace makes CI build and test the tools against this checkout.
+      - name: Use workspace
+        run: go work init . ./tools
+
       - name: Vet
         run: |
           go vet ./...
@@ -80,5 +85,6 @@ jobs:
         with:
           go-version: stable
       - run: go install golang.org/x/vuln/cmd/govulncheck@latest
+      - run: go work init . ./tools
       - run: govulncheck ./...
       - run: cd tools && govulncheck ./...
