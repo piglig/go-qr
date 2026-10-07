@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/boombuler/barcode/qr"
-	go_qr "github.com/piglig/go-qr"
+	boombuler "github.com/boombuler/barcode/qr"
+	"github.com/piglig/go-qr/v2"
 	skip2 "github.com/skip2/go-qrcode"
 )
 
@@ -38,7 +38,7 @@ func BenchmarkEncodeCompare(b *testing.B) {
 		fn   func(string) error
 	}{
 		{"go-qr", func(s string) error {
-			_, err := go_qr.EncodeText(s, go_qr.Medium)
+			_, err := qr.Encode(s, qr.WithECC(qr.ECCMedium))
 			return err
 		}},
 		{"skip2/go-qrcode", func(s string) error {
@@ -53,7 +53,7 @@ func BenchmarkEncodeCompare(b *testing.B) {
 			return nil
 		}},
 		{"boombuler/barcode", func(s string) error {
-			_, err := qr.Encode(s, qr.M, qr.Auto)
+			_, err := boombuler.Encode(s, boombuler.M, boombuler.Auto)
 			return err
 		}},
 	}

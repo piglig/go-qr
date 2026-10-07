@@ -1,4 +1,4 @@
-package go_qr
+package qr
 
 import (
 	"bytes"
@@ -12,7 +12,7 @@ import (
 
 // SVG renders the QR code to the given file path. Colors are taken from the
 // config (WithLight / WithDark). Default colors are white/black.
-func (q *QrCode) SVG(config *QrCodeImgConfig, filePath string) error {
+func (q *Code) SVG(config *QrCodeImgConfig, filePath string) error {
 	if err := config.valid(); err != nil {
 		return err
 	}
@@ -32,7 +32,7 @@ func (q *QrCode) SVG(config *QrCodeImgConfig, filePath string) error {
 
 // WriteAsSVG renders the QR code as SVG to the provided io.Writer.
 // Colors are taken from the config.
-func (q *QrCode) WriteAsSVG(config *QrCodeImgConfig, writer io.Writer) error {
+func (q *Code) WriteAsSVG(config *QrCodeImgConfig, writer io.Writer) error {
 	if err := config.valid(); err != nil {
 		return err
 	}
@@ -41,7 +41,7 @@ func (q *QrCode) WriteAsSVG(config *QrCodeImgConfig, writer io.Writer) error {
 
 // ToSVGBytes renders the QR code as SVG and returns the bytes in memory.
 // Colors are taken from the config.
-func (q *QrCode) ToSVGBytes(config *QrCodeImgConfig) ([]byte, error) {
+func (q *Code) ToSVGBytes(config *QrCodeImgConfig) ([]byte, error) {
 	if err := config.valid(); err != nil {
 		return nil, err
 	}
@@ -54,7 +54,7 @@ func (q *QrCode) ToSVGBytes(config *QrCodeImgConfig) ([]byte, error) {
 
 // doWriteAsSVG writes the QR code as SVG, reading colors from the config.
 // A transparent light color omits the background rectangle.
-func (q *QrCode) doWriteAsSVG(config *QrCodeImgConfig, writer io.Writer) error {
+func (q *Code) doWriteAsSVG(config *QrCodeImgConfig, writer io.Writer) error {
 	var light string
 	if !colorIsTransparent(config.Light()) {
 		light = colorToSVGHex(config.Light())
@@ -99,7 +99,7 @@ func injectSVGFragment(svg, fragment string) string {
 // light/dark color strings. One <rect> background, one <path> of per-module
 // subpaths. Written to avoid fmt.Sprintf and intermediate copies; the builder
 // is pre-sized to the worst-case module count.
-func (q *QrCode) toSVGString(config *QrCodeImgConfig, lightColor, darkColor string) string {
+func (q *Code) toSVGString(config *QrCodeImgConfig, lightColor, darkColor string) string {
 	brd := config.border
 	scl := config.scale
 	size := q.Size()

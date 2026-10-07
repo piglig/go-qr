@@ -7,7 +7,7 @@ import (
 	"image/png"
 	"testing"
 
-	go_qr "github.com/piglig/go-qr"
+	"github.com/piglig/go-qr/v2"
 )
 
 func whiteImage(w, h int) *image.RGBA {
@@ -24,20 +24,20 @@ func TestRoundTrip(t *testing.T) {
 	cases := []struct {
 		name string
 		text string
-		ecl  go_qr.Ecc
+		ecl  qr.ECC
 	}{
-		{"hello", "Hello, world!", go_qr.Low},
-		{"url", "https://example.com/path?a=1&b=2", go_qr.Medium},
-		{"wifi_payload", "WIFI:T:WPA;S:home;P:s3cret;;", go_qr.Quartile},
-		{"long_text", "The quick brown fox jumps over the lazy dog 1234567890", go_qr.High},
+		{"hello", "Hello, world!", qr.ECCLow},
+		{"url", "https://example.com/path?a=1&b=2", qr.ECCMedium},
+		{"wifi_payload", "WIFI:T:WPA;S:home;P:s3cret;;", qr.ECCQuartile},
+		{"long_text", "The quick brown fox jumps over the lazy dog 1234567890", qr.ECCHigh},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			qr, err := go_qr.EncodeText(tc.text, tc.ecl)
+			code, err := qr.Encode(tc.text, qr.WithECC(tc.ecl))
 			if err != nil {
 				t.Fatalf("encode: %v", err)
 			}
-			b, err := qr.ToPNGBytes(go_qr.NewQrCodeImgConfig(10, 4))
+			b, err := code.ToPNGBytes(qr.NewQrCodeImgConfig(10, 4))
 			if err != nil {
 				t.Fatalf("render: %v", err)
 			}
@@ -50,12 +50,12 @@ func TestRoundTrip(t *testing.T) {
 
 func TestRoundTrip_WithLogo(t *testing.T) {
 	text := "https://example.com"
-	qr, err := go_qr.EncodeText(text, go_qr.High)
+	code, err := qr.Encode(text, qr.WithECC(qr.ECCHigh))
 	if err != nil {
 		t.Fatal(err)
 	}
 	logo := whiteImage(40, 40)
-	b, err := qr.ToPNGBytes(go_qr.NewQrCodeImgConfig(10, 4, go_qr.WithLogo(logo, 0.2)))
+	b, err := code.ToPNGBytes(qr.NewQrCodeImgConfig(10, 4, qr.WithLogo(logo, 0.2)))
 	if err != nil {
 		t.Fatal(err)
 	}

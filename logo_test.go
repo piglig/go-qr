@@ -1,4 +1,4 @@
-package go_qr
+package qr
 
 import (
 	"bytes"
@@ -20,7 +20,7 @@ func makeTestLogo(w, h int, c color.Color) image.Image {
 }
 
 func TestWithLogo_PNG(t *testing.T) {
-	qr, err := EncodeText("Hello, world!", High)
+	qr, err := encodeText("Hello, world!", ECCHigh)
 	assertNoError(t, err)
 	logo := makeTestLogo(40, 40, color.RGBA{R: 255, G: 0, B: 0, A: 255})
 
@@ -41,7 +41,7 @@ func TestWithLogo_PNG(t *testing.T) {
 }
 
 func TestWithLogo_SVG(t *testing.T) {
-	qr, err := EncodeText("Hello, world!", High)
+	qr, err := encodeText("Hello, world!", ECCHigh)
 	assertNoError(t, err)
 	logo := makeTestLogo(40, 40, color.RGBA{R: 0, G: 128, B: 255, A: 255})
 
@@ -58,7 +58,7 @@ func TestWithLogo_SVG(t *testing.T) {
 }
 
 func TestWithLogo_SVG_Optimal(t *testing.T) {
-	qr, err := EncodeText("Hello, world!", High)
+	qr, err := encodeText("Hello, world!", ECCHigh)
 	assertNoError(t, err)
 	logo := makeTestLogo(40, 40, color.Black)
 
@@ -71,11 +71,11 @@ func TestWithLogo_SVG_Optimal(t *testing.T) {
 }
 
 func TestWithLogo_ExceedsECCBudget(t *testing.T) {
-	qr, err := EncodeText("Hello, world!", Low)
+	qr, err := encodeText("Hello, world!", ECCLow)
 	assertNoError(t, err)
 	logo := makeTestLogo(40, 40, color.Black)
 
-	// sizeRatio 0.7 is large enough to exceed every ECC budget, including High.
+	// sizeRatio 0.7 is large enough to exceed every ECC budget, including ECCHigh.
 	cfg := NewQrCodeImgConfig(10, 4, WithLogo(logo, 0.7))
 	_, err = qr.ToPNGBytes(cfg)
 	assertError(t, err)
@@ -83,7 +83,7 @@ func TestWithLogo_ExceedsECCBudget(t *testing.T) {
 }
 
 func TestWithLogo_InvalidSizeRatio(t *testing.T) {
-	qr, err := EncodeText("Hello, world!", High)
+	qr, err := encodeText("Hello, world!", ECCHigh)
 	assertNoError(t, err)
 	logo := makeTestLogo(40, 40, color.Black)
 
@@ -96,7 +96,7 @@ func TestWithLogo_InvalidSizeRatio(t *testing.T) {
 }
 
 func TestWithLogo_NilImage(t *testing.T) {
-	qr, err := EncodeText("Hello, world!", High)
+	qr, err := encodeText("Hello, world!", ECCHigh)
 	assertNoError(t, err)
 
 	cfg := NewQrCodeImgConfig(10, 4, WithLogo(nil, 0.2))
@@ -105,18 +105,18 @@ func TestWithLogo_NilImage(t *testing.T) {
 }
 
 func TestWithLogo_HigherECCAllowsLargerLogo(t *testing.T) {
-	qr, err := EncodeText("Hello, world!", High)
+	qr, err := encodeText("Hello, world!", ECCHigh)
 	assertNoError(t, err)
 	logo := makeTestLogo(40, 40, color.Black)
 
-	// Ratio 0.22 = ~5.3% occlusion (1-module padding adds slightly more). OK for High.
+	// Ratio 0.22 = ~5.3% occlusion (1-module padding adds slightly more). OK for ECCHigh.
 	cfg := NewQrCodeImgConfig(10, 4, WithLogo(logo, 0.22))
 	_, err = qr.ToPNGBytes(cfg)
 	assertNoError(t, err)
 }
 
 func TestWithLogo_ImageAPIIncludesLogo(t *testing.T) {
-	qr, err := EncodeText("Hello, world!", High)
+	qr, err := encodeText("Hello, world!", ECCHigh)
 	assertNoError(t, err)
 	logo := makeTestLogo(40, 40, color.RGBA{R: 10, G: 200, B: 20, A: 255})
 

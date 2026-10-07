@@ -1,4 +1,4 @@
-package go_qr
+package qr
 
 import (
 	"bytes"
@@ -126,4 +126,11 @@ func assertContains(t testing.TB, s, substr string, msgAndArgs ...any) {
 	if !strings.Contains(s, substr) {
 		failf(t, msgAndArgs, "%q does not contain %q", s, substr)
 	}
+}
+
+// encodeText reproduces v1 EncodeText: one segment in the most compact
+// single mode, with ECC boosting. Tests that pin exact symbols use it so the
+// expected modules do not depend on the optimal segmenter.
+func encodeText(text string, ecc ECC) (*Code, error) {
+	return Encode(text, WithECC(ecc), WithSimpleSegmentation())
 }

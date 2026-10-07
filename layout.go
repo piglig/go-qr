@@ -1,8 +1,8 @@
-package go_qr
+package qr
 
-// getNumRawDataModules returns the number of raw data modules (bits available
+// numRawDataModules returns the number of raw data modules (bits available
 // for data + ECC codewords, divided by 8 elsewhere) for a QR code version.
-func getNumRawDataModules(ver int) int {
+func numRawDataModules(ver int) int {
 	// Total modules in the size×size grid.
 	size := ver*4 + 17
 	res := size * size

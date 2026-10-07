@@ -1,4 +1,4 @@
-package go_qr
+package qr
 
 import (
 	"image"
@@ -13,21 +13,21 @@ func TestDecodeRoundTrip(t *testing.T) {
 	cases := []struct {
 		name string
 		text string
-		ecl  Ecc
+		ecl  ECC
 	}{
-		{"numeric", "12345678901234567890", Low},
-		{"alnum", "HELLO WORLD 42 $%*+-./:", Medium},
-		{"byte_url", "https://github.com/piglig/go-qr?x=1&y=2", Quartile},
-		{"byte_utf8", "héllo wörld — 日本語テスト", High},
-		{"wifi", "WIFI:T:WPA;S:home-network;P:s3cret-pass;;", Medium},
-		{"long", strings.Repeat("The quick brown fox 0123456789. ", 8), High},
+		{"numeric", "12345678901234567890", ECCLow},
+		{"alnum", "HELLO WORLD 42 $%*+-./:", ECCMedium},
+		{"byte_url", "https://github.com/piglig/go-qr?x=1&y=2", ECCQuartile},
+		{"byte_utf8", "héllo wörld — 日本語テスト", ECCHigh},
+		{"wifi", "WIFI:T:WPA;S:home-network;P:s3cret-pass;;", ECCMedium},
+		{"long", strings.Repeat("The quick brown fox 0123456789. ", 8), ECCHigh},
 	}
 
 	scales := []int{1, 4, 10}
 	for _, tc := range cases {
 		for _, scale := range scales {
 			t.Run(tc.name+"/scale"+itoa(scale), func(t *testing.T) {
-				qr, err := EncodeText(tc.text, tc.ecl)
+				qr, err := encodeText(tc.text, tc.ecl)
 				if err != nil {
 					t.Fatalf("encode: %v", err)
 				}
@@ -49,7 +49,7 @@ func TestDecodeRoundTrip(t *testing.T) {
 
 // TestDecodeDetailed checks the structured metadata.
 func TestDecodeDetailed(t *testing.T) {
-	qr, err := EncodeText("HELLO", Quartile)
+	qr, err := encodeText("HELLO", ECCQuartile)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -69,8 +69,8 @@ func TestDecodeDetailed(t *testing.T) {
 	}
 	// EncodeText boosts ECC for tiny payloads, so compare against the actual
 	// level the encoder settled on, not the requested one.
-	if res.Ecc != qr.errorCorrectionLevel {
-		t.Errorf("ecc: got %d want %d", res.Ecc, qr.errorCorrectionLevel)
+	if res.ECC != qr.ecc {
+		t.Errorf("ecc: got %d want %d", res.ECC, qr.ecc)
 	}
 	if res.Mask != qr.mask {
 		t.Errorf("mask: got %d want %d", res.Mask, qr.mask)
@@ -80,7 +80,7 @@ func TestDecodeDetailed(t *testing.T) {
 // TestRSCorrectsErrors verifies the Reed-Solomon decoder repairs corrupted
 // modules up to the ECC budget (this is the path clean images never exercise).
 func TestRSCorrectsErrors(t *testing.T) {
-	qr, err := EncodeText("ERROR CORRECTION TEST 123", High) // High = ~30% recovery
+	qr, err := encodeText("ERROR CORRECTION TEST 123", ECCHigh) // ECCHigh = ~30% recovery
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -119,15 +119,15 @@ func TestRSCorrectsErrors(t *testing.T) {
 func TestDecodeRotated(t *testing.T) {
 	cases := []struct {
 		text  string
-		ecl   Ecc
+		ecl   ECC
 		theta float64 // radians
 	}{
-		{"ROTATED QR 12345", Medium, 5 * math.Pi / 180},
-		{"https://example.com/x", Quartile, -8 * math.Pi / 180},
-		{"hello rotated world", High, 12 * math.Pi / 180},
+		{"ROTATED QR 12345", ECCMedium, 5 * math.Pi / 180},
+		{"https://example.com/x", ECCQuartile, -8 * math.Pi / 180},
+		{"hello rotated world", ECCHigh, 12 * math.Pi / 180},
 	}
 	for _, tc := range cases {
-		qr, err := EncodeText(tc.text, tc.ecl)
+		qr, err := encodeText(tc.text, tc.ecl)
 		if err != nil {
 			t.Fatal(err)
 		}

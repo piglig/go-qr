@@ -1,4 +1,4 @@
-package go_qr
+package qr
 
 import "fmt"
 

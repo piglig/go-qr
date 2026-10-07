@@ -4,7 +4,7 @@
 // success rate.
 //
 // It lives in the tools submodule because it imports gozxing; the main go-qr
-// library stays dependency-free. Once go_qr.Decode lands, add it to the
+// library stays dependency-free. Once qr.Decode lands, add it to the
 // `decoders` registry in decode_bench_test.go and every benchmark/accuracy
 // case runs against both implementations with no further changes.
 package bench
@@ -15,14 +15,14 @@ import (
 	"math"
 	"math/rand"
 
-	go_qr "github.com/piglig/go-qr"
+	"github.com/piglig/go-qr/v2"
 )
 
 // Sample is one corpus entry: the ground-truth text plus a rendered image.
 type Sample struct {
 	Name string
 	Text string
-	Ecc  go_qr.Ecc
+	Ecc  qr.ECC
 	Img  image.Image
 }
 
@@ -31,7 +31,7 @@ type Sample struct {
 type corpusInput struct {
 	name string
 	text string
-	ecc  go_qr.Ecc
+	ecc  qr.ECC
 }
 
 func corpusInputs() []corpusInput {
@@ -40,11 +40,11 @@ func corpusInputs() []corpusInput {
 		long += "The quick brown fox jumps over the lazy dog 1234567890. "
 	}
 	return []corpusInput{
-		{"numeric_short", "12345678", go_qr.Low},
-		{"alnum_short", "HELLO WORLD 42", go_qr.Medium},
-		{"url_medium", "https://github.com/piglig/go-qr?ref=bench&v=1", go_qr.Quartile},
-		{"wifi_payload", "WIFI:T:WPA;S:home-network;P:s3cret-passphrase;;", go_qr.Medium},
-		{"byte_long", long, go_qr.High}, // forces a high version
+		{"numeric_short", "12345678", qr.ECCLow},
+		{"alnum_short", "HELLO WORLD 42", qr.ECCMedium},
+		{"url_medium", "https://github.com/piglig/go-qr?ref=bench&v=1", qr.ECCQuartile},
+		{"wifi_payload", "WIFI:T:WPA;S:home-network;P:s3cret-passphrase;;", qr.ECCMedium},
+		{"byte_long", long, qr.ECCHigh}, // forces a high version
 	}
 }
 
@@ -54,11 +54,11 @@ func CleanCorpus(scale int) ([]Sample, error) {
 	inputs := corpusInputs()
 	out := make([]Sample, 0, len(inputs))
 	for _, in := range inputs {
-		qr, err := go_qr.EncodeText(in.text, in.ecc)
+		code, err := qr.Encode(in.text, qr.WithECC(in.ecc), qr.WithSimpleSegmentation())
 		if err != nil {
 			return nil, err
 		}
-		img, err := qr.ToImage(go_qr.NewQrCodeImgConfig(scale, 4))
+		img, err := code.ToImage(qr.NewQrCodeImgConfig(scale, 4))
 		if err != nil {
 			return nil, err
 		}

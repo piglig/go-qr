@@ -1,8 +1,7 @@
-package go_qr
+package qr
 
 import (
 	"bytes"
-	"errors"
 	"image"
 	"image/color"
 	"image/png"
@@ -20,16 +19,16 @@ func TestWithLightAndWithDark(t *testing.T) {
 	assertEqual(t, color.RGBA{R: 40, G: 50, B: 60, A: 255}, cfg.Dark())
 }
 
-// Covers encode.go: EncodeBinary success and error paths.
-func TestEncodeBinary(t *testing.T) {
-	qr, err := EncodeBinary([]byte("hello binary"), Low)
+// Covers encode.go: EncodeBytes, including empty input.
+func TestEncodeBytes(t *testing.T) {
+	qr, err := EncodeBytes([]byte("hello binary"), WithECC(ECCLow))
 	assertNoError(t, err)
 	assertNotNil(t, qr)
 	assertGreater(t, qr.Size(), 0)
 
-	_, err = EncodeBinary(nil, Low)
-	assertError(t, err)
-	assertTrue(t, errors.Is(err, ErrInvalidArgument))
+	qr, err = EncodeBytes(nil)
+	assertNoError(t, err)
+	assertEqual(t, 1, qr.Version())
 }
 
 // Covers color.go: translucent path and fully-transparent path.
@@ -47,9 +46,9 @@ func TestColorToSVGHexAndTransparent(t *testing.T) {
 // Covers batch.go: default config branch, invalid format error, nil cfg path.
 func TestRenderBatchInvalidFormatAndDefaults(t *testing.T) {
 	jobs := []BatchJob{
-		{Text: "ok", Ecc: Low, Format: FormatSVG},   // nil config → default
-		{Text: "bad", Ecc: Low, Format: Format(99)}, // invalid format
-		{Text: "ok", Ecc: Low, Format: FormatPNG, Config: NewQrCodeImgConfig(4, 2)},
+		{Text: "ok", ECC: ECCLow, Format: FormatSVG},   // nil config → default
+		{Text: "bad", ECC: ECCLow, Format: Format(99)}, // invalid format
+		{Text: "ok", ECC: ECCLow, Format: FormatPNG, Config: NewQrCodeImgConfig(4, 2)},
 	}
 	results := RenderBatch(jobs, 2)
 	assertLen(t, results, 3)
@@ -73,11 +72,11 @@ func TestRunWorkersEdgeCases(t *testing.T) {
 
 // Covers logo.go eccRecoveryBudget every branch including default.
 func TestEccRecoveryBudgetAllBranches(t *testing.T) {
-	assertInDelta(t, 0.05, eccRecoveryBudget(Low), 1e-9)
-	assertInDelta(t, 0.12, eccRecoveryBudget(Medium), 1e-9)
-	assertInDelta(t, 0.20, eccRecoveryBudget(Quartile), 1e-9)
-	assertInDelta(t, 0.25, eccRecoveryBudget(High), 1e-9)
-	assertInDelta(t, 0.05, eccRecoveryBudget(Ecc(99)), 1e-9) // default
+	assertInDelta(t, 0.05, eccRecoveryBudget(ECCLow), 1e-9)
+	assertInDelta(t, 0.12, eccRecoveryBudget(ECCMedium), 1e-9)
+	assertInDelta(t, 0.20, eccRecoveryBudget(ECCQuartile), 1e-9)
+	assertInDelta(t, 0.25, eccRecoveryBudget(ECCHigh), 1e-9)
+	assertInDelta(t, 0.05, eccRecoveryBudget(ECC(99)), 1e-9) // default
 }
 
 // Covers logo.go logoRect error paths: bad sizeRatio, nil image, oversize.
@@ -111,9 +110,9 @@ func TestInjectSVGFragmentNoClosingTag(t *testing.T) {
 
 // Covers logo.go validate → ratio exceeds ECC budget.
 func TestLogoValidateExceedsBudget(t *testing.T) {
-	// Low ECC budget is 5%. A logo with sizeRatio 0.5 occupies ~25%+ of modules.
+	// ECCLow ECC budget is 5%. A logo with sizeRatio 0.5 occupies ~25%+ of modules.
 	img := image.NewRGBA(image.Rect(0, 0, 20, 20))
-	qr, err := EncodeText("hi", Low)
+	qr, err := encodeText("hi", ECCLow)
 	assertNoError(t, err)
 	logo := &logoConfig{img: img, sizeRatio: 0.5}
 	assertError(t, logo.validate(qr, 10, 4))
@@ -138,7 +137,7 @@ func TestLogoOverlayOnImage(t *testing.T) {
 	// End-to-end PNG render with logo to exercise overlayOnImage + validate.
 	var buf bytes.Buffer
 	assertNoError(t, png.Encode(&buf, src))
-	qr, err := EncodeText("hello", High)
+	qr, err := encodeText("hello", ECCHigh)
 	assertNoError(t, err)
 	cfg := NewQrCodeImgConfig(10, 4, WithLogo(src, 0.2))
 	out, err := qr.ToPNGBytes(cfg)

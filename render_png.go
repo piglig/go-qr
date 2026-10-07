@@ -1,4 +1,4 @@
-package go_qr
+package qr
 
 import (
 	"bytes"
@@ -11,7 +11,7 @@ import (
 )
 
 // PNG renders the QR code to the given file path.
-func (q *QrCode) PNG(config *QrCodeImgConfig, filePath string) error {
+func (q *Code) PNG(config *QrCodeImgConfig, filePath string) error {
 	if err := q.validateWritePNGConfig(config); err != nil {
 		return err
 	}
@@ -26,7 +26,7 @@ func (q *QrCode) PNG(config *QrCodeImgConfig, filePath string) error {
 }
 
 // WriteAsPNG renders the QR code as PNG to the provided io.Writer.
-func (q *QrCode) WriteAsPNG(config *QrCodeImgConfig, writer io.Writer) error {
+func (q *Code) WriteAsPNG(config *QrCodeImgConfig, writer io.Writer) error {
 	if err := q.validateWritePNGConfig(config); err != nil {
 		return err
 	}
@@ -36,7 +36,7 @@ func (q *QrCode) WriteAsPNG(config *QrCodeImgConfig, writer io.Writer) error {
 // ToPNGBytes renders the QR code as PNG and returns the bytes in memory.
 // Useful for HTTP handlers, serverless functions, or any case where writing
 // to a file is unnecessary.
-func (q *QrCode) ToPNGBytes(config *QrCodeImgConfig) ([]byte, error) {
+func (q *Code) ToPNGBytes(config *QrCodeImgConfig) ([]byte, error) {
 	if err := q.validateWritePNGConfig(config); err != nil {
 		return nil, err
 	}
@@ -51,7 +51,7 @@ func (q *QrCode) ToPNGBytes(config *QrCodeImgConfig) ([]byte, error) {
 // This is the composition primitive used by PNG output; callers can use it
 // directly to overlay logos or perform other image-space transformations
 // before encoding to their preferred format.
-func (q *QrCode) ToImage(config *QrCodeImgConfig) (*image.RGBA, error) {
+func (q *Code) ToImage(config *QrCodeImgConfig) (*image.RGBA, error) {
 	if err := q.validateWritePNGConfig(config); err != nil {
 		return nil, err
 	}
@@ -61,7 +61,7 @@ func (q *QrCode) ToImage(config *QrCodeImgConfig) (*image.RGBA, error) {
 // renderImage is the shared composition primitive: it paints modules into an
 // *image.RGBA and, if a logo is configured, validates and overlays it. The
 // caller has already validated the config.
-func (q *QrCode) renderImage(config *QrCodeImgConfig) (*image.RGBA, error) {
+func (q *Code) renderImage(config *QrCodeImgConfig) (*image.RGBA, error) {
 	rgba := q.paintModules(config)
 	if logo := config.logo; logo != nil {
 		if err := logo.validate(q, config.scale, config.border); err != nil {
@@ -75,7 +75,7 @@ func (q *QrCode) renderImage(config *QrCodeImgConfig) (*image.RGBA, error) {
 }
 
 // encodePNG renders to an image and writes PNG bytes to writer.
-func (q *QrCode) encodePNG(config *QrCodeImgConfig, writer io.Writer) error {
+func (q *Code) encodePNG(config *QrCodeImgConfig, writer io.Writer) error {
 	rgba, err := q.renderImage(config)
 	if err != nil {
 		return err
@@ -87,7 +87,7 @@ func (q *QrCode) encodePNG(config *QrCodeImgConfig, writer io.Writer) error {
 }
 
 // validateWritePNGConfig validates the parameters to write the QR code as an image.
-func (q *QrCode) validateWritePNGConfig(config *QrCodeImgConfig) error {
+func (q *Code) validateWritePNGConfig(config *QrCodeImgConfig) error {
 	if err := config.valid(); err != nil {
 		return err
 	}
@@ -101,7 +101,7 @@ func (q *QrCode) validateWritePNGConfig(config *QrCodeImgConfig) error {
 
 // paintModules allocates an RGBA image and fills each pixel with the dark or
 // light color according to the QR module at that position.
-func (q *QrCode) paintModules(config *QrCodeImgConfig) *image.RGBA {
+func (q *Code) paintModules(config *QrCodeImgConfig) *image.RGBA {
 	size := q.Size() + config.border*2
 	imageWidth := size * config.scale
 	imageHeight := size * config.scale

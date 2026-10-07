@@ -1,4 +1,4 @@
-package go_qr
+package qr
 
 import (
 	"bytes"
@@ -37,15 +37,15 @@ func WithLogo(img image.Image, sizeRatio float64) Option {
 // for the given ECC level. Values are conservative: the spec defines recovery
 // capacity per codeword, but in practice finder-pattern position and masking
 // make the usable budget smaller.
-func eccRecoveryBudget(ecl Ecc) float64 {
+func eccRecoveryBudget(ecl ECC) float64 {
 	switch ecl {
-	case Low:
+	case ECCLow:
 		return 0.05
-	case Medium:
+	case ECCMedium:
 		return 0.12
-	case Quartile:
+	case ECCQuartile:
 		return 0.20
-	case High:
+	case ECCHigh:
 		return 0.25
 	default:
 		return 0.05
@@ -93,15 +93,15 @@ func (l *logoConfig) logoRect(qrSize, scale, border int) (image.Rectangle, float
 
 // validate checks that the logo configuration is compatible with the QR code's
 // error correction level.
-func (l *logoConfig) validate(q *QrCode, scale, border int) error {
+func (l *logoConfig) validate(q *Code, scale, border int) error {
 	_, ratio, err := l.logoRect(q.Size(), scale, border)
 	if err != nil {
 		return err
 	}
-	budget := eccRecoveryBudget(q.errorCorrectionLevel)
+	budget := eccRecoveryBudget(q.ecc)
 	if ratio > budget {
 		return fmt.Errorf("logo occludes %.1f%% of QR modules, exceeds ECC %v budget of %.1f%% (use a smaller sizeRatio or a higher ECC)",
-			ratio*100, q.errorCorrectionLevel, budget*100)
+			ratio*100, q.ecc, budget*100)
 	}
 	return nil
 }

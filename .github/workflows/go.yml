@@ -26,7 +26,6 @@ jobs:
           cache-dependency-path: |
             go.mod
             tools/go.sum
-            example/go.mod
 
       - name: gofmt
         run: |
@@ -39,13 +38,11 @@ jobs:
         run: |
           go vet ./...
           (cd tools && go vet ./...)
-          (cd example && go vet ./...)
 
       - name: Test
         run: |
           go test -race -coverprofile=coverage.out -covermode=atomic ./...
           (cd tools && go test -race ./...)
-          (cd example && go build ./...)
 
       - name: Fuzz smoke test
         run: go test -run='^$' -fuzz='^FuzzDecodeNoPanic$' -fuzztime=30s .

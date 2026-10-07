@@ -1,4 +1,4 @@
-package go_qr
+package qr
 
 import "fmt"
 
@@ -41,28 +41,23 @@ func parseBitstream(data []byte, ver int) (string, []SegmentInfo, error) {
 			break // terminator or exhausted
 		}
 
-		var mode Mode
-		switch modeBits {
-		case Numeric.modeBits:
-			mode = Numeric
-		case Alphanumeric.modeBits:
-			mode = Alphanumeric
-		case Byte.modeBits:
-			mode = Byte
-		case Eci.modeBits:
+		mode := Mode(modeBits)
+		switch mode {
+		case ModeNumeric, ModeAlphanumeric, ModeByte:
+		case ModeECI:
 			// ECI: read the assignment number and ignore it (byte mode here is
 			// already raw bytes / UTF-8 from the encoder).
 			if _, err := readECI(r); err != nil {
 				return "", nil, err
 			}
 			continue
-		case Kanji.modeBits:
-			return "", nil, fmt.Errorf("%w: kanji segment decode not yet implemented", ErrUnsupportedSymbol)
+		case ModeKanji:
+			return "", nil, fmt.Errorf("%w: kanji segment decode not yet implemented", ErrUnsupported)
 		default:
 			return "", nil, fmt.Errorf("%w: unknown mode 0x%x", ErrDecodeFailed, modeBits)
 		}
 
-		count, ok := r.read(mode.numCharCountBits(ver))
+		count, ok := r.read(mode.charCountBits(ver))
 		if !ok {
 			return "", nil, fmt.Errorf("%w: truncated char count", ErrDecodeFailed)
 		}
@@ -70,11 +65,11 @@ func parseBitstream(data []byte, ver int) (string, []SegmentInfo, error) {
 		start := len(out)
 		var err error
 		switch {
-		case mode.isNumeric():
+		case mode == ModeNumeric:
 			out, err = readNumeric(r, count, out)
-		case mode.isAlphanumeric():
+		case mode == ModeAlphanumeric:
 			out, err = readAlphanumeric(r, count, out)
-		case mode.isByte():
+		case mode == ModeByte:
 			out, err = readByte(r, count, out)
 		}
 		if err != nil {

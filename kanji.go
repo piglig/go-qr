@@ -1,258 +1,12 @@
-package go_qr
+package qr
 
-import (
-	"encoding/base64"
-	"fmt"
-	"reflect"
-	"unicode/utf16"
-)
+import "encoding/base64"
 
-// MakeSegmentsOptimally takes a string and error correction level, and attempts to
-// make QR segments in the most efficient way possible. It validates the version
-// range and converts the input text into code points. Then, it loops through
-// each version, attempting to make segments until the data fits within the
-// capacity of the version. Returns an array of pointers to QrSegment or an error.
-func MakeSegmentsOptimally(text string, ecl Ecc, minVersion, maxVersion int) ([]*QrSegment, error) {
-	if !isValidVersion(minVersion, maxVersion) {
-		return nil, fmt.Errorf("%w: minVersion=%d maxVersion=%d", ErrInvalidVersion, minVersion, maxVersion)
-	}
-
-	codePoints, err := toCodePoints(text)
-	if err != nil {
-		return nil, err
-	}
-
-	var segs []*QrSegment
-	for version := minVersion; ; version++ {
-		if version == minVersion || version == 10 || version == 27 {
-			segs, err = makeSegmentsOptimallyWithVersion(codePoints, version)
-			if err != nil {
-				return nil, err
-			}
-		}
-
-		dataCapacityBits := getNumDataCodewords(version, ecl) * 8
-		dataUsedBits := getTotalBits(segs, version)
-		if dataUsedBits != -1 && dataUsedBits <= dataCapacityBits {
-			return segs, nil
-		}
-		if version >= maxVersion {
-			if dataUsedBits != -1 {
-				return nil, fmt.Errorf("%w: data length %d bits exceeds capacity %d bits", ErrDataTooLong, dataUsedBits, dataCapacityBits)
-			}
-			return nil, fmt.Errorf("%w: segment too long", ErrDataTooLong)
-		}
-	}
-}
-
-// makeSegmentsOptimallyWithVersion takes code points and a version number,
-// computes the character modes suitable for that version, and then splits the
-// code points into segments accordingly. Returns an array of pointers to
-// QrSegment or an error.
-func makeSegmentsOptimallyWithVersion(codePoints []int, version int) ([]*QrSegment, error) {
-	if len(codePoints) == 0 {
-		return []*QrSegment{}, nil
-	}
-	charModes, err := computeCharacterModes(codePoints, version)
-	if err != nil {
-		return nil, err
-	}
-	return splitIntoSegments(codePoints, charModes)
-}
-
-// toCodePoints returns a new slice of Unicode code points (effectively
-// UTF-32 / UCS-4) representing the given UTF-16 string.
-func toCodePoints(s string) ([]int, error) {
-	runes := []rune(s)
-	codePoints := make([]int, len(runes))
-	for i, r := range runes {
-		if utf16.IsSurrogate(r) {
-			return nil, fmt.Errorf("%w: invalid UTF-16 surrogate", ErrUnencodableChar)
-		}
-		codePoints[i] = int(r)
-	}
-
-	return codePoints, nil
-}
-
-// countUtf8Bytes counts the number of bytes required to represent a Unicode code point in UTF-8.
-func countUtf8Bytes(cp int) (int, error) {
-	if cp < 0 {
-		return 0, fmt.Errorf("%w: negative code point %d", ErrUnencodableChar, cp)
-	} else if cp < 0x80 {
-		return 1, nil
-	} else if cp < 0x800 {
-		return 2, nil
-	} else if cp < 0x10000 {
-		return 3, nil
-	} else if cp < 0x110000 {
-		return 4, nil
-	} else {
-		return 0, fmt.Errorf("%w: code point %d out of range", ErrUnencodableChar, cp)
-	}
-}
-
-// computeCharacterModes determines the optimal encoding mode for each character in the input string.
-func computeCharacterModes(codePoints []int, version int) ([]Mode, error) {
-	if len(codePoints) > 7089 {
-		return nil, fmt.Errorf("%w: string exceeds 7089 code points", ErrDataTooLong)
-	}
-	modeTypes := []Mode{Byte, Alphanumeric, Numeric, Kanji}
-	numModes := len(modeTypes)
-
-	headCosts := make([]int, numModes)
-	charModes := make([][]Mode, len(codePoints))
-	for i := 0; i < numModes; i++ {
-		headCosts[i] = (4 + modeTypes[i].numCharCountBits(version)) * 6
-	}
-
-	for i := range charModes {
-		charModes[i] = make([]Mode, numModes)
-	}
-
-	prevCosts := make([]int, numModes)
-	copy(prevCosts, headCosts)
-
-	// Determine the mode type for each character based on cost calculation
-	for i := 0; i < len(codePoints); i++ {
-		c := codePoints[i]
-		curCosts := make([]int, numModes)
-		{
-			count, err := countUtf8Bytes(c)
-			if err != nil {
-				return nil, err
-			}
-			curCosts[0] = prevCosts[0] + count*8*6
-			charModes[i][0] = modeTypes[0]
-		}
-
-		if isAlphanumeric(string(rune(c))) {
-			curCosts[1] = prevCosts[1] + 33
-			charModes[i][1] = modeTypes[1]
-		}
-
-		if isNumeric(string(rune(c))) {
-			curCosts[2] = prevCosts[2] + 20
-			charModes[i][2] = modeTypes[2]
-		}
-
-		if isKanji(c) {
-			curCosts[3] = prevCosts[3] + 78
-			charModes[i][3] = modeTypes[3]
-		}
-
-		for j := 0; j < numModes; j++ {
-			for k := 0; k < numModes; k++ {
-				newCost := (curCosts[k]+5)/6*6 + headCosts[j]
-				if charModes[i][k].bits() != 0 && (charModes[i][j].bits() == 0 || newCost < curCosts[j]) {
-					curCosts[j] = newCost
-					charModes[i][j] = modeTypes[k]
-				}
-			}
-		}
-
-		prevCosts = curCosts
-	}
-
-	curMode := Mode{}
-	for i, minCost := 0, 0; i < numModes; i++ {
-		if curMode.bits() == 0 || prevCosts[i] < minCost {
-			minCost = prevCosts[i]
-			curMode = modeTypes[i]
-		}
-	}
-
-	res := make([]Mode, len(charModes))
-	for i := len(res) - 1; i >= 0; i-- {
-		for j := 0; j < numModes; j++ {
-			if reflect.DeepEqual(modeTypes[j], curMode) {
-				curMode = charModes[i][j]
-				res[i] = curMode
-				break
-			}
-		}
-	}
-	return res, nil
-}
-
-// splitIntoSegments is used to splits the input into multiple QR segments according to the given modes.
-// Each change in mode results in a new segment being created.
-func splitIntoSegments(codePoints []int, charModes []Mode) ([]*QrSegment, error) {
-	res := make([]*QrSegment, 0)
-	curMode := charModes[0]
-	start := 0
-	for i := 1; ; i++ {
-		if i < len(codePoints) && reflect.DeepEqual(charModes[i], curMode) {
-			continue
-		}
-
-		runes := make([]rune, i-start)
-		for j, cp := range codePoints[start:i] {
-			runes[j] = rune(cp)
-		}
-
-		s := string(runes)
-
-		// Create a QR segment based on the current mode
-		if curMode.isByte() {
-			qs, err := MakeBytes([]byte(s))
-			if err != nil {
-				return nil, err
-			}
-			res = append(res, qs)
-		} else if curMode.isNumeric() {
-			qs, err := MakeNumeric(s)
-			if err != nil {
-				return nil, err
-			}
-			res = append(res, qs)
-		} else if curMode.isAlphanumeric() {
-			qs, err := MakeAlphanumeric(s)
-			if err != nil {
-				return nil, err
-			}
-			res = append(res, qs)
-		} else if curMode.isKanji() {
-			qs, err := MakeKanji(s)
-			if err != nil {
-				return nil, err
-			}
-			res = append(res, qs)
-		} else {
-			return nil, fmt.Errorf("%w: unknown segment mode", ErrInvalidArgument)
-		}
-		if i >= len(codePoints) {
-			return res, nil
-		}
-		curMode = charModes[i]
-		start = i
-	}
-}
-
-// MakeKanji converts a string into a QR code segment in Kanji mode
-// It returns an error if the string contains non-kanji characters.
-func MakeKanji(text string) (*QrSegment, error) {
-	bb := &BitBuffer{}
-	runes := []rune(text)
-	for _, c := range text {
-		if !isKanji(int(c)) {
-			return nil, fmt.Errorf("%w: kanji mode", ErrUnencodableChar)
-		}
-		val := unicdeToQRKanji[c]
-		err := bb.appendBits(val, 13)
-		if err != nil {
-			return nil, err
-		}
-	}
-	return newQrSegment(Kanji, len(runes), bb)
-}
-
-// isKanji function takes a integer as input and returns a boolean indicating whether the integer is Kanji.
-func isKanji(c int) bool {
-	return c < len(unicdeToQRKanji) && unicdeToQRKanji[c] != -1 && c >= 0
-}
-
-const packedQRKanjiToUnicode = "MAAwATAC/wz/DjD7/xr/G/8f/wEwmzCcALT/QACo/z7/4/8/MP0w/jCdMJ4wA07dMAUwBjAHMPwgFSAQ/w8AXDAcIBb/XCAmICUgGCAZIBwgHf8I/wkwFDAV/zv/Pf9b/10wCDAJMAowCzAMMA0wDjAPMBAwEf8LIhIAsQDX//8A9/8dImD/HP8eImYiZyIeIjQmQiZA" +
+// packedKanjiToUnicode maps each 13-bit QR Kanji value to its Unicode code
+// point: base64 of 8192 big-endian uint16 entries, 0xFFFF marking unused
+// values. QR Kanji values are Shift_JIS double-byte codes compacted as
+// described in ISO/IEC 18004 §7.4.6.
+const packedKanjiToUnicode = "MAAwATAC/wz/DjD7/xr/G/8f/wEwmzCcALT/QACo/z7/4/8/MP0w/jCdMJ4wA07dMAUwBjAHMPwgFSAQ/w8AXDAcIBb/XCAmICUgGCAZIBwgHf8I/wkwFDAV/zv/Pf9b/10wCDAJMAowCzAMMA0wDjAPMBAwEf8LIhIAsQDX//8A9/8dImD/HP8eImYiZyIeIjQmQiZA" +
 	"ALAgMiAzIQP/5f8EAKIAo/8F/wP/Bv8K/yAApyYGJgUlyyXPJc4lxyXGJaEloCWzJbIlvSW8IDswEiGSIZAhkSGTMBP/////////////////////////////IggiCyKGIocigiKDIioiKf////////////////////8iJyIoAKwh0iHUIgAiA///////////////////" +
 	"//////////8iICKlIxIiAiIHImEiUiJqImsiGiI9Ih0iNSIrIiz//////////////////yErIDAmbyZtJmogICAhALb//////////yXv/////////////////////////////////////////////////xD/Ef8S/xP/FP8V/xb/F/8Y/xn///////////////////8h" +
 	"/yL/I/8k/yX/Jv8n/yj/Kf8q/yv/LP8t/y7/L/8w/zH/Mv8z/zT/Nf82/zf/OP85/zr///////////////////9B/0L/Q/9E/0X/Rv9H/0j/Sf9K/0v/TP9N/07/T/9Q/1H/Uv9T/1T/Vf9W/1f/WP9Z/1r//////////zBBMEIwQzBEMEUwRjBHMEgwSTBKMEswTDBN" +
@@ -363,20 +117,31 @@ const packedQRKanjiToUnicode = "MAAwATAC/wz/DjD7/xr/G/8f/wEwmzCcALT/QACo/z7/4/8/
 	"////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////" +
 	"/////////////////////////////////////////////w=="
 
-var unicdeToQRKanji [1 << 16]int
+// unicodeToKanji maps a BMP code point to its 13-bit QR Kanji value, or -1 if
+// the character has no Kanji-mode encoding.
+var unicodeToKanji [1 << 16]int16
 
 func init() {
-	for i := range unicdeToQRKanji {
-		unicdeToQRKanji[i] = -1
+	for i := range unicodeToKanji {
+		unicodeToKanji[i] = -1
 	}
-
-	bytes, _ := base64.StdEncoding.DecodeString(packedQRKanjiToUnicode)
-	for i := 0; i < len(bytes); i += 2 {
-		c := int(bytes[i]&0xFF)<<8 | int(bytes[i+1]&0xFF)
-		if c == 0xFFFF {
-			continue
+	packed, err := base64.StdEncoding.DecodeString(packedKanjiToUnicode)
+	if err != nil {
+		panic("qr: corrupt Kanji table: " + err.Error())
+	}
+	for i := 0; i+1 < len(packed); i += 2 {
+		c := int(packed[i])<<8 | int(packed[i+1])
+		if c != 0xFFFF {
+			unicodeToKanji[c] = int16(i / 2)
 		}
-
-		unicdeToQRKanji[c] = i / 2
 	}
+}
+
+// kanjiValue returns the 13-bit QR Kanji value of r and whether r is
+// encodable in Kanji mode.
+func kanjiValue(r rune) (int, bool) {
+	if r < 0 || int(r) >= len(unicodeToKanji) || unicodeToKanji[r] < 0 {
+		return 0, false
+	}
+	return int(unicodeToKanji[r]), true
 }
