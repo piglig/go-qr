@@ -25,8 +25,9 @@
 //	err = code.WriteSVG(w, qr.WithForeground(navy), qr.WithBackground(color.Transparent))
 //	fmt.Print(code)
 //
-// Code.Verify decodes a rendering to confirm it is readable before it is
-// published.
+// WithModuleShape, WithFinderShape, WithFinderColor and WithGradient style
+// the code. Code.Verify decodes a rendering to confirm it is readable
+// before it is published.
 //
 // # Decoding
 //

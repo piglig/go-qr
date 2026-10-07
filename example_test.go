@@ -184,3 +184,19 @@ func ExampleEncodeStructured() {
 	fmt.Println(len(codes), "symbols, intact:", joined == text)
 	// Output: 6 symbols, intact: true
 }
+
+func ExampleWithGradient() {
+	code, _ := qr.Encode("https://example.com", qr.WithECC(qr.ECCQuartile))
+	opts := []qr.RenderOption{
+		qr.WithModuleShape(qr.ModuleRounded),
+		qr.WithFinderShape(qr.FinderRounded),
+		qr.WithGradient(color.RGBA{R: 0x1a, G: 0x23, B: 0x7e, A: 0xff}, color.RGBA{G: 0x69, B: 0x5c, A: 0xff}, 45),
+	}
+	// Check the style before publishing it.
+	if err := code.Verify(opts...); err != nil {
+		panic(err)
+	}
+	svg, _ := code.SVG(opts...)
+	fmt.Println(strings.Contains(string(svg), "<linearGradient"))
+	// Output: true
+}

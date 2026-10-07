@@ -27,9 +27,12 @@ func (c *Code) renderRGBA(cfg *renderConfig) (*image.RGBA, error) {
 		return nil, err
 	}
 	var img *image.RGBA
-	if cfg.styled() {
+	switch {
+	case cfg.multicolor():
+		img = paintColored(c, cfg, side)
+	case cfg.styled():
 		img = paintStyled(c, cfg, side)
-	} else {
+	default:
 		img = paintRGBA(c, cfg, side)
 	}
 	if cfg.logo != nil {
@@ -46,7 +49,7 @@ func (c *Code) WritePNG(w io.Writer, opts ...RenderOption) error {
 	}
 
 	var img image.Image
-	if cfg.logo != nil {
+	if cfg.logo != nil || cfg.multicolor() {
 		if img, err = c.renderRGBA(&cfg); err != nil {
 			return err
 		}

@@ -14,6 +14,7 @@
 - [Quick Start](#quick-start)
 - [Encoding](#encoding)
 - [Rendering](#rendering)
+- [Styling](#styling)
 - [Decoding](#decoding)
 - [Structured Payloads](#structured-payloads)
 - [Batch Processing](#batch-processing)
@@ -26,6 +27,7 @@
 - QR Code Model 2: all 40 versions and all four error correction levels
 - Optimal mixed-mode segmentation (numeric, alphanumeric, byte, Kanji) by default, with optional UTF-8 ECI
 - PNG, compact single-path SVG, `image.RGBA` and Unicode text output, with custom colors and logos
+- Styled codes: dot and rounded modules, rounded and circular finders, finder colors and gradients, each checkable with `Verify`
 - A native decoder that reads rotated, inverted, mirrored, low-contrast and unevenly lit images, plus Kanji and ECI character sets
 - Structured payloads: Wi-Fi, MECARD, email, SMS, tel, geo, URL
 - Concurrent, cancelable batch encoding and rendering
@@ -166,6 +168,36 @@ if err := code.Verify(opts...); err != nil {
 }
 png, err := code.PNG(opts...)
 ```
+
+## Styling
+![Style samples](docs/images/styles.png)
+
+```go
+png, err := code.PNG(
+    qr.WithModuleShape(qr.ModuleRounded),
+    qr.WithFinderShape(qr.FinderRounded),
+    qr.WithGradient(navy, teal, 45),
+)
+```
+
+| Option | Effect |
+| --- | --- |
+| `WithModuleShape(s)` | `ModuleSquare` (default), `ModuleDot`, or `ModuleRounded`, which rounds corners whose neighbors are light so runs merge into smooth shapes. |
+| `WithFinderShape(s)` | `FinderSquare` (default), `FinderRounded`, or `FinderCircle`. |
+| `WithFinderColor(ring, center)` | Colors of the three finder patterns. |
+| `WithGradient(from, to, angle)` | Linear gradient over the dark modules; angle in degrees, 0 is left to right. Finders follow it unless `WithFinderColor` is set. |
+
+Every style keeps the module centers and the 1:1:3:1:1 finder proportions
+that readers rely on, and edges are anti-aliased. Styles still cost some
+robustness, so check the exact options with `Verify` before publishing; it
+also checks that every dark color, including both ends of a gradient,
+contrasts with the background. Readers' "pure barcode" modes assume square
+finders and do not read rounded or circular ones, but normal camera scanning
+does.
+
+Styled PNGs in two colors are 8-bit paletted images; gradients and finder
+colors need full RGBA PNGs, which take several times longer to encode. SVG
+output stays fast in every style.
 
 ## Decoding
 ```go

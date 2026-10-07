@@ -19,6 +19,10 @@ type renderConfig struct {
 
 	moduleShape ModuleShape
 	finderShape FinderShape
+
+	finderRing, finderCenter color.Color
+	finderColorSet           bool
+	gradient                 *gradientConfig
 }
 
 const (
@@ -42,6 +46,13 @@ func newRenderConfig(opts []RenderOption) (renderConfig, error) {
 		return c, fmt.Errorf("%w: unknown module shape %d", ErrInvalidArgument, c.moduleShape)
 	case !c.finderShape.valid():
 		return c, fmt.Errorf("%w: unknown finder shape %d", ErrInvalidArgument, c.finderShape)
+	case c.finderColorSet && (c.finderRing == nil || c.finderCenter == nil):
+		return c, fmt.Errorf("%w: nil finder color", ErrInvalidArgument)
+	}
+	if c.gradient != nil {
+		if err := c.gradient.validate(); err != nil {
+			return c, err
+		}
 	}
 	if c.logo != nil {
 		if err := c.logo.validateOptions(); err != nil {

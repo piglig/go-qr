@@ -15,8 +15,9 @@ const minSymbolContrast = 0.40
 // Verify renders the code with opts, as Image would, decodes the result and
 // checks that it carries exactly the code's data. It also rejects color
 // choices that phone scanners commonly fail on even when this package's
-// decoder succeeds: a foreground that is lighter than the background, or
-// less than 40% luminance contrast between them. Use it to check custom
+// decoder succeeds: any dark color (the foreground, both ends of a
+// gradient, finder colors) that is lighter than the background or has less
+// than 40% luminance contrast with it. Use it to check custom
 // colors or a logo before publishing a code.
 //
 // Verify checks the raster rendering; SVG output with the same options draws
@@ -27,12 +28,14 @@ func (c *Code) Verify(opts ...RenderOption) error {
 	if err != nil {
 		return err
 	}
-	fg, bg := luminanceOverWhite(cfg.fg), luminanceOverWhite(cfg.bg)
-	switch contrast := bg - fg; {
-	case contrast < 0:
-		return fmt.Errorf("%w: foreground is lighter than background; many scanners cannot read inverted codes", ErrUnreadable)
-	case contrast < minSymbolContrast:
-		return fmt.Errorf("%w: contrast %.0f%% is below the %.0f%% scanners need", ErrUnreadable, contrast*100, minSymbolContrast*100)
+	bg := luminanceOverWhite(cfg.bg)
+	for _, dark := range cfg.darkColors() {
+		switch contrast := bg - luminanceOverWhite(dark); {
+		case contrast < 0:
+			return fmt.Errorf("%w: dark color %v is lighter than the background; many scanners cannot read inverted codes", ErrUnreadable, dark)
+		case contrast < minSymbolContrast:
+			return fmt.Errorf("%w: contrast of %v is %.0f%%, below the %.0f%% scanners need", ErrUnreadable, dark, contrast*100, minSymbolContrast*100)
+		}
 	}
 
 	img, err := c.renderRGBA(&cfg)

@@ -58,6 +58,11 @@ func WithFinderShape(s FinderShape) RenderOption {
 // styled reports whether the rendering differs from plain square modules in
 // a single color.
 func (c *renderConfig) styled() bool {
+	return c.shaped() || c.multicolor()
+}
+
+// shaped reports whether modules or finders are not plain squares.
+func (c *renderConfig) shaped() bool {
 	return c.moduleShape != ModuleSquare || c.finderShape != FinderSquare
 }
 
@@ -305,7 +310,7 @@ func (c *Code) writeStyledSVGBody(sb *strings.Builder, cfg *renderConfig) {
 	s := float64(cfg.scale)
 	qz := float64(cfg.quietZone)
 	size := c.Size()
-	fill := colorToSVG(cfg.fg)
+	fill, ringFill, centerFill := cfg.svgFills()
 
 	var d svgPath
 	for y := 0; y < size; y++ {
@@ -347,9 +352,9 @@ func (c *Code) writeStyledSVGBody(sb *strings.Builder, cfg *renderConfig) {
 		center.box(g.center, ox, oy, s)
 		sb.WriteString("\t<path d=\"")
 		sb.Write(ring.b)
-		sb.WriteString("\" fill=\"" + fill + "\" fill-rule=\"evenodd\"/>\n\t<path d=\"")
+		sb.WriteString("\" fill=\"" + ringFill + "\" fill-rule=\"evenodd\"/>\n\t<path d=\"")
 		sb.Write(center.b)
-		sb.WriteString("\" fill=\"" + fill + "\"/>\n")
+		sb.WriteString("\" fill=\"" + centerFill + "\"/>\n")
 	}
 }
 
