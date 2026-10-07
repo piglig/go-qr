@@ -180,6 +180,15 @@ func TestMakeSegmentsOptimally(t *testing.T) {
 				},
 			},
 		},
+		{
+			name:         "test with empty text",
+			text:         "",
+			ecl:          Low,
+			minVersion:   1,
+			maxVersion:   1,
+			wantErr:      false,
+			wantSegments: []*QrSegment{},
+		},
 	}
 
 	for _, tt := range tests {
