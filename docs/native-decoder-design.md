@@ -1,6 +1,8 @@
 # Native QR Decoder — Architecture Design
 
-Status: **proposal** · Target: go-qr 1.x · Owner: TBD
+Status: **implemented** in v1.1 and extended in v2 · This is the original
+design proposal, kept for its rationale. See [§12](#12-v2-changes) for how the
+shipped decoder differs, and the package documentation for the current API.
 
 A zero-dependency QR decoder living in the main `go-qr` module, mirroring the
 existing encoder. Closes the generate ⇄ decode loop, removes the gozxing
@@ -345,3 +347,34 @@ Each milestone is independently shippable; M1 delivers the headline value.
 - **Kanji/ECI completeness.** Lower-traffic modes; can land in M1 as
   byte-mode-only with kanji/ECI following, gated by tests.
 ```
+
+---
+
+## 12. v2 changes
+
+The v2 decoder keeps the pipeline above, with these differences:
+
+- **API.** `Decode(img, opts...) (*DecodeResult, error)` is the single entry
+  point; `DecodeDetailed` and `SegmentInfo` are gone. `DecodedSegment` carries
+  the `Mode`, the ECI in effect and the raw payload, and `DecodeResult.Mirrored`
+  reports mirror images.
+- **Binarization.** The image is converted to luminance once, compositing
+  translucent pixels over white. The fast path thresholds it at Otsu's level
+  instead of mid-gray. The robust path uses a ZXing-style hybrid binarizer
+  (8×8 blocks thresholded against the average black point of a 5×5 block
+  neighborhood) instead of the Bradley moving average proposed in §4.1.
+- **Retries.** Both paths run on the image as is and inverted, and every
+  sampled grid is also decoded transposed, which is how a mirror image samples.
+  A fast-path grid that fails to decode falls back to the robust path.
+- **Finder selection.** Candidates are confirmed vertically and then
+  horizontally. Instead of the three strongest candidates, the decoder picks the
+  triple with similar module sizes that best forms a right isosceles triangle.
+- **Version information.** For version 7 and up, the version blocks are read
+  relative to the top-right and bottom-left finders and BCH-corrected, which
+  fixes the dimension instead of trusting the finder-spacing estimate (§4.4).
+- **Segments.** Kanji decodes through the encoder's table. Byte data honors
+  ECI 26, 1, 3, 20, 27 and 170, and falls back to UTF-8 or ISO-8859-1 without
+  an ECI. Structured append, FNC1, Hanzi and other ECIs return
+  `ErrUnsupported`.
+- **Still out of scope.** Perspective correction through the alignment pattern
+  and multiple symbols per image.

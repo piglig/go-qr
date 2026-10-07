@@ -7,19 +7,79 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+Version 2 redesigns the API around functional options. The module path is now
+`github.com/piglig/go-qr/v2` and the package is named `qr`.
+
+### Breaking changes
+
+| v1 | v2 |
+| --- | --- |
+| `import go_qr "github.com/piglig/go-qr"` | `import "github.com/piglig/go-qr/v2"` (package `qr`) |
+| `EncodeText(text, ecl)` | `Encode(text, opts...)` |
+| `EncodeBinary(data, ecl)` | `EncodeBytes(data, opts...)` |
+| `EncodeStandardSegments(segs, ecl)`, `EncodeSegments(segs, ecl, min, max, mask, boost)` | `EncodeSegments(segs, opts...)` with `WithECC`, `WithVersionRange`, `WithMask`, `WithoutECCBoost` |
+| `MakeSegmentsOptimally(text, ecl, min, max)` | default behavior of `Encode`; `WithSimpleSegmentation()` opts out |
+| `MakeSegments`, `MakeNumeric`, `MakeAlphanumeric`, `MakeBytes`, `MakeKanji`, `MakeEci` | `NumericSegment`, `AlphanumericSegment`, `BytesSegment`, `KanjiSegment`, `ECISegment` (value type `Segment`) |
+| `QrCode`, `QrSegment` | `Code`, `Segment` |
+| `Ecc`, `Low`, `Medium`, `Quartile`, `High` | `ECC`, `ECCLow`, `ECCMedium`, `ECCQuartile`, `ECCHigh` |
+| `Mode` struct, `Numeric`, `Alphanumeric`, `Byte`, `Kanji`, `Eci` | `Mode` enum, `ModeNumeric`, `ModeAlphanumeric`, `ModeByte`, `ModeKanji`, `ModeECI` |
+| `NewQrCodeImgConfig(scale, border, opts...)` | `WithScale`, `WithQuietZone` passed to each render call |
+| `WithLight`, `WithDark` | `WithBackground`, `WithForeground` |
+| `ToImage`, `ToPNGBytes`, `WriteAsPNG`, `PNG(cfg, path)` | `Image`, `PNG`, `WritePNG` |
+| `ToSVGBytes`, `WriteAsSVG`, `SVG(cfg, path)`, `WithOptimalSVG` | `SVG`, `WriteSVG`; the single-path renderer is the only one |
+| `EncodeBatch`, `RenderBatch`, `BatchInput` | `Batch(ctx, []BatchJob, concurrency)` |
+| `Decode(img) (string, error)`, `DecodeDetailed`, `SegmentInfo` | `Decode(img, opts...) (*DecodeResult, error)`, `DecodedSegment` |
+| `ErrNoQRCode`, `ErrUnsupportedSymbol` | `ErrNotFound`, `ErrUnsupported` |
+| `ErrInvalidConfig`, `ErrInvalidImageOutput` | `ErrInvalidArgument` |
+| `BitBuffer`, `Ecc.FormatBits` | unexported |
+| `generator encode -optimal`, `-border`, `-svg-optimized` | optimal by default (`-simple` opts out), `-quiet-zone`, `-svg` |
+
+The default error correction level is `ECCMedium`, and `Encode` switches modes
+optimally, including Kanji, so symbols can differ from v1 `EncodeText`.
+
 ### Added
 
-- `generator encode -optimal` to use optimal mixed-mode segmentation.
+- `Code.Version`, `Code.ECC`, `Code.Mask` and `String` methods on `ECC` and
+  `Mode`.
+- `WithUTF8ECI` declares UTF-8 with an ECI designator for non-ASCII text.
+- `Code.WriteText` and `Code.String` render Unicode half-block text, and the
+  CLI gains `-stdout text`.
+- `Batch` takes a context, reports panics as errors, and accepts encode and
+  render options per job.
+- `ErrLogoTooLarge`; every error now wraps a sentinel.
+- The decoder reads Kanji segments, ECI 26/1/3/20/27/170 byte data, inverted
+  and mirrored symbols, low-contrast and unevenly lit images, transparent
+  backgrounds and YCbCr images. It uses version information to size v7+
+  symbols. `DecodeResult.Mirrored` reports mirror images.
+- Testable examples replace the `example` module.
 
 ### Fixed
 
-- Check capacity at every version in `MakeSegmentsOptimally`, preventing hangs
-  for large payloads, enforcing the maximum version, and retaining optimal
-  segmentation for the first version that fits.
-- Return empty segments for empty input in `MakeSegmentsOptimally` instead of
-  panicking.
-- Place flags before positional content in `generator` help and README
-  examples; flags after the content were encoded as text.
+- `MakeSegmentsOptimally` hung for data needing a version above 27 and could
+  return segments beyond the maximum version (#99, #100).
+- `MakeSegmentsOptimally("")` panicked (#102).
+- SVG output measured the quiet zone in user units instead of modules, so it
+  was too thin and logos were drawn off-center.
+- The logo pad is drawn in the background color instead of white.
+- Malformed alphanumeric data could make the decoder index past its charset
+  and panic; out-of-range numeric groups were accepted.
+- The decoder picked spurious finder candidates in large symbols.
+- `generator` help and README examples placed flags after the content, where
+  they were encoded as text.
+
+### Performance
+
+- Optimal segmentation is about 6× faster with 60× fewer allocations.
+- PNG rendering is about 10× faster (40 instead of 168,000 allocations), and
+  PNGs without a logo are written as 1-bit paletted images.
+- Clean-image decoding is 5–27% faster.
+
+### Changed
+
+- CI tests every package and the `tools` module with `-race` across Go
+  versions, and runs gofmt, staticcheck, govulncheck and a fuzz smoke test.
+- The module has no dependencies; testify was replaced by standard-library
+  test helpers. Go 1.23 is required.
 
 ## [1.1.0] - 2026-05-29
 

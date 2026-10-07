@@ -1,49 +1,53 @@
-// Package go_qr generates QR codes (Model 2, versions 1-40, all four
-// error-correction levels) and renders them to PNG, SVG, or image.Image.
+// Package qr encodes, renders and decodes QR Codes (ISO/IEC 18004 Model 2,
+// versions 1-40, all four error correction levels) with no dependencies
+// outside the standard library.
 //
-// # Quick start
+// # Encoding
 //
-//	qr, err := go_qr.EncodeText("Hello, world!", go_qr.ECCLow)
-//	if err != nil {
-//	    log.Fatal(err)
-//	}
-//	cfg := go_qr.NewQrCodeImgConfig(10, 4)
-//	_ = qr.PNG(cfg, "hello.png")
-//	_ = qr.SVG(cfg, "hello.svg")
+// Encode chooses the smallest version that holds the text, switches between
+// numeric, alphanumeric, byte and Kanji modes to minimize the bit count,
+// raises the error correction level into spare capacity and picks the mask
+// with the lowest penalty. Options override each choice:
 //
-// # Configuration
+//	code, err := qr.Encode("Hello, world!")
+//	code, err := qr.Encode(text, qr.WithECC(qr.ECCHigh), qr.WithVersionRange(5, 10))
 //
-// NewQrCodeImgConfig accepts functional options. Colors are read from the
-// config for both PNG and SVG output:
+// EncodeBytes encodes binary data, and EncodeSegments encodes segments built
+// with NumericSegment, AlphanumericSegment, BytesSegment, KanjiSegment and
+// ECISegment exactly as given.
 //
-//   - WithLight / WithDark set the background and foreground color.
-//   - WithSVGXMLHeader emits the XML + DOCTYPE prolog.
-//   - WithOptimalSVG emits a single <path> with fill-rule="evenodd"
-//     (smaller, connected regions merged into one path).
-//   - WithLogo embeds a centered logo, validated against the ECC budget.
+// # Rendering
 //
-// # In-memory rendering
+// A Code renders to PNG, SVG, an *image.RGBA or Unicode text. Render options
+// set the module scale, quiet zone, colors and an optional center logo:
 //
-// ToPNGBytes, ToSVGBytes, and ToImage return the rendered output directly,
-// avoiding a file round-trip when writing to HTTP responses, archives, or
-// further image processing.
+//	png, err := code.PNG(qr.WithScale(8))
+//	err = code.WriteSVG(w, qr.WithForeground(navy), qr.WithBackground(color.Transparent))
+//	fmt.Print(code)
 //
-// # Batch API
+// # Decoding
 //
-// EncodeBatch and RenderBatch encode/render many inputs concurrently and
-// return results in input order. Per-item failures do not cancel the batch.
+// Decode locates and reads a symbol in an image, including rotated, noisy,
+// low-contrast, inverted and mirrored ones, and returns the text along with
+// the version, error correction level, mask and segments.
 //
-// # Structured payloads
+// # Batches
 //
-// The sub-package github.com/piglig/go-qr/payload builds canonical strings
-// for Wi-Fi, vCard/MECARD, mailto, SMS, tel, geo, and URL payloads that
-// standard QR scanners recognize.
+// Batch encodes and renders many jobs concurrently, in order, with
+// cancellation through a context.
+//
+// # Payloads
+//
+// The payload subpackage builds the Wi-Fi, contact, email, SMS, phone,
+// location and URL strings that phone scanners act on.
 //
 // # Errors
 //
-// Errors returned by this package wrap sentinel values so callers can
-// classify them with errors.Is:
+// Every error wraps one of the sentinel values ErrInvalidArgument,
+// ErrInvalidVersion, ErrDataTooLong, ErrUnencodableChar, ErrLogoTooLarge,
+// ErrNotFound, ErrDecodeFailed or ErrUnsupported; test for them with
+// errors.Is.
 //
-//	ErrInvalidConfig, ErrInvalidArgument, ErrInvalidVersion,
-//	ErrDataTooLong, ErrUnencodableChar, ErrInvalidImageOutput
+// All functions and methods are safe for concurrent use, and a *Code is
+// immutable.
 package qr
