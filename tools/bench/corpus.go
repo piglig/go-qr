@@ -79,8 +79,8 @@ func DegradedCorpus(scale int) ([]Sample, error) {
 	rng := rand.New(rand.NewSource(1)) // deterministic across runs
 	out := make([]Sample, 0, len(clean))
 	for _, s := range clean {
-		img := rotate(s.Img, 7*math.Pi/180)        // 7° skew
-		img = addGaussianNoise(img, 18.0, rng)      // mild sensor noise
+		img := rotate(s.Img, 7*math.Pi/180)    // 7° skew
+		img = addGaussianNoise(img, 18.0, rng) // mild sensor noise
 		out = append(out, Sample{Name: s.Name + "_degraded", Text: s.Text, Ecc: s.Ecc, Img: img})
 	}
 	return out, nil
@@ -112,8 +112,8 @@ func rotate(src image.Image, theta float64) *image.Gray {
 		for x := 0; x < w; x++ {
 			dx := float64(x) - cx
 			dy := float64(y) - cy
-			sx := int(math.Round(cos*dx+sin*dy + cx))
-			sy := int(math.Round(-sin*dx+cos*dy + cy))
+			sx := int(math.Round(cos*dx + sin*dy + cx))
+			sy := int(math.Round(-sin*dx + cos*dy + cy))
 			if sx < 0 || sx >= w || sy < 0 || sy >= h {
 				dst.SetGray(x, y, color.Gray{Y: 255})
 				continue

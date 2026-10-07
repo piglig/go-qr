@@ -6,8 +6,6 @@ import (
 	"runtime"
 	"sync/atomic"
 	"testing"
-
-	"github.com/stretchr/testify/assert"
 )
 
 func TestEncodeBatch_PreservesOrder(t *testing.T) {
@@ -16,14 +14,14 @@ func TestEncodeBatch_PreservesOrder(t *testing.T) {
 		inputs[i] = BatchInput{Text: fmt.Sprintf("item-%d", i), Ecc: Low}
 	}
 	results := EncodeBatch(inputs, 8)
-	assert.Len(t, results, 50)
+	assertLen(t, results, 50)
 
 	// Encode sequentially and compare each code's modules to prove order is stable.
 	for i, r := range results {
-		assert.NoError(t, r.Err)
+		assertNoError(t, r.Err)
 		want, err := EncodeText(inputs[i].Text, inputs[i].Ecc)
-		assert.NoError(t, err)
-		assert.Equal(t, want.Size(), r.QR.Size())
+		assertNoError(t, err)
+		assertEqual(t, want.Size(), r.QR.Size())
 		for y := 0; y < want.Size(); y++ {
 			for x := 0; x < want.Size(); x++ {
 				if want.Module(x, y) != r.QR.Module(x, y) {
@@ -41,17 +39,17 @@ func TestEncodeBatch_PartialFailure(t *testing.T) {
 		{Text: "also ok", Ecc: Low},
 	}
 	results := EncodeBatch(inputs, 4)
-	assert.NoError(t, results[0].Err)
-	assert.Error(t, results[1].Err)
-	assert.NoError(t, results[2].Err)
-	assert.NotNil(t, results[0].QR)
-	assert.Nil(t, results[1].QR)
-	assert.NotNil(t, results[2].QR)
+	assertNoError(t, results[0].Err)
+	assertError(t, results[1].Err)
+	assertNoError(t, results[2].Err)
+	assertNotNil(t, results[0].QR)
+	assertNil(t, results[1].QR)
+	assertNotNil(t, results[2].QR)
 }
 
 func TestEncodeBatch_EmptyInput(t *testing.T) {
 	results := EncodeBatch(nil, 4)
-	assert.Len(t, results, 0)
+	assertLen(t, results, 0)
 }
 
 func TestEncodeBatch_ConcurrencyDefaultsToCPU(t *testing.T) {
@@ -59,8 +57,8 @@ func TestEncodeBatch_ConcurrencyDefaultsToCPU(t *testing.T) {
 	inputs := []BatchInput{{Text: "a", Ecc: Low}, {Text: "b", Ecc: Low}}
 	r1 := EncodeBatch(inputs, 0)
 	r2 := EncodeBatch(inputs, runtime.NumCPU())
-	assert.NoError(t, r1[0].Err)
-	assert.NoError(t, r2[0].Err)
+	assertNoError(t, r1[0].Err)
+	assertNoError(t, r2[0].Err)
 }
 
 func TestRenderBatch_PNG(t *testing.T) {
@@ -71,8 +69,8 @@ func TestRenderBatch_PNG(t *testing.T) {
 	}
 	results := RenderBatch(jobs, 4)
 	for i, r := range results {
-		assert.NoError(t, r.Err, "job %d", i)
-		assert.Equal(t, []byte{0x89, 0x50, 0x4e, 0x47}, r.Bytes[:4], "job %d not PNG", i)
+		assertNoError(t, r.Err, "job %d", i)
+		assertEqual(t, []byte{0x89, 0x50, 0x4e, 0x47}, r.Bytes[:4], "job %d not PNG", i)
 	}
 }
 
@@ -84,9 +82,9 @@ func TestRenderBatch_SVG(t *testing.T) {
 	}
 	results := RenderBatch(jobs, 4)
 	for i, r := range results {
-		assert.NoError(t, r.Err, "job %d", i)
-		assert.True(t, bytes.Contains(r.Bytes, []byte("<svg")), "job %d not SVG", i)
-		assert.True(t, bytes.Contains(r.Bytes, []byte("fill-rule=\"evenodd\"")), "job %d not optimal SVG", i)
+		assertNoError(t, r.Err, "job %d", i)
+		assertTrue(t, bytes.Contains(r.Bytes, []byte("<svg")), "job %d not SVG", i)
+		assertTrue(t, bytes.Contains(r.Bytes, []byte("fill-rule=\"evenodd\"")), "job %d not optimal SVG", i)
 	}
 }
 
@@ -94,15 +92,15 @@ func TestRenderBatch_DefaultConfigAndColors(t *testing.T) {
 	// Omitting Config and colors should still work.
 	jobs := []BatchJob{{Text: "defaults", Ecc: Low, Format: FormatSVG}}
 	results := RenderBatch(jobs, 1)
-	assert.NoError(t, results[0].Err)
-	assert.Contains(t, string(results[0].Bytes), "#FFFFFF")
-	assert.Contains(t, string(results[0].Bytes), "#000000")
+	assertNoError(t, results[0].Err)
+	assertContains(t, string(results[0].Bytes), "#FFFFFF")
+	assertContains(t, string(results[0].Bytes), "#000000")
 }
 
 func TestRenderBatch_InvalidFormat(t *testing.T) {
 	jobs := []BatchJob{{Text: "x", Ecc: Low, Format: Format(99)}}
 	results := RenderBatch(jobs, 1)
-	assert.Error(t, results[0].Err)
+	assertError(t, results[0].Err)
 }
 
 func TestRunWorkers_RunsAllIndices(t *testing.T) {
@@ -111,7 +109,7 @@ func TestRunWorkers_RunsAllIndices(t *testing.T) {
 		atomic.AddInt32(&seen[i], 1)
 	})
 	for i, v := range seen {
-		assert.Equal(t, int32(1), v, "index %d not visited exactly once", i)
+		assertEqual(t, int32(1), v, "index %d not visited exactly once", i)
 	}
 }
 

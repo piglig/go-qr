@@ -2,8 +2,6 @@ package go_qr
 
 import (
 	"testing"
-
-	"github.com/stretchr/testify/assert"
 )
 
 // bufFromBits builds a BitBuffer from a sequence of bits.
@@ -37,7 +35,7 @@ func TestBitBuffer_AppendBitAndGet(t *testing.T) {
 	if b.len() != len(pattern) {
 		t.Fatalf("len = %d, want %d", b.len(), len(pattern))
 	}
-	assert.Equal(t, pattern, bitsOf(b))
+	assertEqual(t, pattern, bitsOf(b))
 	if b.getBit(len(pattern)) {
 		t.Fatal("read past end should be 0")
 	}
@@ -46,7 +44,7 @@ func TestBitBuffer_AppendBitAndGet(t *testing.T) {
 func TestBitBuffer_Clone(t *testing.T) {
 	a := bufFromBits(true, false, true, true, false, true, true)
 	b := a.clone()
-	assert.Equal(t, bitsOf(a), bitsOf(b))
+	assertEqual(t, bitsOf(a), bitsOf(b))
 
 	// Mutating the clone must not affect the original.
 	b.appendBit(true)
@@ -79,7 +77,7 @@ func TestBitBuffer_AppendBits(t *testing.T) {
 			if tt.wantErr {
 				return
 			}
-			assert.Equal(t, tt.wantBits, bitsOf(b))
+			assertEqual(t, tt.wantBits, bitsOf(b))
 		})
 	}
 }
@@ -127,7 +125,7 @@ func TestBitBuffer_AppendData(t *testing.T) {
 			if tt.wantErr {
 				return
 			}
-			assert.Equal(t, tt.wantBits, bitsOf(tt.a))
+			assertEqual(t, tt.wantBits, bitsOf(tt.a))
 		})
 	}
 }

@@ -1,7 +1,6 @@
 package go_qr
 
 import (
-	"github.com/stretchr/testify/assert"
 	"testing"
 )
 
@@ -70,7 +69,7 @@ func TestMakeAlphanumeric(t *testing.T) {
 				return
 			}
 
-			assert.Equal(t, tt.wantData, got)
+			assertEqual(t, tt.wantData, got)
 		})
 	}
 }
@@ -118,7 +117,7 @@ func TestMakeNumeric(t *testing.T) {
 				return
 			}
 
-			assert.Equal(t, tt.wantData, got)
+			assertEqual(t, tt.wantData, got)
 		})
 	}
 }
@@ -169,7 +168,7 @@ func TestMakeBytes(t *testing.T) {
 				t.Errorf("MakeBytes() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			assert.Equal(t, tt.wantData, got)
+			assertEqual(t, tt.wantData, got)
 		})
 	}
 }
@@ -240,7 +239,7 @@ func TestMakeKanji(t *testing.T) {
 				t.Errorf("MakeBytes() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			assert.Equal(t, tt.wantData, got)
+			assertEqual(t, tt.wantData, got)
 		})
 	}
 }
@@ -310,7 +309,7 @@ func TestNewQrSegment(t *testing.T) {
 				t.Errorf("newQrSegment() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			assert.Equal(t, tt.wantData, got)
+			assertEqual(t, tt.wantData, got)
 		})
 	}
 }
@@ -402,7 +401,7 @@ func TestMakeSegments(t *testing.T) {
 				t.Errorf("MakeSegments() error = %v, wantErr %v", err, tt.wantErr)
 			}
 
-			assert.Equal(t, tt.wantSegments, got)
+			assertEqual(t, tt.wantSegments, got)
 		})
 	}
 }
@@ -464,7 +463,7 @@ func TestMakeEci(t *testing.T) {
 				t.Errorf("MakeSegments() error = %v, wantErr %v", err, tt.wantErr)
 			}
 
-			assert.Equal(t, tt.wantSegment, got)
+			assertEqual(t, tt.wantSegment, got)
 		})
 	}
 }
@@ -555,7 +554,7 @@ func TestQrSegment_GetData(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.wantData, tt.segment.cloneData())
+			assertEqual(t, tt.wantData, tt.segment.cloneData())
 		})
 	}
 }
