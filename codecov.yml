@@ -1,0 +1,10 @@
+coverage:
+  status:
+    project:
+      default:
+        # Removing well-tested code lowers the total slightly; only flag real
+        # drops.
+        threshold: 0.5%
+    patch:
+      default:
+        target: auto
