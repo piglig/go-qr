@@ -54,4 +54,7 @@
 //
 // All functions and methods are safe for concurrent use, and a *Code is
 // immutable.
+//
+// Guides, a tutorial and an interactive playground are linked from
+// https://github.com/piglig/go-qr.
 package qr
