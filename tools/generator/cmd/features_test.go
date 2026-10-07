@@ -298,4 +298,11 @@ func TestPayloadEPCRejectsBadIBAN(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "check digits") {
 		t.Fatalf("error = %v, want the IBAN check digits to be rejected", err)
 	}
+	if strings.Count(err.Error(), "payload:") != 1 {
+		t.Errorf("error = %q, want a single \"payload:\" prefix", err)
+	}
+	err = run([]string{"encode", "-stdout", "png", "-payload", "otp", "-content", "issuer=x"}, &out, &errOut)
+	if err == nil || err.Error() != "payload: otp: secret is required" {
+		t.Errorf("error = %v, want CLI errors prefixed once", err)
+	}
 }
