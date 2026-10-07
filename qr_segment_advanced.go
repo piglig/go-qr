@@ -50,6 +50,9 @@ func MakeSegmentsOptimally(text string, ecl Ecc, minVersion, maxVersion int) ([]
 // code points into segments accordingly. Returns an array of pointers to
 // QrSegment or an error.
 func makeSegmentsOptimallyWithVersion(codePoints []int, version int) ([]*QrSegment, error) {
+	if len(codePoints) == 0 {
+		return []*QrSegment{}, nil
+	}
 	charModes, err := computeCharacterModes(codePoints, version)
 	if err != nil {
 		return nil, err
