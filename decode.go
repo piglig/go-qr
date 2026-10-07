@@ -475,7 +475,13 @@ func JoinStructuredAppend(parts ...*DecodeResult) (string, error) {
 // of the top-left finder pattern, where the runs from the left edge of the
 // symbol read 1:1:3:1:1. Using the center rows rather than the top edge
 // keeps this exact for rounded and circular finder styles.
+//
+// The finder spans 7 of at least 21 modules, so a run sequence wider than a
+// third of the symbol is not the finder, even if its ratios match: the top
+// row 7:5:9:5:7 (the finder edge, then data) fits 1:1:3:1:1 within the
+// ratio tolerance at about five times the real pitch.
 func finderPitch(dark func(x, y int) bool, minX, minY, maxX, maxY int) (float64, bool) {
+	maxTotal := (maxX-minX+1)/3 + 1
 	var totals []int
 	for y := minY; y <= minY+(maxY-minY)/2; y++ {
 		if !dark(minX, y) {
@@ -493,8 +499,9 @@ func finderPitch(dark func(x, y int) bool, minX, minY, maxX, maxY int) (float64,
 			s[state]++
 		}
 		complete := state == 5 || (state == 4 && x > maxX)
-		if _, ok := checkFinderRatio(s); complete && ok {
-			totals = append(totals, s[0]+s[1]+s[2]+s[3]+s[4])
+		total := s[0] + s[1] + s[2] + s[3] + s[4]
+		if _, ok := checkFinderRatio(s); complete && ok && total <= maxTotal {
+			totals = append(totals, total)
 		} else if len(totals) > 0 {
 			break // past the finder's center rows
 		}
