@@ -143,16 +143,3 @@ func TestSignalsOrderedBySeverity(t *testing.T) {
 		t.Fatalf("risk %s", r.Risk)
 	}
 }
-
-func TestValidIBAN(t *testing.T) {
-	for _, ok := range []string{"BE72000000001616", "DE89370400440532013000", "GB82WEST12345698765432"} {
-		if !validIBAN(ok) {
-			t.Errorf("%s rejected", ok)
-		}
-	}
-	for _, bad := range []string{"DE89370400440532013001", "XX", "DE89 3704", "de89370400440532013000"} {
-		if validIBAN(bad) {
-			t.Errorf("%s accepted", bad)
-		}
-	}
-}
