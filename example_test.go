@@ -1,8 +1,10 @@
 package qr_test
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"image/color"
 	"strings"
 
 	"github.com/piglig/go-qr/v2"
@@ -94,4 +96,56 @@ func ExampleCode_Module() {
 	fmt.Println()
 	// Output:
 	// #######.##.##.#######
+}
+
+func ExampleCode_PNG() {
+	code, err := qr.Encode("https://example.com")
+	if err != nil {
+		panic(err)
+	}
+	png, err := code.PNG(qr.WithScale(4), qr.WithQuietZone(2))
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println(len(png) > 0, string(png[1:4]))
+	// Output: true PNG
+}
+
+func ExampleCode_WriteSVG() {
+	code, _ := qr.Encode("hi", qr.WithECC(qr.ECCLow))
+	var buf strings.Builder
+	err := code.WriteSVG(&buf,
+		qr.WithScale(1),
+		qr.WithForeground(color.RGBA{R: 0x33, G: 0x33, B: 0x99, A: 0xff}),
+		qr.WithBackground(color.Transparent),
+	)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println(strings.Contains(buf.String(), `viewBox="0 0 29 29"`))
+	// Output: true
+}
+
+func ExampleCode_String() {
+	code, _ := qr.Encode("hi", qr.WithECC(qr.ECCLow), qr.WithMask(0))
+	var buf strings.Builder
+	_ = code.WriteText(&buf, qr.WithQuietZone(0))
+	// Two module rows per line: 21 rows fit in 11 lines.
+	fmt.Println(strings.Count(buf.String(), "\n"))
+	// Output: 11
+}
+
+func ExampleBatch() {
+	jobs := []qr.BatchJob{
+		{Text: "first", Format: qr.FormatPNG},
+		{Text: "second", Format: qr.FormatSVG, Render: []qr.RenderOption{qr.WithScale(4)}},
+		{Text: strings.Repeat("x", 5000)}, // too long: fails alone
+	}
+	for i, r := range qr.Batch(context.Background(), jobs, 0) {
+		fmt.Println(i, len(r.Data) > 0, errors.Is(r.Err, qr.ErrDataTooLong))
+	}
+	// Output:
+	// 0 true false
+	// 1 true false
+	// 2 false true
 }

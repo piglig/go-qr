@@ -100,12 +100,11 @@ type encodeOpts struct {
 	ECC     string // low|medium|quartile|high
 	Simple  bool   // single-mode segmentation instead of optimal mode switching
 
-	Scale, Border int
+	Scale, QuietZone int
 
-	PngOutput          string
-	SvgOutput          string
-	SvgOptimizedOutput string
-	Stdout             string // png|svg|svg-optimized — write bytes to stdout
+	PngOutput string
+	SvgOutput string
+	Stdout    string // png|svg|text — write to stdout
 
 	Logo      string
 	LogoRatio float64
@@ -124,11 +123,10 @@ func runEncode(args []string, stdout, stderr io.Writer) error {
 	fs.StringVar(&o.ECC, "ecc", "high", "Error correction: low, medium, quartile, high")
 	fs.BoolVar(&o.Simple, "simple", false, "Encode the whole text in one mode instead of switching modes optimally")
 	fs.IntVar(&o.Scale, "scale", 10, "Scale (pixels per module for PNG / units per module for SVG)")
-	fs.IntVar(&o.Border, "border", 4, "Quiet-zone border, in modules")
+	fs.IntVar(&o.QuietZone, "quiet-zone", 4, "Light margin around the symbol, in modules")
 	fs.StringVar(&o.PngOutput, "png", "", "Output PNG file path")
 	fs.StringVar(&o.SvgOutput, "svg", "", "Output SVG file path")
-	fs.StringVar(&o.SvgOptimizedOutput, "svg-optimized", "", "Output optimized SVG file path")
-	fs.StringVar(&o.Stdout, "stdout", "", "Write to stdout instead of files: png, svg, or svg-optimized")
+	fs.StringVar(&o.Stdout, "stdout", "", "Write to stdout instead of files: png, svg, or text")
 	fs.StringVar(&o.Logo, "logo", "", "Path to a logo image (png/jpeg/gif) to embed in the center")
 	fs.Float64Var(&o.LogoRatio, "logo-ratio", 0.2, "Logo side length as fraction of QR module-area side")
 	fs.BoolVar(&o.Verify, "verify", false, "Decode the generated PNG and assert it matches the input (exit 1 on mismatch)")
@@ -142,7 +140,8 @@ Examples:
   generator encode -png hello.png hello
   generator encode -simple -png simple.png "https://example.com/order/12345678901234567890"
   generator encode -stdout png hello > hello.png
-  generator encode -svg-optimized hello.svg hello
+  generator encode -svg hello.svg hello
+  generator encode -stdout text hello
   generator encode -payload wifi -png wifi.png "ssid=home,password=s3cret,auth=WPA"
   generator encode -png hello.png -verify hello
 `)
@@ -188,21 +187,17 @@ Examples:
 		return err
 	}
 
-	baseCfg := func(extra ...qr.Option) *qr.QrCodeImgConfig {
-		all := append([]qr.Option{}, imgOpts...)
-		all = append(all, extra...)
-		return qr.NewQrCodeImgConfig(o.Scale, o.Border, all...)
-	}
+	renderOpts := append([]qr.RenderOption{qr.WithScale(o.Scale), qr.WithQuietZone(o.QuietZone)}, imgOpts...)
 
 	if o.Stdout != "" {
-		if bad := setFlagsAmong(fs, "png", "svg", "svg-optimized"); len(bad) > 0 {
+		if bad := setFlagsAmong(fs, "png", "svg"); len(bad) > 0 {
 			return fmt.Errorf("-stdout cannot be combined with file outputs (%s)", strings.Join(bad, ", "))
 		}
-		return writeStdout(code, baseCfg, o.Stdout, stdout)
+		return writeStdout(code, renderOpts, o.Stdout, stdout)
 	}
 
 	if o.PngOutput != "" {
-		b, err := code.ToPNGBytes(baseCfg())
+		b, err := code.PNG(renderOpts...)
 		if err != nil {
 			return fmt.Errorf("png: %w", err)
 		}
@@ -211,18 +206,17 @@ Examples:
 		}
 	}
 	if o.SvgOutput != "" {
-		if err := code.SVG(baseCfg(), o.SvgOutput); err != nil {
+		b, err := code.SVG(renderOpts...)
+		if err != nil {
 			return fmt.Errorf("svg: %w", err)
 		}
-	}
-	if o.SvgOptimizedOutput != "" {
-		if err := code.SVG(baseCfg(qr.WithOptimalSVG()), o.SvgOptimizedOutput); err != nil {
-			return fmt.Errorf("svg-optimized: %w", err)
+		if err := os.WriteFile(o.SvgOutput, b, 0644); err != nil {
+			return err
 		}
 	}
 
 	if o.Verify {
-		b, err := code.ToPNGBytes(baseCfg())
+		b, err := code.PNG(renderOpts...)
 		if err != nil {
 			return fmt.Errorf("verify: render: %w", err)
 		}
@@ -238,7 +232,7 @@ Examples:
 		fmt.Fprint(stderr, renderPreview(code))
 	}
 
-	noOutputRequested := o.PngOutput == "" && o.SvgOutput == "" && o.SvgOptimizedOutput == ""
+	noOutputRequested := o.PngOutput == "" && o.SvgOutput == ""
 	if noOutputRequested && !o.Preview && !o.Verify {
 		// Nothing requested — fall back to preview so the command is never silent.
 		fmt.Fprint(stderr, renderPreview(code))
@@ -423,8 +417,8 @@ func parseECC(s string) (qr.ECC, error) {
 	}
 }
 
-func buildImgOpts(logoPath string, logoRatio float64) ([]qr.Option, error) {
-	var opts []qr.Option
+func buildImgOpts(logoPath string, logoRatio float64) ([]qr.RenderOption, error) {
+	var opts []qr.RenderOption
 	if logoPath != "" {
 		img, err := loadImage(logoPath)
 		if err != nil {
@@ -445,16 +439,16 @@ func loadImage(path string) (image.Image, error) {
 	return img, err
 }
 
-func writeStdout(code *qr.Code, baseCfg func(...qr.Option) *qr.QrCodeImgConfig, format string, w io.Writer) error {
+func writeStdout(code *qr.Code, opts []qr.RenderOption, format string, w io.Writer) error {
 	switch strings.ToLower(format) {
 	case "png":
-		return code.WriteAsPNG(baseCfg(), w)
+		return code.WritePNG(w, opts...)
 	case "svg":
-		return code.WriteAsSVG(baseCfg(), w)
-	case "svg-optimized":
-		return code.WriteAsSVG(baseCfg(qr.WithOptimalSVG()), w)
+		return code.WriteSVG(w, opts...)
+	case "text":
+		return code.WriteText(w, opts...)
 	default:
-		return fmt.Errorf("unknown stdout format %q (expected png, svg, or svg-optimized)", format)
+		return fmt.Errorf("unknown stdout format %q (expected png, svg, or text)", format)
 	}
 }
 

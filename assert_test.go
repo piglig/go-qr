@@ -58,13 +58,6 @@ func assertNoError(t testing.TB, err error, msgAndArgs ...any) {
 	}
 }
 
-func assertError(t testing.TB, err error, msgAndArgs ...any) {
-	t.Helper()
-	if err == nil {
-		failf(t, msgAndArgs, "expected an error, got nil")
-	}
-}
-
 func assertTrue(t testing.TB, v bool, msgAndArgs ...any) {
 	t.Helper()
 	if !v {
@@ -104,13 +97,6 @@ func assertNotEmpty(t testing.TB, v any, msgAndArgs ...any) {
 	t.Helper()
 	if isNil(v) || reflect.ValueOf(v).Len() == 0 {
 		failf(t, msgAndArgs, "expected a non-empty value")
-	}
-}
-
-func assertGreater(t testing.TB, a, b int, msgAndArgs ...any) {
-	t.Helper()
-	if a <= b {
-		failf(t, msgAndArgs, "%d is not greater than %d", a, b)
 	}
 }
 
