@@ -291,7 +291,9 @@ Run "generator <command> -h" for command-specific flags.
 ```
 
 ### `encode`
-Content is given as a positional argument or via `-content`.
+Content is given as a positional argument or via `-content`. Flags must come
+before positional content; anything after the first positional argument is
+treated as content.
 ```
 -content string         Content to encode (overridden by a positional argument)
 -payload string         Structured payload: wifi, vcard, email, sms, tel, geo, url
@@ -314,8 +316,7 @@ Content is given as a positional argument or via `-content`.
 
 `-optimal` uses `MakeSegmentsOptimally` to select numeric, alphanumeric, byte,
 and Kanji segments, then encodes the smallest fitting version with ECC boosting.
-It is independent of `-svg-optimized`, which controls SVG rendering. Place flags
-before positional content, or supply the text with `-content`.
+It is independent of `-svg-optimized`, which controls SVG rendering.
 
 ### `decode`
 ```
@@ -326,11 +327,11 @@ Examples:
 ```shell
 generator encode hello                                       # ANSI preview
 generator encode -optimal -png optimal.png "https://example.com/order/12345678901234567890"
-generator encode hello -png hello.png -svg hello.svg
-generator encode hello -svg-optimized hello.svg              # compact single-path SVG
-generator encode -payload wifi "ssid=home,password=s3cret,auth=WPA" -png wifi.png
-generator encode hello -png hello.png -verify                # round-trip decode check
-generator encode hello -stdout png > hello.png
+generator encode -png hello.png -svg hello.svg hello
+generator encode -svg-optimized hello.svg hello              # compact single-path SVG
+generator encode -payload wifi -png wifi.png "ssid=home,password=s3cret,auth=WPA"
+generator encode -png hello.png -verify hello                # round-trip decode check
+generator encode -stdout png hello > hello.png
 generator decode hello.png                                   # decode an image, print text
 generator version
 ```

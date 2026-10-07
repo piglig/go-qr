@@ -18,6 +18,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   segmentation for the first version that fits.
 - Return empty segments for empty input in `MakeSegmentsOptimally` instead of
   panicking.
+- Place flags before positional content in `generator` help and README
+  examples; flags after the content were encoded as text.
 
 ## [1.1.0] - 2026-05-29
 
