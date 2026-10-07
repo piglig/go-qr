@@ -2,13 +2,68 @@ package cmd
 
 import (
 	"bytes"
+	"errors"
+	"image/png"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	go_qr "github.com/piglig/go-qr"
 	"github.com/piglig/go-qr/tools/verify"
 )
+
+func TestRun_EncodeOptimal(t *testing.T) {
+	mixed := strings.Repeat("a111111", 5)
+	tests := []struct {
+		name, text, ecc string
+		flags           []string
+		wantVersion     int
+	}{
+		{"default segmentation", mixed, "low", nil, 3},
+		{"optimal segmentation", mixed, "low", []string{"-optimal"}, 2},
+		{"explicitly disabled", mixed, "low", []string{"-optimal=false"}, 3},
+		{"high beyond version 27", strings.Repeat("a", 740), "high", []string{"-optimal"}, 30},
+		{"quartile beyond version 27", strings.Repeat("a", 984), "quartile", []string{"-optimal"}, 31},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			args := []string{"encode", "-ecc", tt.ecc, "-scale", "3", "-stdout", "png"}
+			args = append(args, tt.flags...)
+			args = append(args, tt.text)
+			var out, errOut bytes.Buffer
+			if err := run(args, &out, &errOut); err != nil {
+				t.Fatal(err)
+			}
+			cfg, err := png.DecodeConfig(bytes.NewReader(out.Bytes()))
+			if err != nil {
+				t.Fatal(err)
+			}
+			wantEdge := (17 + 4*tt.wantVersion + 8) * 3
+			if cfg.Width != wantEdge || cfg.Height != wantEdge {
+				t.Fatalf("PNG is %dx%d, want %dx%d for version %d", cfg.Width, cfg.Height, wantEdge, wantEdge, tt.wantVersion)
+			}
+			got, err := verify.DecodePNG(out.Bytes())
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got != tt.text {
+				t.Fatalf("decoded text = %q, want %q", got, tt.text)
+			}
+		})
+	}
+}
+
+func TestRun_EncodeOptimalTooLong(t *testing.T) {
+	var out, errOut bytes.Buffer
+	err := run([]string{"encode", "-optimal", "-ecc", "high", "-stdout", "png", "-content", strings.Repeat("a", 1274)}, &out, &errOut)
+	if !errors.Is(err, go_qr.ErrDataTooLong) {
+		t.Fatalf("error = %v, want ErrDataTooLong", err)
+	}
+	if out.Len() != 0 {
+		t.Fatal("capacity error wrote output")
+	}
+}
 
 func TestRun_EncodeStdoutPNG(t *testing.T) {
 	var out, errOut bytes.Buffer

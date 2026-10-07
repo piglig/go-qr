@@ -1,8 +1,12 @@
 package go_qr
 
 import (
-	"github.com/stretchr/testify/assert"
+	"errors"
+	"fmt"
+	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestMakeSegmentsOptimally(t *testing.T) {
@@ -214,5 +218,73 @@ func TestCountUtf8Bytes(t *testing.T) {
 
 			assert.Equal(t, tt.wantData, got)
 		})
+	}
+}
+
+func TestMakeSegmentsOptimallyVersionSearch(t *testing.T) {
+	tests := []struct {
+		name                   string
+		text                   string
+		ecl                    Ecc
+		minVersion, maxVersion int
+		wantVersion            int // Zero means the payload must not fit.
+	}{
+		{"fits after version 27", strings.Repeat("a", 740), High, 1, 40, 30},
+		{"quartile after version 27", strings.Repeat("a", 984), Quartile, 1, 40, 31},
+		{"minimum above version 27", strings.Repeat("a", 740), High, 28, 40, 30},
+		{"fits at version 40", strings.Repeat("a", 1273), High, 1, 40, 40},
+		{"exceeds version 40", strings.Repeat("a", 1274), High, 1, 40, 0},
+		{"maximum before version 10", strings.Repeat("a", 40), Low, 1, 2, 0},
+		{"fits between checkpoints", strings.Repeat("a", 40), Low, 1, 3, 3},
+		{"mixed modes in first range", strings.Repeat("a111111", 5), Low, 1, 40, 2},
+		{"mixed modes with tight maximum", strings.Repeat("a111111", 5), Low, 1, 2, 2},
+		{"fixed version fits", strings.Repeat("a", 740), High, 30, 30, 30},
+		{"fixed version too small", strings.Repeat("a", 740), High, 28, 28, 0},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			segs, err := MakeSegmentsOptimally(tt.text, tt.ecl, tt.minVersion, tt.maxVersion)
+			if tt.wantVersion == 0 {
+				if !errors.Is(err, ErrDataTooLong) {
+					t.Fatalf("MakeSegmentsOptimally() error = %v, want ErrDataTooLong", err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			qr, err := EncodeSegments(segs, tt.ecl, tt.minVersion, tt.maxVersion, -1, false)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := (qr.Size() - 17) / 4; got != tt.wantVersion {
+				t.Fatalf("encoded version = %d, want %d", got, tt.wantVersion)
+			}
+		})
+	}
+}
+
+func TestMakeSegmentsOptimallyCapacityAtEveryVersion(t *testing.T) {
+	for _, ecl := range []Ecc{Low, Medium, Quartile, High} {
+		for version := MinVersion; version <= MaxVersion; version++ {
+			t.Run(fmt.Sprintf("ecc%d/version%d", ecl, version), func(t *testing.T) {
+				// Lowercase ASCII requires byte mode. Choose the largest byte
+				// payload fitting this version, accounting for its segment header.
+				capacity := getNumDataCodewords(version, ecl) * 8
+				n := (capacity - 4 - Byte.numCharCountBits(version)) / 8
+				text := strings.Repeat("a", n)
+				segs, err := MakeSegmentsOptimally(text, ecl, MinVersion, version)
+				if err != nil {
+					t.Fatalf("maximum fitting payload: %v", err)
+				}
+				bits := getTotalBits(segs, version)
+				if bits < 0 || bits > capacity {
+					t.Fatalf("returned segments use %d bits, capacity is %d", bits, capacity)
+				}
+				if _, err := MakeSegmentsOptimally(text+"a", ecl, MinVersion, version); !errors.Is(err, ErrDataTooLong) {
+					t.Fatalf("one byte over capacity: error = %v, want ErrDataTooLong", err)
+				}
+			})
+		}
 	}
 }

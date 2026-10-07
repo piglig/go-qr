@@ -296,6 +296,7 @@ Content is given as a positional argument or via `-content`.
 -content string         Content to encode (overridden by a positional argument)
 -payload string         Structured payload: wifi, vcard, email, sms, tel, geo, url
 -ecc string             Error correction: low, medium, quartile, high (default "high")
+-optimal                Use optimal mixed-mode segmentation (default false)
 -scale int              Pixels per module for PNG / units per module for SVG (default 10)
 -border int             Quiet-zone border, in modules (default 4)
 -png string             Output PNG file path
@@ -311,6 +312,11 @@ Content is given as a positional argument or via `-content`.
 `-stdout` cannot be combined with file outputs (`-png` / `-svg` /
 `-svg-optimized`); the conflict is rejected with an error.
 
+`-optimal` uses `MakeSegmentsOptimally` to select numeric, alphanumeric, byte,
+and Kanji segments, then encodes the smallest fitting version with ECC boosting.
+It is independent of `-svg-optimized`, which controls SVG rendering. Place flags
+before positional content, or supply the text with `-content`.
+
 ### `decode`
 ```
 generator decode <image-file>   # png/jpeg/gif; prints decoded text to stdout
@@ -319,6 +325,7 @@ generator decode <image-file>   # png/jpeg/gif; prints decoded text to stdout
 Examples:
 ```shell
 generator encode hello                                       # ANSI preview
+generator encode -optimal -png optimal.png "https://example.com/order/12345678901234567890"
 generator encode hello -png hello.png -svg hello.svg
 generator encode hello -svg-optimized hello.svg              # compact single-path SVG
 generator encode -payload wifi "ssid=home,password=s3cret,auth=WPA" -png wifi.png

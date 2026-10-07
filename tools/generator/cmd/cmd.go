@@ -98,6 +98,7 @@ type encodeOpts struct {
 	Content string
 	Payload string // wifi|vcard|email|sms|tel|geo|url; interprets Content as key=val pairs
 	ECC     string // low|medium|quartile|high
+	Optimal bool   // use optimal mixed-mode segmentation
 
 	Scale, Border int
 
@@ -121,6 +122,7 @@ func runEncode(args []string, stdout, stderr io.Writer) error {
 	fs.StringVar(&o.Content, "content", "", "Content to encode; may also be given as a positional argument")
 	fs.StringVar(&o.Payload, "payload", "", "Structured payload type: wifi, vcard, email, sms, tel, geo, url")
 	fs.StringVar(&o.ECC, "ecc", "high", "Error correction: low, medium, quartile, high")
+	fs.BoolVar(&o.Optimal, "optimal", false, "Use optimal mixed-mode segmentation")
 	fs.IntVar(&o.Scale, "scale", 10, "Scale (pixels per module for PNG / units per module for SVG)")
 	fs.IntVar(&o.Border, "border", 4, "Quiet-zone border, in modules")
 	fs.StringVar(&o.PngOutput, "png", "", "Output PNG file path")
@@ -138,6 +140,7 @@ func runEncode(args []string, stdout, stderr io.Writer) error {
 		fmt.Fprint(stderr, `
 Examples:
   generator encode hello -png hello.png
+  generator encode -optimal -png optimal.png "https://example.com/order/12345678901234567890"
   generator encode hello -stdout png > hello.png
   generator encode hello -svg-optimized hello.svg
   generator encode -payload wifi "ssid=home,password=s3cret,auth=WPA" -png wifi.png
@@ -171,7 +174,16 @@ Examples:
 		return err
 	}
 
-	qr, err := go_qr.EncodeText(text, ecl)
+	var qr *go_qr.QrCode
+	if o.Optimal {
+		var segs []*go_qr.QrSegment
+		segs, err = go_qr.MakeSegmentsOptimally(text, ecl, go_qr.MinVersion, go_qr.MaxVersion)
+		if err == nil {
+			qr, err = go_qr.EncodeStandardSegments(segs, ecl)
+		}
+	} else {
+		qr, err = go_qr.EncodeText(text, ecl)
+	}
 	if err != nil {
 		return fmt.Errorf("encode: %w", err)
 	}
