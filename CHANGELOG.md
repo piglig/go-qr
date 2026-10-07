@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `go-qr-mcp` (module `github.com/piglig/go-qr/mcp`, mcp/v0.1.0), a Model
+  Context Protocol server for AI assistants with three tools: `decode_qr`
+  decodes local images exactly, `generate_qr` creates plain, payload and
+  styled codes and verifies each one, and `inspect_qr` explains what content
+  does with risk signals (lookalike or disguised URLs, link shorteners, open
+  Wi-Fi, 2FA secrets, invalid IBANs, USSD codes, text addressed to an AI).
+  `-root` confines file access. See the [MCP guide](docs/guides/mcp.md).
+
 ### Changed
 
 - `Code.Verify` names colors in its errors as `#RRGGBB` instead of Go struct

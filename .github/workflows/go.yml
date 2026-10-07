@@ -26,6 +26,7 @@ jobs:
           cache-dependency-path: |
             go.mod
             tools/go.sum
+            mcp/go.sum
 
       - name: gofmt
         run: |
@@ -34,22 +35,25 @@ jobs:
             echo "Run gofmt -w on:"; echo "$unformatted"; exit 1
           fi
 
-      # tools/go.mod pins the released library so `go install` works; the
-      # workspace makes CI build and test the tools against this checkout.
+      # tools/go.mod and mcp/go.mod pin the released library so `go install`
+      # works; the workspace makes CI build and test them against this
+      # checkout.
       - name: Use workspace
-        run: go work init . ./tools ./demo
+        run: go work init . ./tools ./demo ./mcp
 
       - name: Vet
         run: |
           go vet ./...
           (cd tools && go vet ./...)
           (cd demo && go vet ./... && GOOS=js GOARCH=wasm go vet ./...)
+          (cd mcp && go vet ./...)
 
       - name: Test
         run: |
           go test -race -coverprofile=coverage.out -covermode=atomic ./...
           (cd tools && go test -race ./...)
           (cd demo && go test ./... && GOOS=js GOARCH=wasm go build -o /dev/null .)
+          (cd mcp && go test -race ./...)
 
       - name: Fuzz smoke test
         run: |
@@ -91,6 +95,7 @@ jobs:
         with:
           go-version: stable
       - run: go install golang.org/x/vuln/cmd/govulncheck@latest
-      - run: go work init . ./tools ./demo
+      - run: go work init . ./tools ./demo ./mcp
       - run: govulncheck ./...
       - run: cd tools && govulncheck ./...
+      - run: cd mcp && govulncheck ./...
