@@ -192,11 +192,7 @@ func (q *builder) drawVersion() {
 		return
 	}
 
-	rem := q.version
-	for i := 0; i < 12; i++ {
-		rem = (rem << 1) ^ ((rem >> 11) * 0x1F25)
-	}
-	bits := q.version<<12 | rem
+	bits := versionBits(q.version)
 
 	for i := 0; i < 18; i++ {
 		bit := getBit(bits, i)

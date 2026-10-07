@@ -1,6 +1,9 @@
 package qr
 
-import "fmt"
+import (
+	"fmt"
+	"unicode/utf8"
+)
 
 // bitReader reads big-endian bits out of the corrected data codewords.
 type bitReader struct {
@@ -17,137 +20,245 @@ func (r *bitReader) read(n int) (int, bool) {
 	}
 	v := 0
 	for i := 0; i < n; i++ {
-		bit := 0
-		if (r.data[r.pos>>3]>>uint(7-(r.pos&7)))&1 != 0 {
-			bit = 1
-		}
-		v = v<<1 | bit
+		v = v<<1 | int(r.data[r.pos>>3]>>uint(7-r.pos&7))&1
 		r.pos++
 	}
 	return v, true
 }
 
-// parseBitstream walks the segment structure (reverse of EncodeSegments) and
-// reconstructs the original string. Supports numeric, alphanumeric, byte, and
-// ECI (skipped) modes; kanji is reported as unsupported for now.
-func parseBitstream(data []byte, ver int) (string, []SegmentInfo, error) {
+// noECI marks a segment that is not governed by any ECI designator.
+const noECI = -1
+
+// Mode indicators this decoder recognizes but does not support.
+const (
+	modeStructuredAppend = 0x3
+	modeFNC1First        = 0x5
+	modeFNC1Second       = 0x9
+	modeHanzi            = 0xD // GB/T 18284 Chinese mode
+)
+
+// parseBitstream walks the segment structure of the corrected data codewords
+// (the reverse of encodeSegments) and returns the decoded text and segments.
+//
+// Byte segments are interpreted by the ECI in effect: UTF-8 (26),
+// ISO-8859-1 (1, 3), Shift_JIS (20) or ASCII (27, 170). Without an ECI, a
+// segment that is valid UTF-8 is read as UTF-8 and anything else as
+// ISO-8859-1, which matches what common encoders emit.
+func parseBitstream(data []byte, ver int) (string, []DecodedSegment, error) {
 	r := &bitReader{data: data}
-	var out []byte
-	var segs []SegmentInfo
+	var text []byte
+	var segs []DecodedSegment
+	eci := noECI
 
 	for r.remaining() >= 4 {
-		modeBits, ok := r.read(4)
-		if !ok || modeBits == 0 {
-			break // terminator or exhausted
-		}
-
-		mode := Mode(modeBits)
+		bits, _ := r.read(4)
+		mode := Mode(bits)
 		switch mode {
-		case ModeNumeric, ModeAlphanumeric, ModeByte:
+		case 0: // terminator
+			return string(text), segs, nil
 		case ModeECI:
-			// ECI: read the assignment number and ignore it (byte mode here is
-			// already raw bytes / UTF-8 from the encoder).
-			if _, err := readECI(r); err != nil {
+			v, err := readECI(r)
+			if err != nil {
 				return "", nil, err
 			}
+			eci = v
+			segs = append(segs, DecodedSegment{Mode: ModeECI, ECI: v})
 			continue
-		case ModeKanji:
-			return "", nil, fmt.Errorf("%w: kanji segment decode not yet implemented", ErrUnsupported)
+		case ModeNumeric, ModeAlphanumeric, ModeByte, ModeKanji:
+		case modeStructuredAppend:
+			return "", nil, fmt.Errorf("%w: structured append", ErrUnsupported)
+		case modeFNC1First, modeFNC1Second:
+			return "", nil, fmt.Errorf("%w: FNC1 (GS1) mode", ErrUnsupported)
+		case modeHanzi:
+			return "", nil, fmt.Errorf("%w: Hanzi mode", ErrUnsupported)
 		default:
-			return "", nil, fmt.Errorf("%w: unknown mode 0x%x", ErrDecodeFailed, modeBits)
+			return "", nil, fmt.Errorf("%w: unknown mode %#x", ErrDecodeFailed, bits)
 		}
 
 		count, ok := r.read(mode.charCountBits(ver))
 		if !ok {
-			return "", nil, fmt.Errorf("%w: truncated char count", ErrDecodeFailed)
+			return "", nil, fmt.Errorf("%w: truncated character count", ErrDecodeFailed)
 		}
 
-		start := len(out)
+		seg := DecodedSegment{Mode: mode, NumChars: count, ECI: eci}
 		var err error
-		switch {
-		case mode == ModeNumeric:
-			out, err = readNumeric(r, count, out)
-		case mode == ModeAlphanumeric:
-			out, err = readAlphanumeric(r, count, out)
-		case mode == ModeByte:
-			out, err = readByte(r, count, out)
+		switch mode {
+		case ModeNumeric:
+			seg.Data, err = readNumeric(r, count)
+			text = append(text, seg.Data...)
+		case ModeAlphanumeric:
+			seg.Data, err = readAlphanumeric(r, count)
+			text = append(text, seg.Data...)
+		case ModeByte:
+			if seg.Data, err = readBytes(r, count); err == nil {
+				text, err = appendCharset(text, seg.Data, eci)
+			}
+		case ModeKanji:
+			seg.Data, text, err = readKanji(r, count, text)
 		}
 		if err != nil {
 			return "", nil, err
 		}
-		segs = append(segs, SegmentInfo{Mode: modeBits, NumChars: count, Bytes: append([]byte(nil), out[start:]...)})
+		segs = append(segs, seg)
 	}
-	return string(out), segs, nil
+	return string(text), segs, nil
 }
 
+// readECI reads an ECI assignment number in its 1-, 2- or 3-byte form.
 func readECI(r *bitReader) (int, error) {
+	truncated := fmt.Errorf("%w: truncated ECI", ErrDecodeFailed)
 	first, ok := r.read(8)
 	if !ok {
-		return 0, fmt.Errorf("%w: truncated ECI", ErrDecodeFailed)
+		return 0, truncated
 	}
 	switch {
-	case first < 0x80:
+	case first&0x80 == 0:
 		return first, nil
-	case first < 0xC0:
+	case first&0xC0 == 0x80:
 		rest, ok := r.read(8)
 		if !ok {
-			return 0, fmt.Errorf("%w: truncated ECI", ErrDecodeFailed)
+			return 0, truncated
 		}
 		return (first&0x3F)<<8 | rest, nil
-	default:
+	case first&0xE0 == 0xC0:
 		rest, ok := r.read(16)
 		if !ok {
-			return 0, fmt.Errorf("%w: truncated ECI", ErrDecodeFailed)
+			return 0, truncated
 		}
 		return (first&0x1F)<<16 | rest, nil
 	}
+	return 0, fmt.Errorf("%w: invalid ECI designator %#x", ErrDecodeFailed, first)
 }
 
-func readNumeric(r *bitReader, count int, out []byte) ([]byte, error) {
+func readNumeric(r *bitReader, count int) ([]byte, error) {
+	out := make([]byte, 0, count)
 	for count > 0 {
-		n := count
-		if n > 3 {
-			n = 3
-		}
-		bits := n*3 + 1
-		v, ok := r.read(bits)
+		n := min(count, 3)
+		v, ok := r.read(n*3 + 1)
 		if !ok {
-			return nil, fmt.Errorf("%w: truncated numeric", ErrDecodeFailed)
+			return nil, fmt.Errorf("%w: truncated numeric segment", ErrDecodeFailed)
 		}
-		// zero-pad to n digits
-		digits := []byte(fmt.Sprintf("%0*d", n, v))
-		out = append(out, digits...)
+		if v >= [4]int{1, 10, 100, 1000}[n] {
+			return nil, fmt.Errorf("%w: numeric group %d exceeds %d digits", ErrDecodeFailed, v, n)
+		}
+		start := len(out)
+		out = append(out, "000"[:n]...)
+		for i := start + n - 1; i >= start; i-- {
+			out[i] = byte('0' + v%10)
+			v /= 10
+		}
 		count -= n
 	}
 	return out, nil
 }
 
-func readAlphanumeric(r *bitReader, count int, out []byte) ([]byte, error) {
-	for count >= 2 {
+func readAlphanumeric(r *bitReader, count int) ([]byte, error) {
+	out := make([]byte, 0, count)
+	for ; count >= 2; count -= 2 {
 		v, ok := r.read(11)
 		if !ok {
-			return nil, fmt.Errorf("%w: truncated alphanumeric", ErrDecodeFailed)
+			return nil, fmt.Errorf("%w: truncated alphanumeric segment", ErrDecodeFailed)
+		}
+		if v >= 45*45 {
+			return nil, fmt.Errorf("%w: alphanumeric pair value %d out of range", ErrDecodeFailed, v)
 		}
 		out = append(out, alphanumericCharset[v/45], alphanumericCharset[v%45])
-		count -= 2
 	}
 	if count == 1 {
 		v, ok := r.read(6)
 		if !ok {
-			return nil, fmt.Errorf("%w: truncated alphanumeric", ErrDecodeFailed)
+			return nil, fmt.Errorf("%w: truncated alphanumeric segment", ErrDecodeFailed)
+		}
+		if v >= 45 {
+			return nil, fmt.Errorf("%w: alphanumeric value %d out of range", ErrDecodeFailed, v)
 		}
 		out = append(out, alphanumericCharset[v])
 	}
 	return out, nil
 }
 
-func readByte(r *bitReader, count int, out []byte) ([]byte, error) {
-	for i := 0; i < count; i++ {
-		v, ok := r.read(8)
-		if !ok {
-			return nil, fmt.Errorf("%w: truncated byte", ErrDecodeFailed)
-		}
-		out = append(out, byte(v))
+func readBytes(r *bitReader, count int) ([]byte, error) {
+	if count*8 > r.remaining() {
+		return nil, fmt.Errorf("%w: truncated byte segment", ErrDecodeFailed)
+	}
+	out := make([]byte, count)
+	for i := range out {
+		v, _ := r.read(8)
+		out[i] = byte(v)
 	}
 	return out, nil
+}
+
+// readKanji reads count 13-bit Kanji values. It returns the segment's
+// Shift_JIS bytes and text with the characters appended as UTF-8; values
+// without a Unicode mapping become U+FFFD.
+func readKanji(r *bitReader, count int, text []byte) (sjis, _ []byte, err error) {
+	if count*13 > r.remaining() {
+		return nil, nil, fmt.Errorf("%w: truncated kanji segment", ErrDecodeFailed)
+	}
+	sjis = make([]byte, 0, 2*count)
+	for i := 0; i < count; i++ {
+		v, _ := r.read(13)
+		b1, b2 := kanjiToShiftJIS(v)
+		sjis = append(sjis, b1, b2)
+		c, ok := kanjiRune(v)
+		if !ok {
+			c = utf8.RuneError
+		}
+		text = utf8.AppendRune(text, c)
+	}
+	return sjis, text, nil
+}
+
+// appendCharset appends the byte-mode payload b to text as UTF-8, decoding
+// it according to the ECI assignment in effect.
+func appendCharset(text, b []byte, eci int) ([]byte, error) {
+	switch eci {
+	case noECI:
+		if utf8.Valid(b) {
+			return append(text, b...), nil
+		}
+		return appendLatin1(text, b), nil
+	case 26, 27, 170: // UTF-8; US-ASCII is a subset
+		return append(text, b...), nil
+	case 1, 3: // ISO-8859-1
+		return appendLatin1(text, b), nil
+	case 20: // Shift_JIS
+		return appendShiftJIS(text, b), nil
+	}
+	return nil, fmt.Errorf("%w: ECI %d character set", ErrUnsupported, eci)
+}
+
+func appendLatin1(text, b []byte) []byte {
+	for _, c := range b {
+		text = utf8.AppendRune(text, rune(c))
+	}
+	return text
+}
+
+// appendShiftJIS decodes Shift_JIS: ASCII, half-width katakana, and the
+// double-byte range covered by the QR Kanji table. Anything else becomes
+// U+FFFD.
+func appendShiftJIS(text, b []byte) []byte {
+	for i := 0; i < len(b); i++ {
+		c := b[i]
+		switch {
+		case c < 0x80:
+			text = append(text, c)
+		case 0xA1 <= c && c <= 0xDF:
+			text = utf8.AppendRune(text, 0xFF61+rune(c-0xA1))
+		case i+1 < len(b):
+			r := utf8.RuneError
+			if v, ok := shiftJISToKanji(c, b[i+1]); ok {
+				if k, ok := kanjiRune(v); ok {
+					r = k
+				}
+			}
+			text = utf8.AppendRune(text, r)
+			i++
+		default:
+			text = utf8.AppendRune(text, utf8.RuneError)
+		}
+	}
+	return text
 }

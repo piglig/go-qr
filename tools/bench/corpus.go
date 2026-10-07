@@ -4,7 +4,7 @@
 // success rate.
 //
 // It lives in the tools submodule because it imports gozxing; the main go-qr
-// library stays dependency-free. Once qr.Decode lands, add it to the
+// library stays dependency-free. The native qr.Decode is registered in the
 // `decoders` registry in decode_bench_test.go and every benchmark/accuracy
 // case runs against both implementations with no further changes.
 package bench

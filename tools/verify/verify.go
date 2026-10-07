@@ -18,11 +18,11 @@ import (
 
 // Decode returns the text content of a QR code rendered in the given image.
 func Decode(img image.Image) (string, error) {
-	text, err := qr.Decode(img)
+	res, err := qr.Decode(img)
 	if err != nil {
 		return "", fmt.Errorf("decode: %w", err)
 	}
-	return text, nil
+	return res.Text, nil
 }
 
 // DecodePNG decodes a QR code from PNG bytes.

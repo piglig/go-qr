@@ -2,7 +2,6 @@ package qr
 
 import (
 	"fmt"
-	"image"
 	"math"
 	"sort"
 )
@@ -23,19 +22,14 @@ type finderPattern struct {
 	count      int // number of merged horizontal hits (confidence)
 }
 
-// robustSample binarizes, locates finders, and samples the grid via affine.
-func robustSample(img image.Image) ([][]bool, error) {
-	b := img.Bounds()
-	w, h := b.Dx(), b.Dy()
-	if w < 21 || h < 21 {
-		return nil, fmt.Errorf("%w: image too small", ErrNotFound)
-	}
-	bitmap := binarizeFast(img, b, w, h)
+// robustSample locates the finder patterns in a binarized image and samples
+// the module grid through the affine transform they define.
+func robustSample(bm []bool, w, h int) ([][]bool, error) {
 	dark := func(x, y int) bool {
 		if x < 0 || y < 0 || x >= w || y >= h {
 			return false
 		}
-		return bitmap[y*w+x]
+		return bm[y*w+x]
 	}
 
 	finders, err := findFinders(dark, w, h)
@@ -53,9 +47,13 @@ func robustSample(img image.Image) ([][]bool, error) {
 	if err != nil {
 		return nil, err
 	}
-	ver := (dimension - 17) / 4
-	if ver < MinVersion || ver > MaxVersion {
-		return nil, fmt.Errorf("%w: bad dimension %d", ErrNotFound, dimension)
+	// From version 7 on, the version information next to the top-right and
+	// bottom-left finders gives the exact size; the estimate from finder
+	// spacing can be off by a version under rotation or blur.
+	if (dimension-17)/4 >= 7 {
+		if v, ok := readVersionNear(dark, tl, tr, bl); ok {
+			dimension = 4*v + 17
+		}
 	}
 
 	// Affine: finder centers sit at module (3.5,3.5), (dim-3.5,3.5),
@@ -86,7 +84,7 @@ func robustSample(img image.Image) ([][]bool, error) {
 func findFinders(dark func(x, y int) bool, w, h int) ([]finderPattern, error) {
 	var cands []finderPattern
 
-	add := func(cx, cy, module float64, total int) {
+	add := func(cx, cy, module float64) {
 		for i := range cands {
 			if math.Abs(cands[i].x-cx) < module && math.Abs(cands[i].y-cy) < module {
 				n := float64(cands[i].count)
@@ -116,8 +114,14 @@ func findFinders(dark func(x, y int) bool, w, h int) ([]finderPattern, error) {
 						if module, ok := checkFinderRatio(s); ok {
 							cx := float64(x) - float64(s[4]) - float64(s[3]) - float64(s[2])/2
 							total := s[0] + s[1] + s[2] + s[3] + s[4]
-							if cy, ok := crossCheckVertical(dark, h, int(cx+0.5), y, s[2], total); ok {
-								add(cx, cy, module, total)
+							// Confirm vertically, then horizontally through the
+							// refined center.
+							x0 := int(cx + 0.5)
+							if dy, mv, ok := crossCheck(dark, x0, y, 0, 1, s[2], total); ok {
+								cy := float64(y) + dy
+								if dx, mh, ok := crossCheck(dark, x0, int(cy+0.5), 1, 0, s[2], total); ok {
+									add(float64(x0)+dx, cy, (module+mv+mh)/3)
+								}
 							}
 						}
 						s[0], s[1], s[2], s[3], s[4] = s[2], s[3], s[4], 1, 0
@@ -133,11 +137,65 @@ func findFinders(dark func(x, y int) bool, w, h int) ([]finderPattern, error) {
 		}
 	}
 
+	return selectFinders(cands)
+}
+
+// selectFinders picks the three candidates that look most like the finders
+// of one symbol: similar module sizes, placed at the corners of a right
+// isosceles triangle at least 14 modules on a side. Data modules can mimic
+// the 1:1:3:1:1 pattern, and the strongest candidates alone are not reliable
+// in large symbols.
+func selectFinders(cands []finderPattern) ([]finderPattern, error) {
 	if len(cands) < 3 {
 		return nil, fmt.Errorf("%w: found %d finder patterns", ErrNotFound, len(cands))
 	}
 	sort.Slice(cands, func(i, j int) bool { return cands[i].count > cands[j].count })
-	return cands[:3], nil
+	if len(cands) > maxFinderCandidates {
+		cands = cands[:maxFinderCandidates]
+	}
+
+	best, bestScore := [3]int{}, math.Inf(1)
+	for i := 0; i < len(cands); i++ {
+		for j := i + 1; j < len(cands); j++ {
+			for k := j + 1; k < len(cands); k++ {
+				if s := finderTripleScore(cands[i], cands[j], cands[k]); s < bestScore {
+					best, bestScore = [3]int{i, j, k}, s
+				}
+			}
+		}
+	}
+	if math.IsInf(bestScore, 1) {
+		return nil, fmt.Errorf("%w: no three finder patterns form a symbol", ErrNotFound)
+	}
+	return []finderPattern{cands[best[0]], cands[best[1]], cands[best[2]]}, nil
+}
+
+// maxFinderCandidates bounds the O(n³) triple search.
+const maxFinderCandidates = 16
+
+// finderTripleScore rates how well three candidates fit one symbol; lower is
+// better and +Inf rejects the triple.
+func finderTripleScore(a, b, c finderPattern) float64 {
+	lo := min(a.moduleSize, b.moduleSize, c.moduleSize)
+	hi := max(a.moduleSize, b.moduleSize, c.moduleSize)
+	if hi > 1.5*lo {
+		return math.Inf(1)
+	}
+	d := []float64{dist(a, b), dist(b, c), dist(a, c)}
+	sort.Float64s(d)
+	leg1, leg2, hyp := d[0], d[1], d[2]
+	module := (a.moduleSize + b.moduleSize + c.moduleSize) / 3
+	if legModules := leg1 / module; legModules < 14*0.8 || legModules > (4*MaxVersion+10)*1.2 {
+		return math.Inf(1)
+	}
+	isosceles := (leg2 - leg1) / leg2
+	right := math.Abs(hyp-math.Hypot(leg1, leg2)) / hyp
+	if isosceles > 0.2 || right > 0.1 {
+		return math.Inf(1)
+	}
+	// Prefer candidates confirmed on many rows.
+	support := 1 / float64(min(a.count, b.count, c.count))
+	return isosceles + right + (hi-lo)/hi + 0.1*support
 }
 
 // checkFinderRatio reports whether the five run lengths match 1:1:3:1:1 and
@@ -165,64 +223,58 @@ func checkFinderRatio(s [5]int) (float64, bool) {
 	return 0, false
 }
 
-// crossCheckVertical confirms a horizontal candidate by scanning vertically
-// through (centerX, startY), returning the refined center y.
-func crossCheckVertical(dark func(x, y int) bool, h, centerX, startY, maxCount, originalTotal int) (float64, bool) {
+// crossCheck confirms a candidate by measuring the 1:1:3:1:1 runs through
+// (cx, cy) along direction (dx, dy). It returns the refined center
+// coordinate along that axis and the module size of the runs. The total run
+// length must be within 40% of originalTotal, the length seen by the scan that
+// produced the candidate.
+func crossCheck(dark func(x, y int) bool, cx, cy, dx, dy, maxCount, originalTotal int) (float64, float64, bool) {
+	// dark reports false outside the image, so every loop ends: dark runs
+	// stop at the border and light runs are bounded by maxCount.
 	var s [5]int
-	i := startY
-	for i >= 0 && dark(centerX, i) {
+	at := func(i int) bool { return dark(cx+i*dx, cy+i*dy) }
+
+	i := 0
+	for at(i) && s[2] <= 4*maxCount {
 		s[2]++
 		i--
 	}
-	if i < 0 {
-		return 0, false
-	}
-	for i >= 0 && !dark(centerX, i) && s[1] <= maxCount {
+	for ; !at(i) && s[1] <= maxCount; i-- {
 		s[1]++
-		i--
 	}
-	if i < 0 || s[1] > maxCount {
-		return 0, false
-	}
-	for i >= 0 && dark(centerX, i) && s[0] <= maxCount {
+	for ; at(i) && s[0] <= maxCount; i-- {
 		s[0]++
-		i--
 	}
-	if s[0] > maxCount {
-		return 0, false
+	if s[0] == 0 || s[1] > maxCount || s[0] > maxCount {
+		return 0, 0, false
 	}
 
-	i = startY + 1
-	for i < h && dark(centerX, i) {
+	i = 1
+	for at(i) && s[2] <= 4*maxCount {
 		s[2]++
 		i++
 	}
-	if i >= h {
-		return 0, false
-	}
-	for i < h && !dark(centerX, i) && s[3] <= maxCount {
+	for ; !at(i) && s[3] <= maxCount; i++ {
 		s[3]++
-		i++
 	}
-	if i >= h || s[3] > maxCount {
-		return 0, false
-	}
-	for i < h && dark(centerX, i) && s[4] <= maxCount {
+	for ; at(i) && s[4] <= maxCount; i++ {
 		s[4]++
-		i++
 	}
-	if s[4] > maxCount {
-		return 0, false
+	if s[4] == 0 || s[3] > maxCount || s[4] > maxCount {
+		return 0, 0, false
 	}
 
 	total := s[0] + s[1] + s[2] + s[3] + s[4]
 	if 5*abs(total-originalTotal) >= 2*originalTotal {
-		return 0, false
+		return 0, 0, false
 	}
-	if _, ok := checkFinderRatio(s); !ok {
-		return 0, false
+	module, ok := checkFinderRatio(s)
+	if !ok {
+		return 0, 0, false
 	}
-	return float64(i) - float64(s[4]) - float64(s[3]) - float64(s[2])/2, true
+	// Center relative to the start point, along the axis.
+	center := float64(i) - float64(s[4]) - float64(s[3]) - float64(s[2])/2
+	return center, module, true
 }
 
 // orderFinders identifies which of the three patterns is top-left, top-right,
@@ -279,4 +331,66 @@ func computeDimension(tl, tr, bl finderPattern, moduleSize float64) (int, error)
 		return 0, fmt.Errorf("%w: estimated dimension %.1f maps to version %d", ErrNotFound, raw, ver)
 	}
 	return ver*4 + 17, nil
+}
+
+// readVersionNear reads the two 18-bit version information blocks by
+// sampling relative to the finder beside each one, using that finder's own
+// module size, so the result does not depend on the estimated dimension. It
+// returns the first block that BCH-corrects to a valid version.
+func readVersionNear(dark func(x, y int) bool, tl, tr, bl finderPattern) (int, bool) {
+	sample := func(f finderPattern, ux, uy, vx, vy float64, du, dv func(i int) float64) int {
+		bits := 0
+		for i := 0; i < 18; i++ {
+			px := f.x + du(i)*ux + dv(i)*vx
+			py := f.y + du(i)*uy + dv(i)*vy
+			if dark(int(px+0.5), int(py+0.5)) {
+				bits |= 1 << i
+			}
+		}
+		return bits
+	}
+	// unit returns the vector from a to b scaled to one module of size m.
+	unit := func(a, b finderPattern, m float64) (float64, float64) {
+		d := dist(a, b)
+		return (b.x - a.x) / d * m, (b.y - a.y) / d * m
+	}
+
+	// Block 1 sits left of the top-right finder: bit i is module
+	// (size-11+i%3, i/3), offset (i%3-7, i/3-3) from the finder center.
+	cx, cy := unit(tl, tr, tr.moduleSize)
+	rx, ry := unit(tl, bl, tr.moduleSize)
+	if v, ok := correctVersion(sample(tr, cx, cy, rx, ry,
+		func(i int) float64 { return float64(i%3 - 7) },
+		func(i int) float64 { return float64(i/3 - 3) })); ok {
+		return v, true
+	}
+
+	// Block 2 is its transpose, above the bottom-left finder.
+	cx, cy = unit(tl, tr, bl.moduleSize)
+	rx, ry = unit(tl, bl, bl.moduleSize)
+	return correctVersion(sample(bl, cx, cy, rx, ry,
+		func(i int) float64 { return float64(i/3 - 3) },
+		func(i int) float64 { return float64(i%3 - 7) }))
+}
+
+// versionBits returns the 18-bit version information codeword: the version
+// followed by its BCH(18,6) remainder (ISO/IEC 18004 Annex D).
+func versionBits(ver int) int {
+	rem := ver
+	for i := 0; i < 12; i++ {
+		rem = (rem << 1) ^ ((rem >> 11) * 0x1F25)
+	}
+	return ver<<12 | rem
+}
+
+// correctVersion returns the version whose codeword is nearest to bits, if it
+// is within the 3-bit correction capacity of the code.
+func correctVersion(bits int) (int, bool) {
+	best, bestDist := 0, 4
+	for v := 7; v <= MaxVersion; v++ {
+		if d := bitCount(versionBits(v) ^ bits); d < bestDist {
+			best, bestDist = v, d
+		}
+	}
+	return best, bestDist <= 3
 }
