@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `WithFinderShape` (`FinderSquare`, `FinderRounded`, `FinderCircle`) style
   PNG, SVG and `Image` output with anti-aliased edges. Every combination
   keeps module centers and the finder proportions readers rely on.
+- `WithFinderColor` colors the finder rings and centers, and `WithGradient`
+  paints the dark modules with a linear gradient (SVG `<linearGradient>`).
+- `Code.Verify` checks the contrast of every dark color in use: the
+  foreground, both ends of a gradient, and the finder colors.
 
 ### Changed
 

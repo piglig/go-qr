@@ -28,6 +28,14 @@ func TestGoldenSVG(t *testing.T) {
 		{"high_ecc", "The quick brown fox jumps over the lazy dog", ECCHigh, []RenderOption{WithScale(6)}},
 		{"dots_circle_finders", "Hello, world!", ECCLow, []RenderOption{WithModuleShape(ModuleDot), WithFinderShape(FinderCircle)}},
 		{"rounded_rounded_finders", "Hello, world!", ECCLow, []RenderOption{WithModuleShape(ModuleRounded), WithFinderShape(FinderRounded), WithScale(8)}},
+		{"gradient_rounded", "Hello, world!", ECCLow, []RenderOption{
+			WithGradient(color.RGBA{R: 0x1a, G: 0x23, B: 0x7e, A: 0xff}, color.RGBA{G: 0x69, B: 0x5c, A: 0xff}, 45),
+			WithModuleShape(ModuleRounded), WithFinderShape(FinderRounded),
+		}},
+		{"finder_colors", "Hello, world!", ECCLow, []RenderOption{
+			WithModuleShape(ModuleDot), WithFinderShape(FinderCircle),
+			WithFinderColor(color.RGBA{R: 0xc6, G: 0x28, B: 0x28, A: 0xff}, color.Black),
+		}},
 		{"colors", "Hello, world!", ECCLow, []RenderOption{
 			WithForeground(color.RGBA{R: 0x1a, G: 0x2b, B: 0x3c, A: 0xff}),
 			WithBackground(color.Transparent),

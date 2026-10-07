@@ -36,12 +36,17 @@ func (c *Code) WriteSVG(w io.Writer, opts ...RenderOption) error {
 	if !colorIsTransparent(cfg.bg) {
 		sb.WriteString("\t<rect width=\"" + sideStr + "\" height=\"" + sideStr + "\" fill=\"" + colorToSVG(cfg.bg) + "\"/>\n")
 	}
-	if cfg.styled() {
+	if cfg.gradient != nil {
+		cfg.gradient.writeSVGDef(&sb, side)
+	}
+	if cfg.shaped() || cfg.finderColorSet {
 		c.writeStyledSVGBody(&sb, &cfg)
 	} else {
+		// Plain squares in one fill: a single outline of every dark region.
+		fill, _, _ := cfg.svgFills()
 		sb.WriteString("\t<path d=\"")
 		c.assembleBorderGraph().writePath(&sb, cfg.quietZone, cfg.scale)
-		sb.WriteString("\" fill=\"" + colorToSVG(cfg.fg) + "\" fill-rule=\"evenodd\"/>\n")
+		sb.WriteString("\" fill=\"" + fill + "\" fill-rule=\"evenodd\"/>\n")
 	}
 	if cfg.logo != nil {
 		if err := cfg.logo.writeSVG(&sb, c.Size(), &cfg); err != nil {
