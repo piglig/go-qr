@@ -50,7 +50,11 @@ jobs:
           (cd tools && go test -race ./...)
 
       - name: Fuzz smoke test
-        run: go test -run='^$' -fuzz='^FuzzDecodeNoPanic$' -fuzztime=30s .
+        run: |
+          for target in FuzzEncode FuzzEncodeStructured FuzzRender FuzzDecodeRoundTrip FuzzDecodeNoPanic; do
+            go test -run='^$' -fuzz="^$target\$" -fuzztime=15s .
+          done
+          go test -run='^$' -fuzz='^FuzzParse$' -fuzztime=15s ./payload
 
       - name: Staticcheck
         if: matrix.go == 'stable'

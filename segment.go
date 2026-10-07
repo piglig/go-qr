@@ -184,6 +184,14 @@ func fnc1Segment() Segment { return Segment{mode: ModeFNC1} }
 // as "%%" (ISO/IEC 18004 §7.4.8.2); other modes carry it as is.
 const gs1Separator = 0x1D
 
+// gs1AlnumSeparator reports whether the GS separator at runes[i] can be
+// written as '%' in an alphanumeric segment. Followed by another GS or by
+// '%', it would read back as a literal '%' ("%%"), so it must be carried in
+// byte mode instead.
+func gs1AlnumSeparator(runes []rune, i int) bool {
+	return i+1 >= len(runes) || runes[i+1] != gs1Separator && runes[i+1] != '%'
+}
+
 // gs1Alphanumeric rewrites s for an alphanumeric segment in a GS1 symbol.
 func gs1Alphanumeric(s string) string {
 	return strings.NewReplacer("%", "%%", string(rune(gs1Separator)), "%").Replace(s)
@@ -237,7 +245,8 @@ func simpleSegments(text string, gs1 bool) []Segment {
 	case isNumeric(text):
 		s, _ := NumericSegment(text)
 		return []Segment{s}
-	case gs1 && isAlphanumeric(strings.ReplaceAll(text, string(rune(gs1Separator)), "")):
+	case gs1 && isAlphanumeric(strings.ReplaceAll(text, string(rune(gs1Separator)), "")) &&
+		!strings.Contains(text, "\x1d\x1d") && !strings.Contains(text, "\x1d%"):
 		s, _ := AlphanumericSegment(gs1Alphanumeric(text))
 		return []Segment{s}
 	case !gs1 && isAlphanumeric(text):

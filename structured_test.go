@@ -187,3 +187,19 @@ func TestGS1WithStructuredAppend(t *testing.T) {
 	assertNoError(t, err)
 	assertEqual(t, text, got)
 }
+
+// TestGS1AmbiguousSeparators covers separators next to each other or to a
+// literal '%', which the alphanumeric "%" escape cannot represent.
+func TestGS1AmbiguousSeparators(t *testing.T) {
+	for _, text := range []string{"\x1d\x1d", "AB\x1d%CD", "10ABC\x1d\x1d21X", "%\x1d", "\x1d%%\x1d", "12\x1d"} {
+		for _, opts := range [][]EncodeOption{{WithGS1()}, {WithGS1(), WithSimpleSegmentation()}} {
+			res, err := Decode(mustImage(t, mustEncode(t, text, opts...), WithScale(2)))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if res.Text != text {
+				t.Errorf("%q round trips as %q", text, res.Text)
+			}
+		}
+	}
+}

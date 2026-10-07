@@ -18,6 +18,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `Code.Verify` checks the contrast of every dark color in use: the
   foreground, both ends of a gradient, and the finder colors.
 
+### Fixed
+
+- With `WithGS1`, a GS separator followed by another separator or by '%'
+  was written in an alphanumeric segment as "%%", which reads back as a
+  literal '%'. Such separators are now carried in byte mode. Found by the
+  new encoder fuzz tests.
+
 ### Changed
 
 - The decoder's fast path measures the module pitch across the center of
