@@ -87,8 +87,8 @@ Commands:
 Run "generator <command> -h" for command-specific flags.
 
 Examples:
-  generator encode hello -png hello.png
-  generator encode -payload wifi "ssid=home,password=s3cret,auth=WPA" -png wifi.png
+  generator encode -png hello.png hello
+  generator encode -payload wifi -png wifi.png "ssid=home,password=s3cret,auth=WPA"
   generator decode hello.png
 `)
 }
@@ -139,12 +139,12 @@ func runEncode(args []string, stdout, stderr io.Writer) error {
 		fs.PrintDefaults()
 		fmt.Fprint(stderr, `
 Examples:
-  generator encode hello -png hello.png
+  generator encode -png hello.png hello
   generator encode -optimal -png optimal.png "https://example.com/order/12345678901234567890"
-  generator encode hello -stdout png > hello.png
-  generator encode hello -svg-optimized hello.svg
-  generator encode -payload wifi "ssid=home,password=s3cret,auth=WPA" -png wifi.png
-  generator encode hello -png hello.png -verify
+  generator encode -stdout png hello > hello.png
+  generator encode -svg-optimized hello.svg hello
+  generator encode -payload wifi -png wifi.png "ssid=home,password=s3cret,auth=WPA"
+  generator encode -png hello.png -verify hello
 `)
 	}
 
