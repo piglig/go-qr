@@ -29,6 +29,8 @@ your version with `go list -m github.com/piglig/go-qr/v2`.
   payments and more, and parsing them back.
 - [Batch processing](guides/batch.md): generating many codes concurrently.
 - [Command-line tool](guides/cli.md): the `generator` CLI.
+- [AI assistants](guides/mcp.md): the `go-qr-mcp` server that gives Claude,
+  Cursor and other MCP clients decode, generate and inspect tools.
 - [Upgrading to v2](upgrading-to-v2.md): v1 to v2 API mapping.
 
 ## Reference

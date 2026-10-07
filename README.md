@@ -91,7 +91,7 @@ styled, verified code in a few minutes.
 | | |
 | --- | --- |
 | **Tutorial** | [Getting started](docs/getting-started.md) |
-| **Guides** | [Encoding](docs/guides/encoding.md) · [Rendering](docs/guides/rendering.md) · [Styling](docs/guides/styling.md) · [Decoding](docs/guides/decoding.md) · [Payloads](docs/guides/payloads.md) · [Batch processing](docs/guides/batch.md) · [Command-line tool](docs/guides/cli.md) |
+| **Guides** | [Encoding](docs/guides/encoding.md) · [Rendering](docs/guides/rendering.md) · [Styling](docs/guides/styling.md) · [Decoding](docs/guides/decoding.md) · [Payloads](docs/guides/payloads.md) · [Batch processing](docs/guides/batch.md) · [Command-line tool](docs/guides/cli.md) · [AI assistants (MCP)](docs/guides/mcp.md) |
 | **Reference** | [API on pkg.go.dev](https://pkg.go.dev/github.com/piglig/go-qr/v2) · [Errors](docs/reference/errors.md) · [Standards support](docs/reference/standards.md) |
 | **Background** | [How it works](docs/explanation/how-it-works.md) · [Performance](docs/performance.md) · [Troubleshooting](docs/troubleshooting.md) |
 
@@ -104,6 +104,20 @@ generator decode hello.png
 ```
 
 See the [CLI guide](docs/guides/cli.md) for every flag.
+
+## AI assistants
+
+`go-qr-mcp` is an [MCP](https://modelcontextprotocol.io) server that lets
+Claude, Cursor and other assistants decode, generate and inspect QR Codes
+exactly, instead of guessing from pixels, and flags risky content such as
+lookalike URLs or embedded 2FA secrets:
+
+```shell
+go install github.com/piglig/go-qr/mcp/cmd/go-qr-mcp@latest
+claude mcp add go-qr -- go-qr-mcp
+```
+
+See the [MCP guide](docs/guides/mcp.md) for other clients and the tools.
 
 ## Contributing
 

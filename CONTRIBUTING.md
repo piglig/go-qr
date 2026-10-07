@@ -23,17 +23,18 @@ what a change needs before it can be merged.
 | `internal/reedsolomon/` | same | GF(2⁸) Reed–Solomon encoding and correction. |
 | `tools/` | `github.com/piglig/go-qr/tools` | The `generator` CLI, `verify` helpers and the `bench` comparisons with other libraries. |
 | `demo/` | `github.com/piglig/go-qr/demo` | The WebAssembly playground published to GitHub Pages. |
+| `mcp/` | `github.com/piglig/go-qr/mcp` | The `go-qr-mcp` Model Context Protocol server for AI assistants. Needs Go 1.25 or later. |
 | `docs/` | | Documentation; see [docs/README.md](docs/README.md). |
 
 [How it works](docs/explanation/how-it-works.md) maps the library's source
 files to the encode, render and decode pipelines.
 
-`tools` pins a released version of the library so that
-`go install .../generator@latest` works. To develop against your checkout,
+`tools` and `mcp` pin a released version of the library so that
+`go install .../generator@latest` and `go install .../go-qr-mcp@latest` work. To develop against your checkout,
 create a workspace once at the repository root:
 
 ```shell
-go work init . ./tools ./demo
+go work init . ./tools ./demo ./mcp
 ```
 
 `go.work` is ignored by git.
