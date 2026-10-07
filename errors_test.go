@@ -1,4 +1,4 @@
-package go_qr
+package qr
 
 import (
 	"errors"
@@ -9,7 +9,7 @@ import (
 func TestEncodeText_DataTooLongWrapsSentinel(t *testing.T) {
 	// 5000 alphanumeric chars exceed the capacity of every version/ECC level.
 	long := strings.Repeat("A", 5000)
-	_, err := EncodeText(long, High)
+	_, err := encodeText(long, ECCHigh)
 	if err == nil {
 		t.Fatal("expected an error for over-long data")
 	}

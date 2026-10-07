@@ -1,4 +1,4 @@
-package go_qr
+package qr
 
 import (
 	"image"
@@ -14,7 +14,7 @@ func FuzzDecodeRoundTrip(f *testing.F) {
 		f.Add(s)
 	}
 	f.Fuzz(func(t *testing.T, s string) {
-		qr, err := EncodeText(s, Low)
+		qr, err := encodeText(s, ECCLow)
 		if err != nil {
 			t.Skip() // unencodable / too long — not a decode concern
 		}

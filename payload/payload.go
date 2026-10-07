@@ -2,10 +2,10 @@
 //
 // These types produce canonical strings consumable by standard QR code
 // scanners (e.g. Wi-Fi auto-join, contact import, mail compose). Pass the
-// result to go_qr.EncodeText.
+// result to qr.Encode.
 //
 //	wifi := payload.WiFi{SSID: "home", Password: "s3cret", Auth: payload.WPA}
-//	qr, _ := go_qr.EncodeText(wifi.String(), go_qr.Medium)
+//	code, _ := qr.Encode(wifi.String())
 package payload
 
 import (

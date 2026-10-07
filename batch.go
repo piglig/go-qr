@@ -1,4 +1,4 @@
-package go_qr
+package qr
 
 import (
 	"runtime"
@@ -19,14 +19,14 @@ const (
 // BatchInput is one QR code to encode.
 type BatchInput struct {
 	Text string
-	Ecc  Ecc
+	ECC  ECC
 }
 
 // BatchEncodeResult is the result of encoding one BatchInput. Results are
 // returned in input order; a failed item's QR is nil and Err describes the
 // failure, but other items continue to be processed.
 type BatchEncodeResult struct {
-	QR  *QrCode
+	QR  *Code
 	Err error
 }
 
@@ -38,7 +38,7 @@ type BatchEncodeResult struct {
 func EncodeBatch(inputs []BatchInput, concurrency int) []BatchEncodeResult {
 	results := make([]BatchEncodeResult, len(inputs))
 	runWorkers(len(inputs), concurrency, func(i int) {
-		qr, err := EncodeText(inputs[i].Text, inputs[i].Ecc)
+		qr, err := Encode(inputs[i].Text, WithECC(inputs[i].ECC))
 		results[i] = BatchEncodeResult{QR: qr, Err: err}
 	})
 	return results
@@ -47,7 +47,7 @@ func EncodeBatch(inputs []BatchInput, concurrency int) []BatchEncodeResult {
 // BatchJob is one encode-and-render task for RenderBatch.
 type BatchJob struct {
 	Text   string
-	Ecc    Ecc
+	ECC    ECC
 	Format Format
 	// Config is the rendering configuration. If nil, a default
 	// NewQrCodeImgConfig(10, 4) is used. Colors are read from the config
@@ -59,7 +59,7 @@ type BatchJob struct {
 // (useful even on render failure for diagnostics); Bytes holds the rendered
 // output on success.
 type BatchRenderResult struct {
-	QR    *QrCode
+	QR    *Code
 	Bytes []byte
 	Err   error
 }
@@ -78,7 +78,7 @@ func RenderBatch(jobs []BatchJob, concurrency int) []BatchRenderResult {
 }
 
 func renderOne(job BatchJob) BatchRenderResult {
-	qr, err := EncodeText(job.Text, job.Ecc)
+	qr, err := Encode(job.Text, WithECC(job.ECC))
 	if err != nil {
 		return BatchRenderResult{Err: err}
 	}
@@ -139,7 +139,7 @@ func runWorkers(n, concurrency int, fn func(int)) {
 type invalidFormatError Format
 
 func (e invalidFormatError) Error() string {
-	return "go_qr: invalid batch format"
+	return "qr: invalid batch format"
 }
 
 func errInvalidFormat(f Format) error { return invalidFormatError(f) }

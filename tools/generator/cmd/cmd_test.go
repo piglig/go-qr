@@ -9,22 +9,22 @@ import (
 	"strings"
 	"testing"
 
-	go_qr "github.com/piglig/go-qr"
 	"github.com/piglig/go-qr/tools/verify"
+	"github.com/piglig/go-qr/v2"
 )
 
-func TestRun_EncodeOptimal(t *testing.T) {
+func TestRun_EncodeSegmentation(t *testing.T) {
 	mixed := strings.Repeat("a111111", 5)
 	tests := []struct {
 		name, text, ecc string
 		flags           []string
 		wantVersion     int
 	}{
-		{"default segmentation", mixed, "low", nil, 3},
-		{"optimal segmentation", mixed, "low", []string{"-optimal"}, 2},
-		{"explicitly disabled", mixed, "low", []string{"-optimal=false"}, 3},
-		{"high beyond version 27", strings.Repeat("a", 740), "high", []string{"-optimal"}, 30},
-		{"quartile beyond version 27", strings.Repeat("a", 984), "quartile", []string{"-optimal"}, 31},
+		{"optimal by default", mixed, "low", nil, 2},
+		{"simple segmentation", mixed, "low", []string{"-simple"}, 3},
+		{"simple explicitly disabled", mixed, "low", []string{"-simple=false"}, 2},
+		{"high beyond version 27", strings.Repeat("a", 740), "high", nil, 30},
+		{"quartile beyond version 27", strings.Repeat("a", 984), "quartile", nil, 31},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -54,10 +54,10 @@ func TestRun_EncodeOptimal(t *testing.T) {
 	}
 }
 
-func TestRun_EncodeOptimalTooLong(t *testing.T) {
+func TestRun_EncodeTooLong(t *testing.T) {
 	var out, errOut bytes.Buffer
-	err := run([]string{"encode", "-optimal", "-ecc", "high", "-stdout", "png", "-content", strings.Repeat("a", 1274)}, &out, &errOut)
-	if !errors.Is(err, go_qr.ErrDataTooLong) {
+	err := run([]string{"encode", "-ecc", "high", "-stdout", "png", "-content", strings.Repeat("a", 1274)}, &out, &errOut)
+	if !errors.Is(err, qr.ErrDataTooLong) {
 		t.Fatalf("error = %v, want ErrDataTooLong", err)
 	}
 	if out.Len() != 0 {

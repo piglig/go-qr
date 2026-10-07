@@ -1,22 +1,22 @@
-package go_qr
+package qr
 
 import (
 	"testing"
 )
 
-func TestMakeAlphanumeric(t *testing.T) {
+func TestAlphanumericSegment(t *testing.T) {
 	tests := []struct {
 		name     string
 		data     string
 		wantErr  bool
-		wantData *QrSegment
+		wantData Segment
 	}{
 		{
 			name:    "test with a digit",
 			data:    "0",
 			wantErr: false,
-			wantData: &QrSegment{
-				mode:     Alphanumeric,
+			wantData: Segment{
+				mode:     ModeAlphanumeric,
 				numChars: 1,
 				data:     bufFromBits(false, false, false, false, false, false),
 			},
@@ -25,8 +25,8 @@ func TestMakeAlphanumeric(t *testing.T) {
 			name:    "test with normal digits",
 			data:    "123456",
 			wantErr: false,
-			wantData: &QrSegment{
-				mode:     Alphanumeric,
+			wantData: Segment{
+				mode:     ModeAlphanumeric,
 				numChars: 6,
 				data: bufFromBits(false, false, false, false, false, true, false, true, true, true, true, false, false,
 					false, true, false, false, false, true, false, true, true, false, false, false, true, true, true, false,
@@ -37,24 +37,23 @@ func TestMakeAlphanumeric(t *testing.T) {
 			name:    "test with empty data",
 			data:    "",
 			wantErr: false,
-			wantData: &QrSegment{
-				mode:     Alphanumeric,
+			wantData: Segment{
+				mode:     ModeAlphanumeric,
 				numChars: 0,
 				data:     bufFromBits(),
 			},
 		},
 		{
-			name:     "test with a lower case letter",
-			data:     "a",
-			wantErr:  true,
-			wantData: nil,
+			name:    "test with a lower case letter",
+			data:    "a",
+			wantErr: true,
 		},
 		{
 			name:    "test with a uppercase letter",
 			data:    "A",
 			wantErr: false,
-			wantData: &QrSegment{
-				mode:     Alphanumeric,
+			wantData: Segment{
+				mode:     ModeAlphanumeric,
 				numChars: 1,
 				data:     bufFromBits(false, false, true, false, true, false),
 			},
@@ -63,30 +62,32 @@ func TestMakeAlphanumeric(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := MakeAlphanumeric(tt.data)
+			got, err := AlphanumericSegment(tt.data)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("MakeAlphanumeric() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("segment constructor error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 
-			assertEqual(t, tt.wantData, got)
+			if !tt.wantErr {
+				assertSegment(t, tt.wantData, got)
+			}
 		})
 	}
 }
 
-func TestMakeNumeric(t *testing.T) {
+func TestNumericSegment(t *testing.T) {
 	tests := []struct {
 		name     string
 		digits   string
 		wantErr  bool
-		wantData *QrSegment
+		wantData Segment
 	}{
 		{
 			name:    "test with normal digits",
 			digits:  "314159265358979323846264338327950288419716939937510",
 			wantErr: false,
-			wantData: &QrSegment{
-				mode:     Numeric,
+			wantData: Segment{
+				mode:     ModeNumeric,
 				numChars: 51,
 				data: bufFromBits(false, true, false, false, true, true, true, false, true, false, false, false, true,
 					false, false, true, true, true, true, true, false, true, false, false, false, false, true, false, false,
@@ -102,39 +103,40 @@ func TestMakeNumeric(t *testing.T) {
 			},
 		},
 		{
-			name:     "test with empty digit",
-			digits:   "",
-			wantErr:  true,
-			wantData: nil,
+			name:    "test with empty digit",
+			digits:  "",
+			wantErr: true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := MakeNumeric(tt.digits)
+			got, err := NumericSegment(tt.digits)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("MakeNumeric() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("segment constructor error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 
-			assertEqual(t, tt.wantData, got)
+			if !tt.wantErr {
+				assertSegment(t, tt.wantData, got)
+			}
 		})
 	}
 }
 
-func TestMakeBytes(t *testing.T) {
+func TestBytesSegment(t *testing.T) {
 	tests := []struct {
 		name     string
 		data     []byte
 		wantErr  bool
-		wantData *QrSegment
+		wantData Segment
 	}{
 		{
 			name:    "test with non-nil data",
 			data:    []byte("https://www.github.com/piglig"),
 			wantErr: false,
-			wantData: &QrSegment{
-				mode:     Byte,
+			wantData: Segment{
+				mode:     ModeByte,
 				numChars: 29,
 				data: bufFromBits(false, true, true, false, true, false, false, false, false, true, true, true, false, true,
 					false, false, false, true, true, true, false, true, false, false, false, true, true, true, false, false,
@@ -156,36 +158,30 @@ func TestMakeBytes(t *testing.T) {
 		{
 			name:     "test with nil data",
 			data:     nil,
-			wantErr:  true,
-			wantData: nil,
+			wantData: Segment{mode: ModeByte},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := MakeBytes(tt.data)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("MakeBytes() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			assertEqual(t, tt.wantData, got)
+			assertSegment(t, tt.wantData, BytesSegment(tt.data))
 		})
 	}
 }
 
-func TestMakeKanji(t *testing.T) {
+func TestKanjiSegment(t *testing.T) {
 	tests := []struct {
 		name     string
 		data     string
 		wantErr  bool
-		wantData *QrSegment
+		wantData Segment
 	}{
 		{
 			name:    "test with Kanji data",
 			data:    "「魔法少女まどか☆マギカ」って、　ИАИ　ｄｅｓｕ　κα？",
 			wantErr: false,
-			wantData: &QrSegment{
-				mode:     Kanji,
+			wantData: Segment{
+				mode:     ModeKanji,
 				numChars: 29,
 				data: bufFromBits(false, false, false, false, false, false, false, true, true, false, true, false, true, true,
 					false, false, false, false, false, false, false, false, false, false, true, false, false, true, true,
@@ -218,115 +214,46 @@ func TestMakeKanji(t *testing.T) {
 			name:    "test with nil data",
 			data:    "",
 			wantErr: false,
-			wantData: &QrSegment{
-				mode:     Kanji,
+			wantData: Segment{
+				mode:     ModeKanji,
 				numChars: 0,
 				data:     bufFromBits(),
 			},
 		},
 		{
-			name:     "test with signal data",
-			data:     "ꘞ",
-			wantErr:  true,
-			wantData: nil,
+			name:    "test with signal data",
+			data:    "ꘞ",
+			wantErr: true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := MakeKanji(tt.data)
+			got, err := KanjiSegment(tt.data)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("MakeBytes() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("segment constructor error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			assertEqual(t, tt.wantData, got)
+			if !tt.wantErr {
+				assertSegment(t, tt.wantData, got)
+			}
 		})
 	}
 }
 
-func TestNewQrSegment(t *testing.T) {
-	tests := []struct {
-		name     string
-		mode     Mode
-		numCh    int
-		data     *BitBuffer
-		wantErr  bool
-		wantData *QrSegment
-	}{
-		{
-			name:     "test with one numCh and no BitBuffer",
-			mode:     Numeric,
-			numCh:    1,
-			data:     bufFromBits(),
-			wantErr:  false,
-			wantData: &QrSegment{mode: Numeric, numChars: 1, data: bufFromBits()},
-		},
-		{
-			name:     "test with one numCh",
-			mode:     Numeric,
-			numCh:    1,
-			data:     bufFromBits(true),
-			wantErr:  false,
-			wantData: &QrSegment{mode: Numeric, numChars: 1, data: bufFromBits(true)},
-		},
-		{
-			name:     "test with positive numCh",
-			mode:     Numeric,
-			numCh:    10,
-			data:     bufFromBits(true, true, false),
-			wantErr:  false,
-			wantData: &QrSegment{mode: Numeric, numChars: 10, data: bufFromBits(true, true, false)},
-		},
-		{
-			name:     "test with positive numCh and no BitBuffer",
-			mode:     Numeric,
-			numCh:    10,
-			data:     bufFromBits(),
-			wantErr:  false,
-			wantData: &QrSegment{mode: Numeric, numChars: 10, data: bufFromBits()},
-		},
-		{
-			name:     "test with negative numCh",
-			mode:     Numeric,
-			numCh:    -1,
-			data:     bufFromBits(),
-			wantErr:  true,
-			wantData: nil,
-		}, {
-			name:     "test with zero numCh",
-			mode:     Numeric,
-			numCh:    0,
-			data:     bufFromBits(),
-			wantErr:  false,
-			wantData: &QrSegment{mode: Numeric, numChars: 0, data: bufFromBits()},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := newQrSegment(tt.mode, tt.numCh, tt.data)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("newQrSegment() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			assertEqual(t, tt.wantData, got)
-		})
-	}
-}
-
-func TestMakeSegments(t *testing.T) {
+func TestSimpleSegments(t *testing.T) {
 	cases := []struct {
 		name         string
 		text         string
 		wantErr      bool
-		wantSegments []*QrSegment
+		wantSegments []Segment
 	}{
 		{
 			name:    "test with numeric text",
 			text:    "314159265358979323846264338327950288419716939937510",
 			wantErr: false,
-			wantSegments: []*QrSegment{{
-				mode:     Numeric,
+			wantSegments: []Segment{{
+				mode:     ModeNumeric,
 				numChars: 51,
 				data: bufFromBits(false, true, false, false, true, true, true, false, true, false, false, false, true,
 					false, false, true, true, true, true, true, false, true, false, false, false, false, true, false, false,
@@ -344,8 +271,8 @@ func TestMakeSegments(t *testing.T) {
 		{
 			name: "test with byte text",
 			text: "https://www.github.com/piglig",
-			wantSegments: []*QrSegment{{
-				mode:     Byte,
+			wantSegments: []Segment{{
+				mode:     ModeByte,
 				numChars: 29,
 				data: bufFromBits(false, true, true, false, true, false, false, false, false, true, true, true, false, true,
 					false, false, false, true, true, true, false, true, false, false, false, true, true, true, false, false,
@@ -367,8 +294,8 @@ func TestMakeSegments(t *testing.T) {
 		{
 			name: "test with alphanumeric text",
 			text: "DOLLAR-AMOUNT:$39.87 PERCENTAGE:100.00% OPERATIONS:+-*/",
-			wantSegments: []*QrSegment{{
-				mode:     Alphanumeric,
+			wantSegments: []Segment{{
+				mode:     ModeAlphanumeric,
 				numChars: 55,
 				data: bufFromBits(false, true, false, false, true, true, false, false, false, false, true, false, true,
 					true, true, true, false, false, false, true, true, false, false, false, true, true, true, false, true,
@@ -396,41 +323,40 @@ func TestMakeSegments(t *testing.T) {
 
 	for _, tt := range cases {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := MakeSegments(tt.text)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("MakeSegments() error = %v, wantErr %v", err, tt.wantErr)
+			got := simpleSegments(tt.text)
+			if len(got) != len(tt.wantSegments) {
+				t.Fatalf("got %d segments, want %d", len(got), len(tt.wantSegments))
 			}
-
-			assertEqual(t, tt.wantSegments, got)
+			for i := range got {
+				assertSegment(t, tt.wantSegments[i], got[i])
+			}
 		})
 	}
 }
 
-func TestMakeEci(t *testing.T) {
+func TestECISegment(t *testing.T) {
 	cases := []struct {
 		name        string
 		val         int
 		wantErr     bool
-		wantSegment *QrSegment
+		wantSegment Segment
 	}{
 		{
-			name:        "test with negative value",
-			val:         -1,
-			wantErr:     true,
-			wantSegment: nil,
+			name:    "test with negative value",
+			val:     -1,
+			wantErr: true,
 		},
 		{
-			name:        "test with outside value",
-			val:         1e6 + 1,
-			wantErr:     true,
-			wantSegment: nil,
+			name:    "test with outside value",
+			val:     1e6 + 1,
+			wantErr: true,
 		},
 		{
 			name:    "test with 100 value",
 			val:     100,
 			wantErr: false,
-			wantSegment: &QrSegment{
-				mode:     Eci,
+			wantSegment: Segment{
+				mode:     ModeECI,
 				numChars: 0,
 				data:     bufFromBits(false, true, true, false, false, true, false, false),
 			},
@@ -439,8 +365,8 @@ func TestMakeEci(t *testing.T) {
 			name:    "test with 1000 value",
 			val:     1000,
 			wantErr: false,
-			wantSegment: &QrSegment{
-				mode:     Eci,
+			wantSegment: Segment{
+				mode:     ModeECI,
 				numChars: 0,
 				data:     bufFromBits(true, false, false, false, false, false, true, true, true, true, true, false, true, false, false, false),
 			},
@@ -449,8 +375,8 @@ func TestMakeEci(t *testing.T) {
 			name:    "test with 99999 value",
 			val:     99999,
 			wantErr: false,
-			wantSegment: &QrSegment{
-				mode:     Eci,
+			wantSegment: Segment{
+				mode:     ModeECI,
 				numChars: 0,
 				data:     bufFromBits(true, true, false, false, false, false, false, true, true, false, false, false, false, true, true, false, true, false, false, true, true, true, true, true),
 			},
@@ -458,103 +384,79 @@ func TestMakeEci(t *testing.T) {
 	}
 	for _, tt := range cases {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := MakeEci(tt.val)
+			got, err := ECISegment(tt.val)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("MakeSegments() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("segment constructor error = %v, wantErr %v", err, tt.wantErr)
 			}
 
-			assertEqual(t, tt.wantSegment, got)
-		})
-	}
-}
-
-func TestIsModes(t *testing.T) {
-	tests := []struct {
-		name      string
-		mode      Mode
-		isNumeric bool
-		isAlpha   bool
-		isByte    bool
-		isKanji   bool
-		isEci     bool
-	}{
-		{
-			"Numeric mode",
-			Numeric,
-			true,
-			false,
-			false,
-			false,
-			false,
-		},
-		{
-			"Alphanumeric mode",
-			Alphanumeric,
-			false,
-			true,
-			false,
-			false,
-			false,
-		},
-		{
-			"Byte mode",
-			Byte,
-			false,
-			false,
-			true,
-			false,
-			false,
-		},
-		{
-			"Eci mode",
-			Eci,
-			false,
-			false,
-			false,
-			false,
-			true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := tt.mode.isNumeric(); got != tt.isNumeric {
-				t.Errorf("Mode.isNumeric() = %v, want %v", got, tt.isNumeric)
-			}
-			if got := tt.mode.isAlphanumeric(); got != tt.isAlpha {
-				t.Errorf("Mode.isAlphanumeric() = %v, want %v", got, tt.isAlpha)
-			}
-			if got := tt.mode.isByte(); got != tt.isByte {
-				t.Errorf("Mode.isByte() = %v, want %v", got, tt.isByte)
-			}
-			if got := tt.mode.isKanji(); got != tt.isKanji {
-				t.Errorf("Mode.isKanji() = %v, want %v", got, tt.isKanji)
-			}
-			if got := tt.mode.isEci(); got != tt.isEci {
-				t.Errorf("Mode.isEci() = %v, want %v", got, tt.isEci)
+			if !tt.wantErr {
+				assertSegment(t, tt.wantSegment, got)
 			}
 		})
 	}
 }
 
-func TestQrSegment_GetData(t *testing.T) {
-	tests := []struct {
-		name     string
-		segment  *QrSegment
-		wantData *BitBuffer
-	}{
-		{
-			name: "test with normal data",
-			segment: &QrSegment{
-				data: bufFromBits(true, true, false),
-			},
-			wantData: bufFromBits(true, true, false),
-		},
+// assertSegment compares segments by mode, character count and bit content.
+func assertSegment(t *testing.T, want, got Segment) {
+	t.Helper()
+	if want.mode != got.mode || want.numChars != got.numChars {
+		t.Errorf("segment = {%v, %d chars}, want {%v, %d chars}", got.mode, got.numChars, want.mode, want.numChars)
 	}
+	assertEqual(t, bitsOf(&want.data), bitsOf(&got.data))
+}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			assertEqual(t, tt.wantData, tt.segment.cloneData())
-		})
+func TestSimpleSegmentsEmpty(t *testing.T) {
+	if segs := simpleSegments(""); len(segs) != 0 {
+		t.Fatalf("simpleSegments(\"\") = %d segments, want 0", len(segs))
 	}
+}
+
+func TestModeString(t *testing.T) {
+	for m, want := range map[Mode]string{
+		ModeNumeric: "numeric", ModeAlphanumeric: "alphanumeric", ModeByte: "byte",
+		ModeKanji: "kanji", ModeECI: "eci", Mode(0x3): "Mode(0x3)",
+	} {
+		assertEqual(t, want, m.String())
+	}
+}
+
+func TestModeCharCountBits(t *testing.T) {
+	tests := []struct {
+		mode Mode
+		want [3]int // versions 1-9, 10-26, 27-40
+	}{
+		{ModeNumeric, [3]int{10, 12, 14}},
+		{ModeAlphanumeric, [3]int{9, 11, 13}},
+		{ModeByte, [3]int{8, 16, 16}},
+		{ModeKanji, [3]int{8, 10, 12}},
+		{ModeECI, [3]int{0, 0, 0}},
+	}
+	for _, tt := range tests {
+		for i, vers := range [3][2]int{{1, 9}, {10, 26}, {27, 40}} {
+			for _, ver := range vers {
+				if got := tt.mode.charCountBits(ver); got != tt.want[i] {
+					t.Errorf("%v.charCountBits(%d) = %d, want %d", tt.mode, ver, got, tt.want[i])
+				}
+			}
+		}
+	}
+}
+
+func TestSegmentAccessors(t *testing.T) {
+	s, err := KanjiSegment("漢字")
+	assertNoError(t, err)
+	assertEqual(t, ModeKanji, s.Mode())
+	assertEqual(t, 2, s.NumChars())
+}
+
+func TestTotalBits(t *testing.T) {
+	num, _ := NumericSegment("12345") // 4 + 10 + 17
+	eci, _ := ECISegment(eciUTF8)     // 4 + 0 + 8
+	assertEqual(t, 31+12, totalBits([]Segment{num, eci}, 1))
+	assertEqual(t, 0, totalBits(nil, 1))
+
+	// 256 bytes overflow the 8-bit count indicator of versions 1-9 only.
+	big := BytesSegment(make([]byte, 256))
+	assertEqual(t, -1, totalBits([]Segment{big}, 9))
+	assertEqual(t, 4+16+256*8, totalBits([]Segment{big}, 10))
 }

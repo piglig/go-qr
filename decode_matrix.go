@@ -1,9 +1,9 @@
-package go_qr
+package qr
 
 import (
 	"fmt"
 
-	"github.com/piglig/go-qr/internal/reedsolomon"
+	"github.com/piglig/go-qr/v2/internal/reedsolomon"
 )
 
 // decodeMatrix takes a fully sampled module grid (modules[y][x] == dark) and
@@ -13,7 +13,7 @@ import (
 // It mirrors the encoder geometry exactly by reusing drawFunctionPatterns to
 // rebuild the function-module map and applyMask (which is its own inverse) to
 // remove the mask.
-func decodeMatrix(modules [][]bool) (data []byte, ver int, ecl Ecc, mask int, err error) {
+func decodeMatrix(modules [][]bool) (data []byte, ver int, ecl ECC, mask int, err error) {
 	size := len(modules)
 	if size < 21 || (size-17)%4 != 0 {
 		return nil, 0, 0, 0, fmt.Errorf("%w: bad matrix size %d", ErrDecodeFailed, size)
@@ -50,7 +50,7 @@ func decodeMatrix(modules [][]bool) (data []byte, ver int, ecl Ecc, mask int, er
 
 // readFormat reads the 15-bit format information (two redundant copies),
 // strips the 0x5412 mask, BCH-corrects it, and returns the ECC level and mask.
-func readFormat(modules [][]bool, size int) (Ecc, int, error) {
+func readFormat(modules [][]bool, size int) (ECC, int, error) {
 	bitAt := func(x, y int) int {
 		if modules[y][x] {
 			return 1
@@ -89,9 +89,9 @@ func readFormat(modules [][]bool, size int) (Ecc, int, error) {
 
 	formatVal := data >> 3 // 2 bits
 	mask := data & 0x7     // 3 bits
-	// eccFormats {Low:1, Medium:0, Quartile:3, High:2} is an involution, so the
-	// same table maps the 2-bit format value back to an Ecc.
-	ecl := Ecc(eccFormats[formatVal])
+	// eccFormatBits {ECCLow:1, ECCMedium:0, ECCQuartile:3, ECCHigh:2} is an involution, so the
+	// same table maps the 2-bit format value back to an ECC.
+	ecl := ECC(eccFormatBits[formatVal])
 	return ecl, mask, nil
 }
 
@@ -136,7 +136,7 @@ func bitCount(x int) int {
 // readCodewords reverses drawCodewords: walk columns right-to-left in pairs,
 // zig-zagging, reading 8 bits per codeword from non-function modules.
 func (q *builder) readCodewords() []byte {
-	n := getNumRawDataModules(q.version) / 8
+	n := numRawDataModules(q.version) / 8
 	data := make([]byte, n)
 	i := 0
 	for right := q.size - 1; right >= 1; right -= 2 {
@@ -166,10 +166,10 @@ func (q *builder) readCodewords() []byte {
 // deinterleaveAndCorrect splits the interleaved raw codewords back into ECC
 // blocks (reverse of addEccAndInterLeave), Reed-Solomon corrects each block,
 // and concatenates the corrected data codewords in order.
-func deinterleaveAndCorrect(raw []byte, ver int, ecl Ecc) ([]byte, error) {
+func deinterleaveAndCorrect(raw []byte, ver int, ecl ECC) ([]byte, error) {
 	numBlocks := int(numErrorCorrectionBlocks[ecl][ver])
 	blockEccLen := int(eccCodeWordsPerBlock[ecl][ver])
-	rawCodewords := getNumRawDataModules(ver) / 8
+	rawCodewords := numRawDataModules(ver) / 8
 
 	numShortBlocks := numBlocks - rawCodewords%numBlocks
 	shortBlockLen := rawCodewords / numBlocks

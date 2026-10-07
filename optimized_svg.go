@@ -1,4 +1,4 @@
-package go_qr
+package qr
 
 import (
 	"fmt"
@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-func (q *QrCode) toSvgOptimizedString(config *QrCodeImgConfig, lightColor, darkColor string) string {
+func (q *Code) toSvgOptimizedString(config *QrCodeImgConfig, lightColor, darkColor string) string {
 	scale := config.scale
 	border := config.border
 	sb := strings.Builder{}
@@ -174,7 +174,7 @@ func writeInt(sb *strings.Builder, v int) {
 
 // assembleBorderGraph builds the border graph of all connected filled regions
 // in the QR code. Borders between two adjacent filled modules are omitted.
-func (q *QrCode) assembleBorderGraph() *borderGraph {
+func (q *Code) assembleBorderGraph() *borderGraph {
 	n := q.Size()
 	g := newBorderGraph(n)
 	for y := 0; y < n; y++ {

@@ -1,4 +1,4 @@
-package go_qr
+package qr
 
 import (
 	"bytes"
@@ -11,7 +11,7 @@ import (
 func TestEncodeBatch_PreservesOrder(t *testing.T) {
 	inputs := make([]BatchInput, 50)
 	for i := range inputs {
-		inputs[i] = BatchInput{Text: fmt.Sprintf("item-%d", i), Ecc: Low}
+		inputs[i] = BatchInput{Text: fmt.Sprintf("item-%d", i), ECC: ECCLow}
 	}
 	results := EncodeBatch(inputs, 8)
 	assertLen(t, results, 50)
@@ -19,7 +19,7 @@ func TestEncodeBatch_PreservesOrder(t *testing.T) {
 	// Encode sequentially and compare each code's modules to prove order is stable.
 	for i, r := range results {
 		assertNoError(t, r.Err)
-		want, err := EncodeText(inputs[i].Text, inputs[i].Ecc)
+		want, err := Encode(inputs[i].Text, WithECC(inputs[i].ECC))
 		assertNoError(t, err)
 		assertEqual(t, want.Size(), r.QR.Size())
 		for y := 0; y < want.Size(); y++ {
@@ -34,9 +34,9 @@ func TestEncodeBatch_PreservesOrder(t *testing.T) {
 
 func TestEncodeBatch_PartialFailure(t *testing.T) {
 	inputs := []BatchInput{
-		{Text: "ok", Ecc: Low},
-		{Text: string(make([]byte, 5000)), Ecc: High}, // exceeds v40-High capacity (~1273 bytes)
-		{Text: "also ok", Ecc: Low},
+		{Text: "ok", ECC: ECCLow},
+		{Text: string(make([]byte, 5000)), ECC: ECCHigh}, // exceeds v40-ECCHigh capacity (~1273 bytes)
+		{Text: "also ok", ECC: ECCLow},
 	}
 	results := EncodeBatch(inputs, 4)
 	assertNoError(t, results[0].Err)
@@ -54,7 +54,7 @@ func TestEncodeBatch_EmptyInput(t *testing.T) {
 
 func TestEncodeBatch_ConcurrencyDefaultsToCPU(t *testing.T) {
 	// Run with concurrency=0 and concurrency=runtime.NumCPU(); both should succeed.
-	inputs := []BatchInput{{Text: "a", Ecc: Low}, {Text: "b", Ecc: Low}}
+	inputs := []BatchInput{{Text: "a", ECC: ECCLow}, {Text: "b", ECC: ECCLow}}
 	r1 := EncodeBatch(inputs, 0)
 	r2 := EncodeBatch(inputs, runtime.NumCPU())
 	assertNoError(t, r1[0].Err)
@@ -63,9 +63,9 @@ func TestEncodeBatch_ConcurrencyDefaultsToCPU(t *testing.T) {
 
 func TestRenderBatch_PNG(t *testing.T) {
 	jobs := []BatchJob{
-		{Text: "one", Ecc: Medium, Format: FormatPNG},
-		{Text: "two", Ecc: Medium, Format: FormatPNG},
-		{Text: "three", Ecc: Medium, Format: FormatPNG},
+		{Text: "one", ECC: ECCMedium, Format: FormatPNG},
+		{Text: "two", ECC: ECCMedium, Format: FormatPNG},
+		{Text: "three", ECC: ECCMedium, Format: FormatPNG},
 	}
 	results := RenderBatch(jobs, 4)
 	for i, r := range results {
@@ -77,8 +77,8 @@ func TestRenderBatch_PNG(t *testing.T) {
 func TestRenderBatch_SVG(t *testing.T) {
 	cfg := NewQrCodeImgConfig(10, 4, WithOptimalSVG())
 	jobs := []BatchJob{
-		{Text: "one", Ecc: Medium, Format: FormatSVG, Config: cfg},
-		{Text: "two", Ecc: Medium, Format: FormatSVG, Config: cfg},
+		{Text: "one", ECC: ECCMedium, Format: FormatSVG, Config: cfg},
+		{Text: "two", ECC: ECCMedium, Format: FormatSVG, Config: cfg},
 	}
 	results := RenderBatch(jobs, 4)
 	for i, r := range results {
@@ -90,7 +90,7 @@ func TestRenderBatch_SVG(t *testing.T) {
 
 func TestRenderBatch_DefaultConfigAndColors(t *testing.T) {
 	// Omitting Config and colors should still work.
-	jobs := []BatchJob{{Text: "defaults", Ecc: Low, Format: FormatSVG}}
+	jobs := []BatchJob{{Text: "defaults", ECC: ECCLow, Format: FormatSVG}}
 	results := RenderBatch(jobs, 1)
 	assertNoError(t, results[0].Err)
 	assertContains(t, string(results[0].Bytes), "#FFFFFF")
@@ -98,7 +98,7 @@ func TestRenderBatch_DefaultConfigAndColors(t *testing.T) {
 }
 
 func TestRenderBatch_InvalidFormat(t *testing.T) {
-	jobs := []BatchJob{{Text: "x", Ecc: Low, Format: Format(99)}}
+	jobs := []BatchJob{{Text: "x", ECC: ECCLow, Format: Format(99)}}
 	results := RenderBatch(jobs, 1)
 	assertError(t, results[0].Err)
 }
@@ -116,7 +116,7 @@ func TestRunWorkers_RunsAllIndices(t *testing.T) {
 func BenchmarkEncodeBatch_Serial(b *testing.B) {
 	inputs := make([]BatchInput, 100)
 	for i := range inputs {
-		inputs[i] = BatchInput{Text: fmt.Sprintf("hello-%d", i), Ecc: Medium}
+		inputs[i] = BatchInput{Text: fmt.Sprintf("hello-%d", i), ECC: ECCMedium}
 	}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -127,7 +127,7 @@ func BenchmarkEncodeBatch_Serial(b *testing.B) {
 func BenchmarkEncodeBatch_Parallel(b *testing.B) {
 	inputs := make([]BatchInput, 100)
 	for i := range inputs {
-		inputs[i] = BatchInput{Text: fmt.Sprintf("hello-%d", i), Ecc: Medium}
+		inputs[i] = BatchInput{Text: fmt.Sprintf("hello-%d", i), ECC: ECCMedium}
 	}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {

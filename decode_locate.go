@@ -1,4 +1,4 @@
-package go_qr
+package qr
 
 import (
 	"fmt"
@@ -28,7 +28,7 @@ func robustSample(img image.Image) ([][]bool, error) {
 	b := img.Bounds()
 	w, h := b.Dx(), b.Dy()
 	if w < 21 || h < 21 {
-		return nil, fmt.Errorf("%w: image too small", ErrNoQRCode)
+		return nil, fmt.Errorf("%w: image too small", ErrNotFound)
 	}
 	bitmap := binarizeFast(img, b, w, h)
 	dark := func(x, y int) bool {
@@ -46,7 +46,7 @@ func robustSample(img image.Image) ([][]bool, error) {
 	tl, tr, bl := orderFinders(finders)
 	moduleSize := (tl.moduleSize + tr.moduleSize + bl.moduleSize) / 3
 	if moduleSize <= 0 {
-		return nil, fmt.Errorf("%w: bad module size", ErrNoQRCode)
+		return nil, fmt.Errorf("%w: bad module size", ErrNotFound)
 	}
 
 	dimension, err := computeDimension(tl, tr, bl, moduleSize)
@@ -55,7 +55,7 @@ func robustSample(img image.Image) ([][]bool, error) {
 	}
 	ver := (dimension - 17) / 4
 	if ver < MinVersion || ver > MaxVersion {
-		return nil, fmt.Errorf("%w: bad dimension %d", ErrNoQRCode, dimension)
+		return nil, fmt.Errorf("%w: bad dimension %d", ErrNotFound, dimension)
 	}
 
 	// Affine: finder centers sit at module (3.5,3.5), (dim-3.5,3.5),
@@ -134,7 +134,7 @@ func findFinders(dark func(x, y int) bool, w, h int) ([]finderPattern, error) {
 	}
 
 	if len(cands) < 3 {
-		return nil, fmt.Errorf("%w: found %d finder patterns", ErrNoQRCode, len(cands))
+		return nil, fmt.Errorf("%w: found %d finder patterns", ErrNotFound, len(cands))
 	}
 	sort.Slice(cands, func(i, j int) bool { return cands[i].count > cands[j].count })
 	return cands[:3], nil
@@ -276,7 +276,7 @@ func computeDimension(tl, tr, bl finderPattern, moduleSize float64) (int, error)
 
 	ver := int(math.Round((raw - 17) / 4))
 	if ver < MinVersion || ver > MaxVersion {
-		return 0, fmt.Errorf("%w: estimated dimension %.1f maps to version %d", ErrNoQRCode, raw, ver)
+		return 0, fmt.Errorf("%w: estimated dimension %.1f maps to version %d", ErrNotFound, raw, ver)
 	}
 	return ver*4 + 17, nil
 }

@@ -7,7 +7,7 @@ import (
 
 	"github.com/makiuchi-d/gozxing"
 	"github.com/makiuchi-d/gozxing/qrcode"
-	go_qr "github.com/piglig/go-qr"
+	"github.com/piglig/go-qr/v2"
 )
 
 // decoderImpl is a candidate QR decoder under comparison.
@@ -20,13 +20,13 @@ type decoderImpl struct {
 //
 // To add the native decoder once it exists, append:
 //
-//	{"native", go_qr.Decode},
+//	{"native", qr.Decode},
 //
 // Nothing else needs to change — baselines, allocs, and success-rate reports
 // will all pick it up automatically.
 var decoders = []decoderImpl{
 	{"gozxing", decodeGozxing},
-	{"native", go_qr.Decode},
+	{"native", qr.Decode},
 }
 
 func decodeGozxing(img image.Image) (string, error) {

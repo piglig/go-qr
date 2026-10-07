@@ -1,30 +1,30 @@
-package go_qr
+package qr
 
 import (
 	"fmt"
 	"math"
 
-	"github.com/piglig/go-qr/internal/reedsolomon"
+	"github.com/piglig/go-qr/v2/internal/reedsolomon"
 )
 
 // builder is the mutable scaffold used to lay out a QR matrix. It owns the
 // module grid plus the function-module map (isFunction) that drives codeword
 // placement and masking. The encoder drives a builder to completion and then
-// freezes it into an immutable QrCode; the decoder reuses a builder purely to
-// rebuild the function map and undo masking. Keeping this state off QrCode means
+// freezes it into an immutable Code; the decoder reuses a builder purely to
+// rebuild the function map and undo masking. Keeping this state off Code means
 // the returned value is immutable and carries no build-time scratch.
 type builder struct {
-	version              int
-	size                 int
-	errorCorrectionLevel Ecc
-	modules              [][]bool // dark/light state of every module
-	isFunction           [][]bool // true where a module belongs to a function pattern
+	version    int
+	size       int
+	ecc        ECC
+	modules    [][]bool // dark/light state of every module
+	isFunction [][]bool // true where a module belongs to a function pattern
 }
 
 // newBuilder allocates a blank builder for the given version and ECC level.
-func newBuilder(version int, ecl Ecc) *builder {
+func newBuilder(version int, ecl ECC) *builder {
 	size := version*4 + 17
-	b := &builder{version: version, size: size, errorCorrectionLevel: ecl}
+	b := &builder{version: version, size: size, ecc: ecl}
 	// One backing allocation per grid; rows alias into it.
 	b.modules = make([][]bool, size)
 	b.isFunction = make([][]bool, size)
@@ -37,15 +37,15 @@ func newBuilder(version int, ecl Ecc) *builder {
 	return b
 }
 
-// toQrCode freezes the builder into an immutable QrCode with the chosen mask.
+// toCode freezes the builder into an immutable Code with the chosen mask.
 // The module grid is handed over directly; the builder must not be used after.
-func (q *builder) toQrCode(mask int) *QrCode {
-	return &QrCode{
-		version:              q.version,
-		size:                 q.size,
-		errorCorrectionLevel: q.errorCorrectionLevel,
-		mask:                 mask,
-		modules:              q.modules,
+func (q *builder) toCode(mask int) *Code {
+	return &Code{
+		version: q.version,
+		size:    q.size,
+		ecc:     q.ecc,
+		mask:    mask,
+		modules: q.modules,
 	}
 }
 
@@ -86,14 +86,14 @@ func (q *builder) setFunctionModule(x, y int, isDark bool) {
 // interleaves the result according to the block layout for the QR version and
 // ECC level.
 func (q *builder) addEccAndInterLeave(data []byte) ([]byte, error) {
-	numDataCodewords := getNumDataCodewords(q.version, q.errorCorrectionLevel)
+	numDataCodewords := numDataCodewords(q.version, q.ecc)
 	if len(data) != numDataCodewords {
 		return nil, fmt.Errorf("%w: data length %d != expected %d", ErrInvalidArgument, len(data), numDataCodewords)
 	}
 
-	numBlocks := numErrorCorrectionBlocks[q.errorCorrectionLevel][q.version]
-	blockEccLen := eccCodeWordsPerBlock[q.errorCorrectionLevel][q.version]
-	rawCodewords := getNumRawDataModules(q.version) / 8
+	numBlocks := numErrorCorrectionBlocks[q.ecc][q.version]
+	blockEccLen := eccCodeWordsPerBlock[q.ecc][q.version]
+	rawCodewords := numRawDataModules(q.version) / 8
 
 	numShortBlocks := int(numBlocks) - rawCodewords%int(numBlocks)
 	shortBlockLen := rawCodewords / int(numBlocks)
@@ -136,7 +136,7 @@ func (q *builder) addEccAndInterLeave(data []byte) ([]byte, error) {
 // drawCodewords fills the non-function modules with the given codeword bytes
 // following the QR Code zig-zag traversal.
 func (q *builder) drawCodewords(data []byte) error {
-	numRawDataModules := getNumRawDataModules(q.version) / 8
+	numRawDataModules := numRawDataModules(q.version) / 8
 	if len(data) != numRawDataModules {
 		return fmt.Errorf("%w: codeword length mismatch", ErrInvalidArgument)
 	}
@@ -263,7 +263,7 @@ func (q *builder) getAlignmentPatternPositions() []int {
 
 // drawFormatBits encodes the ECC level and mask number into the format bits.
 func (q *builder) drawFormatBits(msk int) {
-	data := q.errorCorrectionLevel.FormatBits()<<3 | msk
+	data := q.ecc.formatBits()<<3 | msk
 	rem := data
 	for i := 0; i < 10; i++ {
 		rem = (rem << 1) ^ ((rem >> 9) * 0x537)

@@ -21,9 +21,9 @@ import (
 	"strconv"
 	"strings"
 
-	go_qr "github.com/piglig/go-qr"
-	"github.com/piglig/go-qr/payload"
 	"github.com/piglig/go-qr/tools/verify"
+	"github.com/piglig/go-qr/v2"
+	"github.com/piglig/go-qr/v2/payload"
 )
 
 const (
@@ -98,7 +98,7 @@ type encodeOpts struct {
 	Content string
 	Payload string // wifi|vcard|email|sms|tel|geo|url; interprets Content as key=val pairs
 	ECC     string // low|medium|quartile|high
-	Optimal bool   // use optimal mixed-mode segmentation
+	Simple  bool   // single-mode segmentation instead of optimal mode switching
 
 	Scale, Border int
 
@@ -122,7 +122,7 @@ func runEncode(args []string, stdout, stderr io.Writer) error {
 	fs.StringVar(&o.Content, "content", "", "Content to encode; may also be given as a positional argument")
 	fs.StringVar(&o.Payload, "payload", "", "Structured payload type: wifi, vcard, email, sms, tel, geo, url")
 	fs.StringVar(&o.ECC, "ecc", "high", "Error correction: low, medium, quartile, high")
-	fs.BoolVar(&o.Optimal, "optimal", false, "Use optimal mixed-mode segmentation")
+	fs.BoolVar(&o.Simple, "simple", false, "Encode the whole text in one mode instead of switching modes optimally")
 	fs.IntVar(&o.Scale, "scale", 10, "Scale (pixels per module for PNG / units per module for SVG)")
 	fs.IntVar(&o.Border, "border", 4, "Quiet-zone border, in modules")
 	fs.StringVar(&o.PngOutput, "png", "", "Output PNG file path")
@@ -140,7 +140,7 @@ func runEncode(args []string, stdout, stderr io.Writer) error {
 		fmt.Fprint(stderr, `
 Examples:
   generator encode -png hello.png hello
-  generator encode -optimal -png optimal.png "https://example.com/order/12345678901234567890"
+  generator encode -simple -png simple.png "https://example.com/order/12345678901234567890"
   generator encode -stdout png hello > hello.png
   generator encode -svg-optimized hello.svg hello
   generator encode -payload wifi -png wifi.png "ssid=home,password=s3cret,auth=WPA"
@@ -174,16 +174,11 @@ Examples:
 		return err
 	}
 
-	var qr *go_qr.QrCode
-	if o.Optimal {
-		var segs []*go_qr.QrSegment
-		segs, err = go_qr.MakeSegmentsOptimally(text, ecl, go_qr.MinVersion, go_qr.MaxVersion)
-		if err == nil {
-			qr, err = go_qr.EncodeStandardSegments(segs, ecl)
-		}
-	} else {
-		qr, err = go_qr.EncodeText(text, ecl)
+	opts := []qr.EncodeOption{qr.WithECC(ecl)}
+	if o.Simple {
+		opts = append(opts, qr.WithSimpleSegmentation())
 	}
+	code, err := qr.Encode(text, opts...)
 	if err != nil {
 		return fmt.Errorf("encode: %w", err)
 	}
@@ -193,21 +188,21 @@ Examples:
 		return err
 	}
 
-	baseCfg := func(extra ...go_qr.Option) *go_qr.QrCodeImgConfig {
-		all := append([]go_qr.Option{}, imgOpts...)
+	baseCfg := func(extra ...qr.Option) *qr.QrCodeImgConfig {
+		all := append([]qr.Option{}, imgOpts...)
 		all = append(all, extra...)
-		return go_qr.NewQrCodeImgConfig(o.Scale, o.Border, all...)
+		return qr.NewQrCodeImgConfig(o.Scale, o.Border, all...)
 	}
 
 	if o.Stdout != "" {
 		if bad := setFlagsAmong(fs, "png", "svg", "svg-optimized"); len(bad) > 0 {
 			return fmt.Errorf("-stdout cannot be combined with file outputs (%s)", strings.Join(bad, ", "))
 		}
-		return writeStdout(qr, baseCfg, o.Stdout, stdout)
+		return writeStdout(code, baseCfg, o.Stdout, stdout)
 	}
 
 	if o.PngOutput != "" {
-		b, err := qr.ToPNGBytes(baseCfg())
+		b, err := code.ToPNGBytes(baseCfg())
 		if err != nil {
 			return fmt.Errorf("png: %w", err)
 		}
@@ -216,18 +211,18 @@ Examples:
 		}
 	}
 	if o.SvgOutput != "" {
-		if err := qr.SVG(baseCfg(), o.SvgOutput); err != nil {
+		if err := code.SVG(baseCfg(), o.SvgOutput); err != nil {
 			return fmt.Errorf("svg: %w", err)
 		}
 	}
 	if o.SvgOptimizedOutput != "" {
-		if err := qr.SVG(baseCfg(go_qr.WithOptimalSVG()), o.SvgOptimizedOutput); err != nil {
+		if err := code.SVG(baseCfg(qr.WithOptimalSVG()), o.SvgOptimizedOutput); err != nil {
 			return fmt.Errorf("svg-optimized: %w", err)
 		}
 	}
 
 	if o.Verify {
-		b, err := qr.ToPNGBytes(baseCfg())
+		b, err := code.ToPNGBytes(baseCfg())
 		if err != nil {
 			return fmt.Errorf("verify: render: %w", err)
 		}
@@ -240,13 +235,13 @@ Examples:
 	}
 
 	if o.Preview {
-		fmt.Fprint(stderr, renderPreview(qr))
+		fmt.Fprint(stderr, renderPreview(code))
 	}
 
 	noOutputRequested := o.PngOutput == "" && o.SvgOutput == "" && o.SvgOptimizedOutput == ""
 	if noOutputRequested && !o.Preview && !o.Verify {
 		// Nothing requested — fall back to preview so the command is never silent.
-		fmt.Fprint(stderr, renderPreview(qr))
+		fmt.Fprint(stderr, renderPreview(code))
 	}
 
 	return nil
@@ -413,29 +408,29 @@ func parseKV(s string) (map[string]string, error) {
 	return out, nil
 }
 
-func parseECC(s string) (go_qr.Ecc, error) {
+func parseECC(s string) (qr.ECC, error) {
 	switch strings.ToLower(s) {
 	case "low", "l":
-		return go_qr.Low, nil
+		return qr.ECCLow, nil
 	case "medium", "m":
-		return go_qr.Medium, nil
+		return qr.ECCMedium, nil
 	case "quartile", "q":
-		return go_qr.Quartile, nil
+		return qr.ECCQuartile, nil
 	case "high", "h":
-		return go_qr.High, nil
+		return qr.ECCHigh, nil
 	default:
 		return 0, fmt.Errorf("unknown ecc level %q (expected low|medium|quartile|high)", s)
 	}
 }
 
-func buildImgOpts(logoPath string, logoRatio float64) ([]go_qr.Option, error) {
-	var opts []go_qr.Option
+func buildImgOpts(logoPath string, logoRatio float64) ([]qr.Option, error) {
+	var opts []qr.Option
 	if logoPath != "" {
 		img, err := loadImage(logoPath)
 		if err != nil {
 			return nil, fmt.Errorf("load logo: %w", err)
 		}
-		opts = append(opts, go_qr.WithLogo(img, logoRatio))
+		opts = append(opts, qr.WithLogo(img, logoRatio))
 	}
 	return opts, nil
 }
@@ -450,25 +445,25 @@ func loadImage(path string) (image.Image, error) {
 	return img, err
 }
 
-func writeStdout(qr *go_qr.QrCode, baseCfg func(...go_qr.Option) *go_qr.QrCodeImgConfig, format string, w io.Writer) error {
+func writeStdout(code *qr.Code, baseCfg func(...qr.Option) *qr.QrCodeImgConfig, format string, w io.Writer) error {
 	switch strings.ToLower(format) {
 	case "png":
-		return qr.WriteAsPNG(baseCfg(), w)
+		return code.WriteAsPNG(baseCfg(), w)
 	case "svg":
-		return qr.WriteAsSVG(baseCfg(), w)
+		return code.WriteAsSVG(baseCfg(), w)
 	case "svg-optimized":
-		return qr.WriteAsSVG(baseCfg(go_qr.WithOptimalSVG()), w)
+		return code.WriteAsSVG(baseCfg(qr.WithOptimalSVG()), w)
 	default:
 		return fmt.Errorf("unknown stdout format %q (expected png, svg, or svg-optimized)", format)
 	}
 }
 
-func renderPreview(qr *go_qr.QrCode) string {
+func renderPreview(code *qr.Code) string {
 	buf := bytes.Buffer{}
 	border := 2
-	for y := -border; y < qr.Size()+border; y++ {
-		for x := -border; x < qr.Size()+border; x++ {
-			if qr.Module(x, y) {
+	for y := -border; y < code.Size()+border; y++ {
+		for x := -border; x < code.Size()+border; x++ {
+			if code.Module(x, y) {
 				buf.WriteString(blackBlock)
 			} else {
 				buf.WriteString(whiteBlock)

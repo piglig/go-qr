@@ -1,7 +1,7 @@
 // Package verify decodes a QR code image and exposes a round-trip helper for
 // asserting that generated QR codes are actually scannable.
 //
-// As of go-qr's native decoder it wraps go_qr.Decode directly, so this package
+// As of go-qr's native decoder it wraps qr.Decode directly, so this package
 // (and the generator's --verify mode) no longer pulls in any third-party
 // decoder. The gozxing dependency now lives only in tools/bench, where it
 // serves as a cross-check oracle for the benchmark suite.
@@ -13,12 +13,12 @@ import (
 	"image"
 	"image/png"
 
-	go_qr "github.com/piglig/go-qr"
+	"github.com/piglig/go-qr/v2"
 )
 
 // Decode returns the text content of a QR code rendered in the given image.
 func Decode(img image.Image) (string, error) {
-	text, err := go_qr.Decode(img)
+	text, err := qr.Decode(img)
 	if err != nil {
 		return "", fmt.Errorf("decode: %w", err)
 	}

@@ -20,7 +20,5 @@
 
 # Go workspace file
 go.work
-/example/*.png
-/example/*.svg
 /tools/generator/*.png
 /tools/generator/*.svg

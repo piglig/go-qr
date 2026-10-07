@@ -1,128 +1,188 @@
-package go_qr
+package qr
 
 import "fmt"
 
-// EncodeText takes a string and an error correction level (ecl),
-// encodes the text to segments and returns a QR code or an error.
-func EncodeText(text string, ecl Ecc) (*QrCode, error) {
-	segs, err := MakeSegments(text)
+// EncodeOption configures Encode, EncodeBytes and EncodeSegments.
+type EncodeOption func(*encodeConfig)
+
+type encodeConfig struct {
+	ecc            ECC
+	minVer, maxVer int
+	mask           int  // -1 selects the lowest-penalty mask
+	fixedMask      bool // WithMask was given
+	boost          bool
+	simple         bool
+	utf8ECI        bool
+}
+
+func newEncodeConfig(opts []EncodeOption) (encodeConfig, error) {
+	c := encodeConfig{ecc: ECCMedium, minVer: MinVersion, maxVer: MaxVersion, mask: -1, boost: true}
+	for _, o := range opts {
+		o(&c)
+	}
+	switch {
+	case !c.ecc.valid():
+		return c, fmt.Errorf("%w: unknown error correction level %d", ErrInvalidArgument, int8(c.ecc))
+	case c.minVer < MinVersion || c.minVer > c.maxVer || c.maxVer > MaxVersion:
+		return c, fmt.Errorf("%w: version range %d..%d", ErrInvalidVersion, c.minVer, c.maxVer)
+	case c.fixedMask && (c.mask < 0 || c.mask > 7):
+		return c, fmt.Errorf("%w: mask %d out of range 0..7", ErrInvalidArgument, c.mask)
+	}
+	return c, nil
+}
+
+// WithECC sets the minimum error correction level. The default is ECCMedium.
+// Unless WithoutECCBoost is given, the level is raised as far as the data
+// still fits in the chosen version.
+func WithECC(level ECC) EncodeOption {
+	return func(c *encodeConfig) { c.ecc = level }
+}
+
+// WithVersionRange restricts the symbol version to [min, max]. The smallest
+// version in the range that holds the data is used. The default is
+// [MinVersion, MaxVersion]; pass the same value twice to fix the version.
+func WithVersionRange(min, max int) EncodeOption {
+	return func(c *encodeConfig) { c.minVer, c.maxVer = min, max }
+}
+
+// WithMask forces mask pattern m (0-7) instead of choosing the pattern with
+// the lowest ISO/IEC 18004 penalty score.
+func WithMask(m int) EncodeOption {
+	return func(c *encodeConfig) { c.mask, c.fixedMask = m, true }
+}
+
+// WithoutECCBoost keeps exactly the level given by WithECC instead of raising
+// it when the chosen version has spare capacity.
+func WithoutECCBoost() EncodeOption {
+	return func(c *encodeConfig) { c.boost = false }
+}
+
+// WithSimpleSegmentation makes Encode use a single segment in the most
+// compact mode that holds the whole text (numeric, alphanumeric or byte),
+// instead of switching modes optimally within the text. It is faster, but can
+// produce a larger symbol for mixed content. Ignored by EncodeBytes and
+// EncodeSegments.
+func WithSimpleSegmentation() EncodeOption {
+	return func(c *encodeConfig) { c.simple = true }
+}
+
+// WithUTF8ECI prefixes the data with an ECI designator declaring UTF-8 when
+// the text is not pure ASCII. Readers that follow ISO/IEC 18004 otherwise
+// assume ISO-8859-1 for byte-mode data, although most phone scanners guess
+// UTF-8 anyway. Ignored by EncodeSegments.
+func WithUTF8ECI() EncodeOption {
+	return func(c *encodeConfig) { c.utf8ECI = true }
+}
+
+// Encode encodes text into a QR Code. By default it uses ECCMedium (boosted
+// when there is room), the smallest fitting version, optimal mode switching
+// between numeric, alphanumeric, byte and Kanji segments, and the
+// lowest-penalty mask.
+func Encode(text string, opts ...EncodeOption) (*Code, error) {
+	c, err := newEncodeConfig(opts)
 	if err != nil {
 		return nil, err
 	}
 
-	return EncodeStandardSegments(segs, ecl)
-}
-
-// EncodeBinary takes a byte array and an error correction level (ecl),
-// converts the bytes to QR code segments and returns a QR code or an error.
-func EncodeBinary(data []byte, ecl Ecc) (*QrCode, error) {
-	segs, err := MakeBytes(data)
-	if err != nil {
-		return nil, err
+	var prefix []Segment
+	if c.utf8ECI && !isASCII(text) {
+		eci, _ := ECISegment(eciUTF8)
+		prefix = []Segment{eci}
 	}
 
-	return EncodeStandardSegments([]*QrSegment{segs}, ecl)
-}
-
-// EncodeStandardSegments takes QR code segments and an error correction level,
-// creates a standard QR code using these parameters and returns it or an error.
-func EncodeStandardSegments(segs []*QrSegment, ecl Ecc) (*QrCode, error) {
-	return EncodeSegments(segs, ecl, MinVersion, MaxVersion, -1, true)
-}
-
-// EncodeSegments is a more flexible version of EncodeStandardSegments. It allows
-// the specification of minVer, maxVer, mask in addition to the regular parameters.
-// Returns a QR code object or an error.
-func EncodeSegments(segs []*QrSegment, ecl Ecc, minVer, maxVer, mask int, boostEcl bool) (*QrCode, error) {
-	if segs == nil {
-		return nil, fmt.Errorf("%w: segments slice is nil", ErrInvalidArgument)
-	}
-
-	if !isValidVersion(minVer, maxVer) {
-		return nil, fmt.Errorf("%w: minVer=%d maxVer=%d", ErrInvalidVersion, minVer, maxVer)
-	}
-
-	// Loop over all versions between minVer and maxVer to find a suitable one
-	version, dataUsedBits := 0, 0
-	for version = minVer; ; version++ {
-		dataCapacityBits := getNumDataCodewords(version, ecl) * 8
-		dataUsedBits = getTotalBits(segs, version)
-		if dataUsedBits != -1 && dataUsedBits <= dataCapacityBits {
-			break
+	var segs []Segment
+	if c.simple {
+		segs = simpleSegments(text)
+	} else {
+		segs, err = optimalSegments(text, c, totalBits(prefix, MinVersion))
+		if err != nil {
+			return nil, err
 		}
+	}
+	return encodeSegments(append(prefix, segs...), c)
+}
 
-		if version >= maxVer {
-			if dataUsedBits != -1 {
-				return nil, fmt.Errorf("%w: data length %d bits exceeds capacity %d bits", ErrDataTooLong, dataUsedBits, dataCapacityBits)
+// EncodeBytes encodes binary data in a single byte-mode segment.
+func EncodeBytes(data []byte, opts ...EncodeOption) (*Code, error) {
+	c, err := newEncodeConfig(opts)
+	if err != nil {
+		return nil, err
+	}
+	segs := []Segment{BytesSegment(data)}
+	if c.utf8ECI {
+		eci, _ := ECISegment(eciUTF8)
+		segs = append([]Segment{eci}, segs...)
+	}
+	return encodeSegments(segs, c)
+}
+
+// EncodeSegments encodes the given segments as-is, in order.
+func EncodeSegments(segs []Segment, opts ...EncodeOption) (*Code, error) {
+	c, err := newEncodeConfig(opts)
+	if err != nil {
+		return nil, err
+	}
+	return encodeSegments(segs, c)
+}
+
+// encodeSegments picks the smallest version in range that holds segs, boosts
+// the ECC level if allowed, builds the padded data codewords and lays out the
+// symbol.
+func encodeSegments(segs []Segment, c encodeConfig) (*Code, error) {
+	ver, usedBits, err := fitVersion(segs, c.ecc, c.minVer, c.maxVer)
+	if err != nil {
+		return nil, err
+	}
+
+	ecc := c.ecc
+	if c.boost {
+		for _, e := range []ECC{ECCMedium, ECCQuartile, ECCHigh} {
+			if e > ecc && usedBits <= numDataCodewords(ver, e)*8 {
+				ecc = e
 			}
-			return nil, fmt.Errorf("%w: segment too long", ErrDataTooLong)
 		}
 	}
 
-	// If boostEcl is set, upgrade ECC as far as the data still fits.
-	for _, newEcl := range []Ecc{Medium, Quartile, High} {
-		numDataCodewords := getNumDataCodewords(version, newEcl)
-		if boostEcl && dataUsedBits <= numDataCodewords*8 {
-			ecl = newEcl
-		}
+	capacityBits := numDataCodewords(ver, ecc) * 8
+	var bb bitBuffer
+	bb.grow(capacityBits)
+	for _, s := range segs {
+		bb.appendBits(int(s.mode), 4)
+		bb.appendBits(s.numChars, s.mode.charCountBits(ver))
+		bb.appendBuffer(&s.data)
 	}
 
-	bb := BitBuffer{}
-	for _, seg := range segs {
-		if seg == nil {
-			continue
-		}
-
-		err := bb.appendBits(seg.mode.modeBits, 4)
-		if err != nil {
-			return nil, err
-		}
-		err = bb.appendBits(seg.numChars, seg.mode.numCharCountBits(version))
-		if err != nil {
-			return nil, err
-		}
-		err = bb.appendData(seg.data)
-		if err != nil {
-			return nil, err
-		}
+	// Terminator, then pad to a byte boundary, then alternate pad bytes.
+	bb.appendBits(0, min(4, capacityBits-bb.len()))
+	bb.appendBits(0, (8-bb.len()%8)%8)
+	for pad := 0xEC; bb.len() < capacityBits; pad ^= 0xEC ^ 0x11 {
+		bb.appendBits(pad, 8)
 	}
-
-	dataCapacityBits := getNumDataCodewords(version, ecl) * 8
-	err := bb.appendBits(0, min(4, dataCapacityBits-bb.len()))
-	if err != nil {
-		return nil, err
-	}
-
-	err = bb.appendBits(0, (8-bb.len()%8)%8)
-	if err != nil {
-		return nil, err
-	}
-
-	for padByte := 0xEC; bb.len() < dataCapacityBits; padByte ^= 0xEC ^ 0x11 {
-		err = bb.appendBits(padByte, 8)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	dataCodewords := make([]byte, bb.len()/8)
-	for i := 0; i < bb.len(); i++ {
-		bit := 0
-		if bb.getBit(i) {
-			bit = 1
-		}
-		dataCodewords[i>>3] |= byte(bit << (7 - (i & 7)))
-	}
-	return newQrCode(version, ecl, dataCodewords, mask)
+	return newCode(ver, ecc, bb.bytes(), c.mask)
 }
 
-// isValidVersion reports whether minVer and maxVer lie within [MinVersion, MaxVersion] and minVer <= maxVer.
-func isValidVersion(minVer, maxVer int) bool {
-	return MinVersion <= minVer && minVer <= maxVer && maxVer <= MaxVersion
+// fitVersion returns the smallest version in [minVer, maxVer] whose data
+// capacity at level ecc holds segs, along with the number of bits used.
+func fitVersion(segs []Segment, ecc ECC, minVer, maxVer int) (ver, usedBits int, err error) {
+	for ver = minVer; ; ver++ {
+		capacityBits := numDataCodewords(ver, ecc) * 8
+		usedBits = totalBits(segs, ver)
+		if usedBits != -1 && usedBits <= capacityBits {
+			return ver, usedBits, nil
+		}
+		if ver >= maxVer {
+			if usedBits == -1 {
+				return 0, 0, fmt.Errorf("%w: segment too long for versions %d..%d", ErrDataTooLong, minVer, maxVer)
+			}
+			return 0, 0, fmt.Errorf("%w: %d bits exceed the %d-bit capacity of version %d-%v",
+				ErrDataTooLong, usedBits, capacityBits, ver, ecc)
+		}
+	}
 }
 
-// getNumDataCodewords returns the number of data codewords for a given version and ECC level.
-func getNumDataCodewords(ver int, ecl Ecc) int {
-	return getNumRawDataModules(ver)/8 -
-		int(eccCodeWordsPerBlock[ecl][ver])*int(numErrorCorrectionBlocks[ecl][ver])
+// numDataCodewords returns the number of data (non-ECC) codewords in a symbol
+// of the given version and ECC level.
+func numDataCodewords(ver int, ecc ECC) int {
+	return numRawDataModules(ver)/8 -
+		int(eccCodeWordsPerBlock[ecc][ver])*int(numErrorCorrectionBlocks[ecc][ver])
 }

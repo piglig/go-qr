@@ -1,4 +1,4 @@
-package go_qr
+package qr
 
 import "sync"
 
@@ -30,7 +30,7 @@ func getTemplate(version int) *qrTemplate {
 	size := version*4 + 17
 	// A throwaway builder gives us the version's function-pattern map; only
 	// isFunction is read here (module values are irrelevant).
-	b := newBuilder(version, Low)
+	b := newBuilder(version, ECCLow)
 	b.drawFunctionPatterns()
 
 	t := &qrTemplate{}

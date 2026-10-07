@@ -1,4 +1,4 @@
-package go_qr
+package qr
 
 import (
 	"flag"
@@ -18,44 +18,44 @@ func TestGoldenSVG(t *testing.T) {
 	cases := []struct {
 		name   string
 		text   string
-		ecl    Ecc
+		ecl    ECC
 		config *QrCodeImgConfig
 	}{
 		{
 			name:   "basic",
 			text:   "Hello, world!",
-			ecl:    Low,
+			ecl:    ECCLow,
 			config: NewQrCodeImgConfig(10, 4),
 		},
 		{
 			name:   "with_xml_header",
 			text:   "Hello, world!",
-			ecl:    Low,
+			ecl:    ECCLow,
 			config: NewQrCodeImgConfig(10, 4, WithSVGXMLHeader()),
 		},
 		{
 			name:   "optimal",
 			text:   "Hello, world!",
-			ecl:    Low,
+			ecl:    ECCLow,
 			config: NewQrCodeImgConfig(10, 4, WithOptimalSVG()),
 		},
 		{
 			name:   "optimal_larger_payload",
 			text:   "WIFI:S:mYwIfI;T:WPA;P:secret_passwordt;H:false;;",
-			ecl:    Medium,
+			ecl:    ECCMedium,
 			config: NewQrCodeImgConfig(8, 2, WithOptimalSVG()),
 		},
 		{
 			name:   "optimal_high_ecc",
 			text:   "The quick brown fox jumps over the lazy dog",
-			ecl:    High,
+			ecl:    ECCHigh,
 			config: NewQrCodeImgConfig(6, 4, WithOptimalSVG()),
 		},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			qr, err := EncodeText(tc.text, tc.ecl)
+			qr, err := encodeText(tc.text, tc.ecl)
 			assertNoError(t, err)
 
 			got, err := qr.ToSVGBytes(tc.config)
@@ -79,7 +79,7 @@ func TestGoldenSVG(t *testing.T) {
 // identical output every run. This specifically guards against the map-iteration
 // non-determinism that broke position-detection markers in earlier versions.
 func TestGoldenDeterminism(t *testing.T) {
-	qr, err := EncodeText("Hello, world!", Low)
+	qr, err := encodeText("Hello, world!", ECCLow)
 	assertNoError(t, err)
 	cfg := NewQrCodeImgConfig(10, 4, WithOptimalSVG())
 

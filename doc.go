@@ -3,7 +3,7 @@
 //
 // # Quick start
 //
-//	qr, err := go_qr.EncodeText("Hello, world!", go_qr.Low)
+//	qr, err := go_qr.EncodeText("Hello, world!", go_qr.ECCLow)
 //	if err != nil {
 //	    log.Fatal(err)
 //	}
@@ -46,4 +46,4 @@
 //
 //	ErrInvalidConfig, ErrInvalidArgument, ErrInvalidVersion,
 //	ErrDataTooLong, ErrUnencodableChar, ErrInvalidImageOutput
-package go_qr
+package qr

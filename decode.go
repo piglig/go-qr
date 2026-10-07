@@ -1,4 +1,4 @@
-package go_qr
+package qr
 
 import (
 	"fmt"
@@ -16,7 +16,7 @@ type SegmentInfo struct {
 type DecodeResult struct {
 	Text     string
 	Version  int
-	Ecc      Ecc
+	ECC      ECC
 	Mask     int
 	Segments []SegmentInfo
 }
@@ -78,7 +78,7 @@ func DecodeDetailed(img image.Image, opts ...DecodeOption) (*DecodeResult, error
 	if err != nil {
 		return nil, err
 	}
-	return &DecodeResult{Text: text, Version: ver, Ecc: ecl, Mask: mask, Segments: segs}, nil
+	return &DecodeResult{Text: text, Version: ver, ECC: ecl, Mask: mask, Segments: segs}, nil
 }
 
 // fastSample binarizes a crisp, axis-aligned image and samples it into a module
@@ -90,7 +90,7 @@ func fastSample(img image.Image) ([][]bool, error) {
 	b := img.Bounds()
 	w, h := b.Dx(), b.Dy()
 	if w < 21 || h < 21 {
-		return nil, fmt.Errorf("%w: image too small (%dx%d)", ErrNoQRCode, w, h)
+		return nil, fmt.Errorf("%w: image too small (%dx%d)", ErrNotFound, w, h)
 	}
 
 	// One typed pass over the pixel buffer into a dark bitmap. Avoids boxing a
@@ -118,7 +118,7 @@ func fastSample(img image.Image) ([][]bool, error) {
 		}
 	}
 	if maxX < 0 {
-		return nil, fmt.Errorf("%w: no dark pixels", ErrNoQRCode)
+		return nil, fmt.Errorf("%w: no dark pixels", ErrNotFound)
 	}
 
 	boxW := maxX - minX + 1
@@ -131,17 +131,17 @@ func fastSample(img image.Image) ([][]bool, error) {
 		run++
 	}
 	if run < 7 {
-		return nil, fmt.Errorf("%w: no finder edge at top-left", ErrNoQRCode)
+		return nil, fmt.Errorf("%w: no finder edge at top-left", ErrNotFound)
 	}
 	pitch := float64(run) / 7.0
 
 	size := int(float64(boxW)/pitch + 0.5)
 	if size < 21 || (size-17)%4 != 0 {
-		return nil, fmt.Errorf("%w: inferred size %d not a valid QR size", ErrNoQRCode, size)
+		return nil, fmt.Errorf("%w: inferred size %d not a valid QR size", ErrNotFound, size)
 	}
 	// Consistency check against the vertical extent.
 	if vsize := int(float64(boxH)/pitch + 0.5); vsize != size {
-		return nil, fmt.Errorf("%w: non-square module grid (%d vs %d)", ErrNoQRCode, size, vsize)
+		return nil, fmt.Errorf("%w: non-square module grid (%d vs %d)", ErrNotFound, size, vsize)
 	}
 
 	px := float64(boxW) / float64(size)

@@ -1,4 +1,4 @@
-package go_qr
+package qr
 
 import (
 	"bytes"
@@ -17,24 +17,24 @@ func (bw *badWriter) Write(p []byte) (n int, err error) {
 	return -1, errors.New("sorry, all I do is fail")
 }
 
-func TestEncodeStandardSegments(t *testing.T) {
+func TestEncodeSegments(t *testing.T) {
 	cases := []struct {
-		name       string
-		text       string
-		ecl        Ecc
-		wantErr    bool
-		wantQrCode *QrCode
+		name     string
+		text     string
+		ecl      ECC
+		wantErr  bool
+		wantCode *Code
 	}{
 		{
 			name:    "test with Byte segments",
 			text:    "Hello, world!",
-			ecl:     Low,
+			ecl:     ECCLow,
 			wantErr: false,
-			wantQrCode: &QrCode{
-				version:              MinVersion,
-				size:                 21,
-				errorCorrectionLevel: Medium,
-				mask:                 2,
+			wantCode: &Code{
+				version: MinVersion,
+				size:    21,
+				ecc:     ECCMedium,
+				mask:    2,
 				modules: [][]bool{
 					{true, true, true, true, true, true, true, false, false, false, false, false, true, false, true, true, true, true, true, true, true},
 					{true, false, false, false, false, false, true, false, false, true, false, true, false, false, true, false, false, false, false, false, true},
@@ -63,13 +63,13 @@ func TestEncodeStandardSegments(t *testing.T) {
 		{
 			name:    "test with Numeric segments",
 			text:    "314159265358979323846264338327950288419716939937510",
-			ecl:     Medium,
+			ecl:     ECCMedium,
 			wantErr: false,
-			wantQrCode: &QrCode{
-				version:              2,
-				size:                 25,
-				errorCorrectionLevel: Medium,
-				mask:                 3,
+			wantCode: &Code{
+				version: 2,
+				size:    25,
+				ecc:     ECCMedium,
+				mask:    3,
 				modules: [][]bool{
 					{true, true, true, true, true, true, true, false, true, false, false, false, false, false, true, false, false, false, true, true, true, true, true, true, true},
 					{true, false, false, false, false, false, true, false, true, false, true, false, true, true, true, false, true, false, true, false, false, false, false, false, true},
@@ -103,13 +103,13 @@ func TestEncodeStandardSegments(t *testing.T) {
 			name: "test with long text",
 			text: "AB3CD6EF9GH2IJ5KL8MN0PQ7RS4TUW1VX6YBZ035LH4EJ9QA8RD2VM6BT5UO1EZK7PX3IY6FN0SJ4DC7HQ2WB5LZ8EP4RO1KD6MG3J" +
 				"F2HB5UE7LV2NO6SJ1RD9FA8KC3BP6VS1LZ7HN2XF5DQ8RG4JN0SM7ED2VL6HO1PX9FC3KJZB6HD0SE7LQ3VG8NY1TM4PK9RI2AF6DJ5B",
-			ecl:     Low,
+			ecl:     ECCLow,
 			wantErr: false,
-			wantQrCode: &QrCode{
-				version:              7,
-				size:                 45,
-				errorCorrectionLevel: Low,
-				mask:                 3,
+			wantCode: &Code{
+				version: 7,
+				size:    45,
+				ecc:     ECCLow,
+				mask:    3,
 				modules: [][]bool{
 					{true, true, true, true, true, true, true, false, true, true, true, false, false, true, false, true, false, true, false, false, false, false, true, false, false, false, true, true, true, false, true, false, true, true, false, false, true, false, true, true, true, true, true, true, true},
 					{true, false, false, false, false, false, true, false, false, false, true, false, false, true, false, true, false, false, false, true, false, true, false, false, true, false, false, true, true, false, false, false, true, true, false, true, false, false, true, false, false, false, false, false, true},
@@ -163,39 +163,34 @@ func TestEncodeStandardSegments(t *testing.T) {
 
 	for _, tt := range cases {
 		t.Run(tt.name, func(t *testing.T) {
-			segs, err := MakeSegments(tt.text)
-			if err != nil {
-				t.Errorf("MakeSegments() error = %v, wantErr %v", err, tt.wantErr)
-			}
-
-			got, err := EncodeStandardSegments(segs, tt.ecl)
+			got, err := EncodeSegments(simpleSegments(tt.text), WithECC(tt.ecl))
 			if (err != nil) != tt.wantErr {
 				t.Errorf("EncodeSegments() error = %v, wantErr %v", err, tt.wantErr)
 			}
 
-			assertEqual(t, tt.wantQrCode, got)
+			assertEqual(t, tt.wantCode, got)
 		})
 	}
 }
 
-func TestEncodeText(t *testing.T) {
+func TestEncodeSimpleEmpty(t *testing.T) {
 	tests := []struct {
-		name       string
-		text       string
-		ecl        Ecc
-		wantErr    bool
-		wantQrCode *QrCode
+		name     string
+		text     string
+		ecl      ECC
+		wantErr  bool
+		wantCode *Code
 	}{
 		{
 			name:    "test with empty text",
 			text:    "",
-			ecl:     Low,
+			ecl:     ECCLow,
 			wantErr: false,
-			wantQrCode: &QrCode{
-				version:              MinVersion,
-				size:                 21,
-				errorCorrectionLevel: High,
-				mask:                 6,
+			wantCode: &Code{
+				version: MinVersion,
+				size:    21,
+				ecc:     ECCHigh,
+				mask:    6,
 				modules: [][]bool{
 					{true, true, true, true, true, true, true, false, false, true, false, false, false, false, true, true, true, true, true, true, true},
 					{true, false, false, false, false, false, true, false, false, false, true, true, false, false, true, false, false, false, false, false, true},
@@ -225,157 +220,157 @@ func TestEncodeText(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := EncodeText(tt.text, tt.ecl)
+			got, err := encodeText(tt.text, tt.ecl)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("EncodeText() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("encodeText() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 
-			assertEqual(t, tt.wantQrCode, got)
+			assertEqual(t, tt.wantCode, got)
 		})
 	}
 }
 
-func TestQrCode_PNG(t *testing.T) {
+func TestCode_PNG(t *testing.T) {
 	tempDir := t.TempDir()
 	defer os.RemoveAll(tempDir)
 	tests := []struct {
 		text    string
 		wantErr bool
-		ecl     Ecc
+		ecl     ECC
 		dest    string
 		config  *QrCodeImgConfig
 	}{
 		{
 			text:    "Hello, world!",
 			wantErr: false,
-			ecl:     Low,
+			ecl:     ECCLow,
 			dest:    "hello-world-QR.png",
 			config:  NewQrCodeImgConfig(10, 4),
 		},
 		{
 			text:    "",
 			wantErr: false,
-			ecl:     Low,
+			ecl:     ECCLow,
 			dest:    "empty-QR.png",
 			config:  NewQrCodeImgConfig(10, 4),
 		},
 		{
 			text:    "こんにちwa、世界！ αβγδ",
 			wantErr: false,
-			ecl:     Quartile,
+			ecl:     ECCQuartile,
 			dest:    "unicode-QR.png",
 			config:  NewQrCodeImgConfig(10, 3),
 		},
 		{
 			text:    "aabbcc",
 			wantErr: true,
-			ecl:     Quartile,
+			ecl:     ECCQuartile,
 			dest:    "aabbcc-QR.png",
 			config:  NewQrCodeImgConfig(-10, -3),
 		},
 		{
 			text:    "non-existent path",
 			wantErr: true,
-			ecl:     Low,
+			ecl:     ECCLow,
 			dest:    "../../not/existing.png",
 			config:  NewQrCodeImgConfig(10, 3),
 		},
 	}
 
 	for _, tt := range tests {
-		qr, err := EncodeText(tt.text, tt.ecl)
+		qr, err := encodeText(tt.text, tt.ecl)
 		if err != nil {
-			t.Errorf("EncodeText() error = %v", err)
+			t.Errorf("encodeText() error = %v", err)
 			return
 		}
 
 		dest := filepath.Join(tempDir, tt.dest)
 		err = qr.PNG(tt.config, dest)
 		if (err != nil) != tt.wantErr {
-			t.Errorf("TestQrCode_PNG() error = %v, wantErr %v", err, tt.wantErr)
+			t.Errorf("TestCode_PNG() error = %v, wantErr %v", err, tt.wantErr)
 			return
 		}
 
 		if err == nil {
 			_, err = os.Stat(dest)
 			if err != nil {
-				t.Errorf("TestQrCode_PNG() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("TestCode_PNG() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 		}
 	}
 }
 
-func TestQrCode_WriteAsPNG(t *testing.T) {
+func TestCode_WriteAsPNG(t *testing.T) {
 	tests := []struct {
 		text    string
 		wantErr bool
-		ecl     Ecc
+		ecl     ECC
 		dest    io.Writer
 		config  *QrCodeImgConfig
 	}{
 		{
 			text:    "Hello, world!",
 			wantErr: false,
-			ecl:     Low,
+			ecl:     ECCLow,
 			dest:    &bytes.Buffer{},
 			config:  NewQrCodeImgConfig(10, 4),
 		},
 		{
 			text:    "",
 			wantErr: false,
-			ecl:     Low,
+			ecl:     ECCLow,
 			dest:    &bytes.Buffer{},
 			config:  NewQrCodeImgConfig(10, 4),
 		},
 		{
 			text:    "こんにちwa、世界！ αβγδ",
 			wantErr: false,
-			ecl:     Quartile,
+			ecl:     ECCQuartile,
 			dest:    &bytes.Buffer{},
 			config:  NewQrCodeImgConfig(10, 3),
 		},
 		{
 			text:    "Negative scale",
 			wantErr: true,
-			ecl:     Quartile,
+			ecl:     ECCQuartile,
 			dest:    nil,
 			config:  NewQrCodeImgConfig(-10, 3),
 		},
 		{
 			text:    "Negative border",
 			wantErr: true,
-			ecl:     Quartile,
+			ecl:     ECCQuartile,
 			dest:    nil,
 			config:  NewQrCodeImgConfig(10, -3),
 		},
 		{
 			text:    "Too large border",
 			wantErr: true,
-			ecl:     Quartile,
+			ecl:     ECCQuartile,
 			dest:    nil,
 			config:  NewQrCodeImgConfig(10, math.MaxInt32),
 		},
 		{
 			text:    "Fail on write",
 			wantErr: true,
-			ecl:     Quartile,
+			ecl:     ECCQuartile,
 			dest:    &badWriter{},
 			config:  NewQrCodeImgConfig(10, 3),
 		},
 	}
 
 	for _, tt := range tests {
-		qr, err := EncodeText(tt.text, tt.ecl)
+		qr, err := encodeText(tt.text, tt.ecl)
 		if err != nil {
-			t.Errorf("EncodeText() error = %v", err)
+			t.Errorf("encodeText() error = %v", err)
 			return
 		}
 
 		err = qr.WriteAsPNG(tt.config, tt.dest)
 		if (err != nil) != tt.wantErr {
-			t.Errorf("TestQrCode_WriteAsPNG() error = %v, wantErr %v", err, tt.wantErr)
+			t.Errorf("TestCode_WriteAsPNG() error = %v, wantErr %v", err, tt.wantErr)
 			return
 		}
 	}
@@ -447,145 +442,145 @@ func TestNewQrCodeImgConfig(t *testing.T) {
 	}
 }
 
-func TestQrCode_SVG(t *testing.T) {
+func TestCode_SVG(t *testing.T) {
 	tempDir := t.TempDir()
 	defer os.RemoveAll(tempDir)
 	tests := []struct {
 		text    string
 		wantErr bool
-		ecl     Ecc
+		ecl     ECC
 		dest    string
 		config  *QrCodeImgConfig
 	}{
 		{
 			text:    "Hello, world!",
 			wantErr: false,
-			ecl:     Low,
+			ecl:     ECCLow,
 			dest:    "hello-world-QR.svg",
 			config:  NewQrCodeImgConfig(10, 4),
 		},
 		{
 			text:    "Hello, world!",
 			wantErr: false,
-			ecl:     Low,
+			ecl:     ECCLow,
 			dest:    "hello-world-QR-with-svg-xml.svg",
 			config:  NewQrCodeImgConfig(10, 4, WithSVGXMLHeader()),
 		},
 		{
 			text:    "Hello, world!",
 			wantErr: false,
-			ecl:     Low,
+			ecl:     ECCLow,
 			dest:    "hello-world-QR-with-optimal-svg-xml.svg",
 			config:  NewQrCodeImgConfig(10, 4, WithSVGXMLHeader(), WithOptimalSVG()),
 		},
 		{
 			text:    "",
 			wantErr: false,
-			ecl:     Low,
+			ecl:     ECCLow,
 			dest:    "empty-QR.svg",
 			config:  NewQrCodeImgConfig(10, 4),
 		},
 		{
 			text:    "こんにちwa、世界！ αβγδ",
 			wantErr: false,
-			ecl:     Quartile,
+			ecl:     ECCQuartile,
 			dest:    "unicode-QR.svg",
 			config:  NewQrCodeImgConfig(10, 3),
 		},
 		{
 			text:    "aabbcc",
 			wantErr: true,
-			ecl:     Quartile,
+			ecl:     ECCQuartile,
 			dest:    "aabbcc-QR.svg",
 			config:  NewQrCodeImgConfig(-10, -3),
 		},
 		{
 			text:    "invalid file name",
 			wantErr: true,
-			ecl:     Low,
+			ecl:     ECCLow,
 			dest:    "test.other",
 			config:  NewQrCodeImgConfig(10, 3),
 		},
 		{
 			text:    "non-existent path",
 			wantErr: true,
-			ecl:     Low,
+			ecl:     ECCLow,
 			dest:    "../../not/existing.svg",
 			config:  NewQrCodeImgConfig(10, 3),
 		},
 	}
 
 	for _, tt := range tests {
-		qr, err := EncodeText(tt.text, tt.ecl)
+		qr, err := encodeText(tt.text, tt.ecl)
 		if err != nil {
-			t.Errorf("EncodeText() error = %v", err)
+			t.Errorf("encodeText() error = %v", err)
 			return
 		}
 
 		dest := filepath.Join(tempDir, tt.dest)
 		err = qr.SVG(tt.config, dest)
 		if (err != nil) != tt.wantErr {
-			t.Errorf("TestQrCode_SVG() error = %v, text = %v, wantErr %v", err, tt.text, tt.wantErr)
+			t.Errorf("TestCode_SVG() error = %v, text = %v, wantErr %v", err, tt.text, tt.wantErr)
 			return
 		}
 
 		if err == nil {
 			_, err = os.Stat(dest)
 			if err != nil {
-				t.Errorf("TestQrCode_SVG() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("TestCode_SVG() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 		}
 	}
 }
 
-func TestQrCode_WriteAsSVG(t *testing.T) {
+func TestCode_WriteAsSVG(t *testing.T) {
 	tests := []struct {
 		text    string
 		wantErr bool
-		ecl     Ecc
+		ecl     ECC
 		dest    io.Writer
 		config  *QrCodeImgConfig
 	}{
 		{
 			text:    "Hello, world!",
 			wantErr: false,
-			ecl:     Low,
+			ecl:     ECCLow,
 			dest:    &bytes.Buffer{},
 			config:  NewQrCodeImgConfig(10, 4),
 		},
 		{
 			text:    "",
 			wantErr: false,
-			ecl:     Low,
+			ecl:     ECCLow,
 			dest:    &bytes.Buffer{},
 			config:  NewQrCodeImgConfig(10, 4),
 		},
 		{
 			text:    "こんにちwa、世界！ αβγδ",
 			wantErr: false,
-			ecl:     Quartile,
+			ecl:     ECCQuartile,
 			dest:    &bytes.Buffer{},
 			config:  NewQrCodeImgConfig(10, 3),
 		},
 		{
 			text:    "Negative scale",
 			wantErr: true,
-			ecl:     Quartile,
+			ecl:     ECCQuartile,
 			dest:    nil,
 			config:  NewQrCodeImgConfig(-10, 3),
 		},
 		{
 			text:    "Negative border",
 			wantErr: true,
-			ecl:     Quartile,
+			ecl:     ECCQuartile,
 			dest:    nil,
 			config:  NewQrCodeImgConfig(10, -3),
 		},
 		{
 			text:    "Fail on write",
 			wantErr: true,
-			ecl:     Quartile,
+			ecl:     ECCQuartile,
 			dest:    &badWriter{},
 			config:  NewQrCodeImgConfig(10, 3),
 		},
@@ -593,15 +588,15 @@ func TestQrCode_WriteAsSVG(t *testing.T) {
 
 	light, dark := "#FFFFFF", "#000000"
 	for _, tt := range tests {
-		qr, err := EncodeText(tt.text, tt.ecl)
+		qr, err := encodeText(tt.text, tt.ecl)
 		if err != nil {
-			t.Errorf("EncodeText() error = %v", err)
+			t.Errorf("encodeText() error = %v", err)
 			return
 		}
 
 		err = qr.WriteAsSVG(tt.config, tt.dest)
 		if (err != nil) != tt.wantErr {
-			t.Errorf("TestQrCode_WriteAsSVG() error = %v, wantErr %v", err, tt.wantErr)
+			t.Errorf("TestCode_WriteAsSVG() error = %v, wantErr %v", err, tt.wantErr)
 			return
 		}
 
@@ -610,7 +605,7 @@ func TestQrCode_WriteAsSVG(t *testing.T) {
 			expectedSVGString := qr.toSVGString(tt.config, light, dark)
 
 			if actualSVGString != expectedSVGString {
-				t.Error("TestQrCode_WriteAsSVG() svg string does not match the content of the io.Writer")
+				t.Error("TestCode_WriteAsSVG() svg string does not match the content of the io.Writer")
 				return
 			}
 		}
@@ -618,7 +613,7 @@ func TestQrCode_WriteAsSVG(t *testing.T) {
 }
 
 func BenchmarkToSVGString(b *testing.B) {
-	qr, _ := EncodeText("WIFI:S:mYwIfI;T:WPA;P:secret_passwordt;H:false;;", Medium)
+	qr, _ := encodeText("WIFI:S:mYwIfI;T:WPA;P:secret_passwordt;H:false;;", ECCMedium)
 	cfg := NewQrCodeImgConfig(10, 4)
 	light, dark := "#FFFFFF", "#000000"
 	b.ReportAllocs()
@@ -629,7 +624,7 @@ func BenchmarkToSVGString(b *testing.B) {
 }
 
 func TestToPNGBytes(t *testing.T) {
-	qr, err := EncodeText("Hello, world!", Low)
+	qr, err := encodeText("Hello, world!", ECCLow)
 	assertNoError(t, err)
 
 	t.Run("returns valid PNG bytes", func(t *testing.T) {
@@ -656,7 +651,7 @@ func TestToPNGBytes(t *testing.T) {
 }
 
 func TestToSVGBytes(t *testing.T) {
-	qr, err := EncodeText("Hello, world!", Low)
+	qr, err := encodeText("Hello, world!", ECCLow)
 	assertNoError(t, err)
 
 	t.Run("returns valid SVG bytes", func(t *testing.T) {
@@ -688,7 +683,7 @@ func TestToSVGBytes(t *testing.T) {
 }
 
 func TestToImage(t *testing.T) {
-	qr, err := EncodeText("Hello, world!", Low)
+	qr, err := encodeText("Hello, world!", ECCLow)
 	assertNoError(t, err)
 
 	t.Run("returns image with expected dimensions", func(t *testing.T) {
@@ -707,10 +702,10 @@ func TestToImage(t *testing.T) {
 
 func BenchmarkToOptimalSVGString(b *testing.B) {
 	text := "WIFI:S:mYwIfI;T:WPA;P:secret_passwordt;H:false;;"
-	ecl := Medium
+	ecl := ECCMedium
 	light, dark := "#FFFFFF", "#000000"
 	for i := 0; i < b.N; i++ {
-		qr, _ := EncodeText(text, ecl)
+		qr, _ := encodeText(text, ecl)
 		qr.toSvgOptimizedString(NewQrCodeImgConfig(10, 4), light, dark)
 	}
 }
