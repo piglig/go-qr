@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- New payload types: `OTP` (otpauth:// for authenticator apps), `Contact`
+  (vCard 3.0), `Event` (iCalendar) and `EPC` (SEPA GiroCode, with
+  `Validate`).
+- `payload.Parse` turns decoded text back into a payload value, and every
+  type implements the new `payload.Payload` interface.
+
 ### Fixed
 
 - `go install github.com/piglig/go-qr/tools/generator@latest` failed because
