@@ -224,24 +224,24 @@ skip2 defers it to `Bitmap()`, which the benchmark forces.
 
 | Payload | go-qr | [skip2/go-qrcode][skip2] | [boombuler/barcode][boombuler] |
 | --- | --- | --- | --- |
-| numeric, 8 chars (v1) | **50 µs** · 17 allocs | 114 µs · 934 allocs (2.3×) | 503 µs · 172 allocs (10×) |
-| alphanumeric, 14 chars (v1) | **50 µs** · 19 allocs | 116 µs · 936 allocs (2.3×) | 509 µs · 181 allocs (10×) |
-| URL, 45 chars (v4) | **161 µs** · 23 allocs | 425 µs · 3,450 allocs (2.6×) | 1,704 µs · 578 allocs (11×) |
-| text, 672 chars (v20) | **1.6 ms** · 129 allocs | 5.4 ms · 49,099 allocs (3.3×) | 19.8 ms · 5,891 allocs (12×) |
+| numeric, 8 chars (v1) | **25 µs** · 17 allocs | 74 µs · 934 allocs (2.9×) | 407 µs · 172 allocs (16×) |
+| alphanumeric, 14 chars (v1) | **26 µs** · 19 allocs | 76 µs · 936 allocs (3.0×) | 414 µs · 181 allocs (16×) |
+| URL, 45 chars (v4) | **101 µs** · 23 allocs | 278 µs · 3,450 allocs (2.8×) | 1,425 µs · 578 allocs (14×) |
+| text, 672 chars (v20) | **1.07 ms** · 129 allocs | 3.35 ms · 49,099 allocs (3.1×) | 16.3 ms · 5,891 allocs (15×) |
 
 Decoding crisp rendered images against [gozxing][gozxing], a ZXing port:
 
 | Symbol | go-qr | [gozxing][gozxing] |
 | --- | --- | --- |
-| numeric (v1) | **210 µs** · 17 allocs | 685 µs · 53,914 allocs (3.3×) |
-| URL (v4) | **404 µs** · 23 allocs | 2,789 µs · 107,701 allocs (6.9×) |
-| text (v29) | **4.5 ms** · 114 allocs | 35 ms · 1.27M allocs (7.7×) |
+| numeric (v1) | **109 µs** · 17 allocs | 686 µs · 53,914 allocs (6.3×) |
+| URL (v4) | **206 µs** · 23 allocs | 1,399 µs · 107,701 allocs (6.8×) |
+| text (v29) | **2.3 ms** · 114 allocs | 16.9 ms · 1.27M allocs (7.4×) |
 
 Both decoders read the whole clean corpus and 4 of 5 images in a degraded
 corpus (7° rotation plus Gaussian noise). In the failing image, the rotation
 pushes the finder patterns out of the frame.
 
-<sub>Intel Core i7-14700KF, Go 1.25, Windows, best of three `go test -bench` runs. Absolute numbers vary by machine; reproduce with [`tools/bench`](tools/bench): `go test -run=^$ -bench='EncodeCompare|DecodeClean' -benchmem ./bench/`.</sub>
+<sub>Intel Core i7-14700KF, Go 1.25, Windows, best of five `go test -bench` runs on an otherwise idle machine. Absolute numbers vary by machine; reproduce with [`tools/bench`](tools/bench): `go test -run=^$ -bench='EncodeCompare|DecodeClean' -benchmem ./bench/`.</sub>
 
 [skip2]: https://github.com/skip2/go-qrcode
 [boombuler]: https://github.com/boombuler/barcode
