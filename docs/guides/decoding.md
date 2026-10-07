@@ -33,25 +33,29 @@ or text in an encoding other than UTF-8.
 
 `Decode` first tries a fast path for crisp, axis-aligned images such as the
 ones this library renders. If that fails, it locates the three finder
-patterns with a locally adaptive threshold and samples the grid through an
-affine transform. Each path is tried on the image as is and inverted, and
+patterns with a locally adaptive threshold and samples the grid through a
+perspective transform, anchored on the bottom-right alignment pattern when
+the symbol has one. Each path is tried on the image as is and inverted, and
 every sampled symbol is also read mirrored.
 
 | Input | Supported |
 | --- | --- |
 | Rendered images at any scale; PNG, JPEG, GIF, paletted, transparent backgrounds | ✅ |
-| Rotation, noise, low contrast, uneven lighting | ✅ |
+| Rotation, noise, blur, low contrast, uneven lighting | ✅ |
+| Perspective (photos taken at an angle, up to about 40°) | ✅ *Since v2.4* |
 | Light-on-dark (inverted) and mirror images | ✅ |
 | Styled codes: dots, rounded modules, round finders, gradients | ✅ |
 | Version information of version 7+ symbols, with error correction | ✅ |
 | Numeric, alphanumeric, byte and Kanji segments | ✅ |
 | Structured append and GS1 (FNC1 in first position) | ✅ *Since v2.1* |
-| Perspective distortion (photos taken at an angle) | ❌ |
+| Lens distortion and curved surfaces | ⚠️ small symbols only; large ones need a flat, centered view |
 | Several symbols in one image | ❌ only one is read |
 | Micro QR, rMQR, FNC1 in second position, Hanzi mode | ❌ `ErrUnsupported` |
 
-For photos, hold the camera square to the code. Perspective correction is
-not implemented yet.
+Modules should be at least 2 to 3 pixels wide. Large symbols in wide-angle
+photos are the hardest case: barrel distortion bends their edges, which one
+perspective transform cannot follow. Move closer to the code rather than
+zooming out.
 
 ### Text encodings
 

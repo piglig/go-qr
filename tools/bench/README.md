@@ -50,7 +50,16 @@ go test -run=^$ -bench='EncodeCompare|DecodeClean' -benchmem ./bench/
 
 # Robustness table (clean vs degraded success rate)
 go test -run=TestDecodeAccuracy -v ./bench/
+
+# Distortion sweeps: tilt, module size, blur, lens distortion, phone mix
+go test -run=TestRobustness -v ./bench/ -sweep
 ```
+
+`TestRobustness` renders symbols through a simulated pinhole camera
+(`distort.go`: tilt about any axis, rotation, pixels per module, Gaussian
+blur, noise, radial lens distortion) and tabulates decode rates per decoder
+and version. `DistortWithTruth` also returns where each module lands, for
+measuring localization error.
 
 ## Baseline (gozxing, 8 px/module, this machine — replace with your own)
 

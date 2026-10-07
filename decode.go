@@ -96,6 +96,13 @@ func searchImage(img image.Image, cfg decodeConfig, read func([][]bool) (*Decode
 	}
 
 	var firstErr error
+	// Keep the most specific failure: a symbol that was found but not
+	// readable says more than "not found".
+	note := func(err error) {
+		if firstErr == nil || errors.Is(firstErr, ErrNotFound) && !errors.Is(err, ErrNotFound) {
+			firstErr = err
+		}
+	}
 	try := func(grid [][]bool, err error) (*DecodeResult, error) {
 		if err == nil {
 			var res *DecodeResult
@@ -103,11 +110,7 @@ func searchImage(img image.Image, cfg decodeConfig, read func([][]bool) (*Decode
 				return res, nil
 			}
 		}
-		// Keep the most specific failure: a symbol that was found but not
-		// readable says more than "not found".
-		if firstErr == nil || errors.Is(firstErr, ErrNotFound) && !errors.Is(err, ErrNotFound) {
-			firstErr = err
-		}
+		note(err)
 		return nil, err
 	}
 
@@ -126,9 +129,11 @@ func searchImage(img image.Image, cfg decodeConfig, read func([][]bool) (*Decode
 		if inverted {
 			bm = invert(adaptive)
 		}
-		if res, err := try(robustSample(bm, w, h)); err == nil || errors.Is(err, ErrUnsupported) {
+		res, err := robustDecode(bm, w, h, read)
+		if err == nil || errors.Is(err, ErrUnsupported) {
 			return res, err
 		}
+		note(err)
 	}
 	return nil, firstErr
 }

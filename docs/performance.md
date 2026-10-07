@@ -21,9 +21,26 @@ Decoding crisp rendered images, compared with [gozxing], a Go port of ZXing:
 | URL (v4) | **206 µs** · 23 allocs | 1,399 µs · 107,701 allocs (6.8×) |
 | text (v29) | **2.3 ms** · 114 allocs | 16.9 ms · 1.27M allocs (7.4×) |
 
-Both decoders read the whole clean corpus and 4 of 5 images in a degraded
-corpus (7° rotation plus Gaussian noise). In the image both miss, the
-rotation pushes the finder patterns out of the frame.
+Robustness, from `TestRobustness` in `tools/bench`: symbols of versions 1,
+3, 7 and 12 photographed by a simulated pinhole camera, 32 images per point,
+with random rotation, slight blur and noise. Each row varies one parameter;
+"phone mix" randomizes all of them (tilt up to 35°, 3 to 8 pixels per
+module, blur, noise and mild barrel distortion), 256 images. A decode counts
+only if the text matches; neither decoder returned a wrong text.
+
+| Distortion | go-qr | gozxing (`TRY_HARDER`) |
+| --- | --- | --- |
+| tilt 20° | **100%** | 56% |
+| tilt 30° | **97%** | 31% |
+| tilt 40° | **81%** | 0% |
+| 2 px per module | **78%** | 75% |
+| 1.5 px per module | 22% | **28%** |
+| blur σ 2 px | **100%** | 56% |
+| barrel distortion k₁ = −0.1 | **62%** | 56% |
+| phone mix | **83%** | 42% |
+
+Large symbols under barrel distortion remain the weak spot: a single
+perspective transform cannot follow curved edges.
 
 ## Cost of features
 

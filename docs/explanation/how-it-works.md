@@ -69,9 +69,16 @@ image ──► luminance ──► binarize ──► locate ──► sample g
    thresholds each 8×8 block against its neighborhood, which copes with
    shadows and low contrast. Finder candidates are found by their 1:1:3:1:1
    runs, confirmed vertically and horizontally, and the three that best form
-   a right isosceles triangle are chosen. For version 7 and up, the version
+   a right isosceles triangle are chosen; up to three triples are tried.
+   Module sizes are measured along the symbol's edges, not the image axes,
+   so rotation does not distort them. For version 7 and up, the version
    information blocks near the finders give the exact size. The grid is
-   sampled through the affine transform the finders define.
+   sampled through a perspective transform whose fourth point is, in order
+   of preference, the bottom-right alignment pattern (searched for near
+   where the other estimates put it), the intersection of the outer edges of
+   the top-right and bottom-left finders, or the parallelogram completion of
+   the finder centers. Each module is a majority vote of five points in a
+   cross.
 4. **Retries.** Both paths run on the image as is and inverted, and each
    sampled grid is also decoded transposed, which is how a mirror image
    samples.

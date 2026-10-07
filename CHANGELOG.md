@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `Decode` corrects perspective, so it reads photos taken at an angle. The
+  robust path samples the grid through a perspective transform anchored on
+  the bottom-right alignment pattern, falling back to the intersection of
+  the finder edges and then to the parallelogram of the finder centers, and
+  tries up to three finder triples. In simulated phone photos it reads 83%
+  of symbols, up from 7% (gozxing: 42%); tilts up to 30° decode almost
+  always. Clean images take the unchanged fast path; the robust path is
+  about 7% slower. See [Performance](docs/performance.md).
+- `TestRobustness` in `tools/bench` sweeps tilt, module size, blur and lens
+  distortion through a simulated camera and compares decoders.
+
+### Fixed
+
+- The robust decode path misjudged the size of symbols rotated by 30° to
+  60°, because it measured module sizes along the image axes, and rejected
+  the finders of rotated version 1 symbols. About half of randomly rotated
+  photos failed to decode.
+
 ### Changed
 
 - The `generator` CLI (tools/v1.1.1) and `go-qr-mcp` (mcp/v0.1.1) are built
