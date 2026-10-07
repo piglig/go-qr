@@ -70,7 +70,8 @@ not accept rounded or circular finders.
 
 ## The CLI lacks a recent option
 
-The `generator` tool is released separately and pins a library release.
-Options that are newer than that release are not yet flags; use the library
+The `generator` tool is released separately and pins a library release, so
+options added to the library after that release are not flags yet. Check
+`generator version` against the [CLI guide](guides/cli.md), use the library
 directly, or build the tool from a checkout with a workspace (see
 [CONTRIBUTING.md](../CONTRIBUTING.md)).
