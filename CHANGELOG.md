@@ -17,6 +17,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Wi-Fi, 2FA secrets, invalid IBANs, USSD codes, text addressed to an AI).
   `-root` confines file access. See the [MCP guide](docs/guides/mcp.md).
 
+### Fixed
+
+- `Decode` could fail on a clean, axis-aligned image when the symbol's top
+  row happened to read 7:5:9:5:7 (the finder edge followed by data), which
+  the fast path mistook for the finder pattern at five times the real module
+  size. It occurred in about 1 in 10,000 symbols with a fixed mask, and in
+  small images the robust path could not recover. Found by `FuzzEncode`.
+
 ### Changed
 
 - `Code.Verify` names colors in its errors as `#RRGGBB` instead of Go struct

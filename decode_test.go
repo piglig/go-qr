@@ -513,3 +513,19 @@ func TestDecodeFlatImageFailsFast(t *testing.T) {
 		t.Fatalf("error = %v, want ErrNotFound", err)
 	}
 }
+
+// TestDecodeFastPathTopRowLikeFinder covers a symbol whose top row reads
+// 7:5:9:5:7, which matches the finder's 1:1:3:1:1 at about five times the
+// module pitch. Found by FuzzEncode.
+func TestDecodeFastPathTopRowLikeFinder(t *testing.T) {
+	const text = "YC0122881,70\xd5C0A02Y1Z110112120020000022100100701001"
+	code := mustEncode(t, text, WithECC(ECCMedium), WithGS1(), WithMask(0))
+	sym := mustImage(t, code, WithScale(1))
+	res, err := Decode(sym, WithFastPathOnly())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Version != code.Version() || res.Mask != 0 || !res.GS1 {
+		t.Fatalf("metadata %+v does not match the code", res)
+	}
+}
