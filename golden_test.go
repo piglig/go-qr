@@ -26,6 +26,8 @@ func TestGoldenSVG(t *testing.T) {
 		{"with_xml_header", "Hello, world!", ECCLow, []RenderOption{WithSVGXMLHeader()}},
 		{"larger_payload", "WIFI:S:mYwIfI;T:WPA;P:secret_passwordt;H:false;;", ECCMedium, []RenderOption{WithScale(8), WithQuietZone(2)}},
 		{"high_ecc", "The quick brown fox jumps over the lazy dog", ECCHigh, []RenderOption{WithScale(6)}},
+		{"dots_circle_finders", "Hello, world!", ECCLow, []RenderOption{WithModuleShape(ModuleDot), WithFinderShape(FinderCircle)}},
+		{"rounded_rounded_finders", "Hello, world!", ECCLow, []RenderOption{WithModuleShape(ModuleRounded), WithFinderShape(FinderRounded), WithScale(8)}},
 		{"colors", "Hello, world!", ECCLow, []RenderOption{
 			WithForeground(color.RGBA{R: 0x1a, G: 0x2b, B: 0x3c, A: 0xff}),
 			WithBackground(color.Transparent),

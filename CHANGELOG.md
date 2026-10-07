@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `WithModuleShape` (`ModuleSquare`, `ModuleDot`, `ModuleRounded`) and
+  `WithFinderShape` (`FinderSquare`, `FinderRounded`, `FinderCircle`) style
+  PNG, SVG and `Image` output with anti-aliased edges. Every combination
+  keeps module centers and the finder proportions readers rely on.
+
+### Changed
+
+- The decoder's fast path measures the module pitch across the center of
+  the top-left finder instead of along its top edge, so styled finders
+  decode without the slower fallback.
+
 ## [2.1.0] - 2026-10-07
 
 ### Added

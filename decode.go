@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"image"
+	"sort"
 	"strings"
 )
 
@@ -214,14 +215,10 @@ func fastSample(l []uint8, w, h int, threshold uint8, inverted bool) ([][]bool, 
 		return nil, fmt.Errorf("%w: no dark pixels", ErrNotFound)
 	}
 
-	run := 0
-	for x := minX; x <= maxX && dark(x, minY); x++ {
-		run++
+	pitch, ok := finderPitch(dark, minX, minY, maxX, maxY)
+	if !ok {
+		return nil, fmt.Errorf("%w: no finder pattern at top-left", ErrNotFound)
 	}
-	if run < 7 {
-		return nil, fmt.Errorf("%w: no finder edge at top-left", ErrNotFound)
-	}
-	pitch := float64(run) / 7
 
 	boxW, boxH := maxX-minX+1, maxY-minY+1
 	size := int(float64(boxW)/pitch + 0.5)
@@ -472,4 +469,39 @@ func JoinStructuredAppend(parts ...*DecodeResult) (string, error) {
 		sb.WriteString(p.Text)
 	}
 	return sb.String(), nil
+}
+
+// finderPitch measures the module pitch from the rows that cross the center
+// of the top-left finder pattern, where the runs from the left edge of the
+// symbol read 1:1:3:1:1. Using the center rows rather than the top edge
+// keeps this exact for rounded and circular finder styles.
+func finderPitch(dark func(x, y int) bool, minX, minY, maxX, maxY int) (float64, bool) {
+	var totals []int
+	for y := minY; y <= minY+(maxY-minY)/2; y++ {
+		if !dark(minX, y) {
+			continue
+		}
+		var s [5]int
+		state, x := 0, minX
+		for ; x <= maxX && state < 5; x++ {
+			if dark(x, y) != (state%2 == 0) {
+				state++
+				if state == 5 {
+					break
+				}
+			}
+			s[state]++
+		}
+		complete := state == 5 || (state == 4 && x > maxX)
+		if _, ok := checkFinderRatio(s); complete && ok {
+			totals = append(totals, s[0]+s[1]+s[2]+s[3]+s[4])
+		} else if len(totals) > 0 {
+			break // past the finder's center rows
+		}
+	}
+	if len(totals) == 0 {
+		return 0, false
+	}
+	sort.Ints(totals)
+	return float64(totals[len(totals)/2]) / 7, true
 }

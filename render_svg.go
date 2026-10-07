@@ -36,9 +36,13 @@ func (c *Code) WriteSVG(w io.Writer, opts ...RenderOption) error {
 	if !colorIsTransparent(cfg.bg) {
 		sb.WriteString("\t<rect width=\"" + sideStr + "\" height=\"" + sideStr + "\" fill=\"" + colorToSVG(cfg.bg) + "\"/>\n")
 	}
-	sb.WriteString("\t<path d=\"")
-	c.assembleBorderGraph().writePath(&sb, cfg.quietZone, cfg.scale)
-	sb.WriteString("\" fill=\"" + colorToSVG(cfg.fg) + "\" fill-rule=\"evenodd\"/>\n")
+	if cfg.styled() {
+		c.writeStyledSVGBody(&sb, &cfg)
+	} else {
+		sb.WriteString("\t<path d=\"")
+		c.assembleBorderGraph().writePath(&sb, cfg.quietZone, cfg.scale)
+		sb.WriteString("\" fill=\"" + colorToSVG(cfg.fg) + "\" fill-rule=\"evenodd\"/>\n")
+	}
 	if cfg.logo != nil {
 		if err := cfg.logo.writeSVG(&sb, c.Size(), &cfg); err != nil {
 			return err

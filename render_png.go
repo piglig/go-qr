@@ -26,7 +26,12 @@ func (c *Code) renderRGBA(cfg *renderConfig) (*image.RGBA, error) {
 	if err := cfg.checkLogo(c); err != nil {
 		return nil, err
 	}
-	img := paintRGBA(c, cfg, side)
+	var img *image.RGBA
+	if cfg.styled() {
+		img = paintStyled(c, cfg, side)
+	} else {
+		img = paintRGBA(c, cfg, side)
+	}
 	if cfg.logo != nil {
 		cfg.logo.overlay(img, c.Size(), cfg)
 	}
@@ -50,7 +55,11 @@ func (c *Code) WritePNG(w io.Writer, opts ...RenderOption) error {
 		if err != nil {
 			return err
 		}
-		img = paintPaletted(c, &cfg, side)
+		if cfg.styled() {
+			img = paintStyledPaletted(c, &cfg, side)
+		} else {
+			img = paintPaletted(c, &cfg, side)
+		}
 	}
 
 	if err := png.Encode(w, img); err != nil {
