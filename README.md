@@ -121,14 +121,31 @@ err = code.WriteText(os.Stdout)                // █▀▄ half blocks
 | `WithSVGXMLHeader()` | Add the XML declaration and DOCTYPE to SVG output. |
 
 ### Logos
-A logo covers modules, so the symbol relies on error correction to stay
-readable. Rendering fails with `ErrLogoTooLarge` when the covered area exceeds
-a conservative budget for the symbol's ECC level: 5% for L, 12% for M, 20% for
-Q and 25% for H. Encode with `WithECC(qr.ECCHigh)` for the largest logos:
+A logo hides the modules under it, so the symbol relies on error correction
+to stay readable. Rendering fails with `ErrLogoTooLarge` when the codewords
+under the logo would use more than 75% of the correction capacity of any
+error correction block, which leaves the rest for print defects and glare.
+Encode with `WithECC(qr.ECCHigh)` for the largest logos; a ratio of 0.2 fits
+every version at that level:
 
 ```go
 code, _ := qr.Encode("https://example.com", qr.WithECC(qr.ECCHigh))
-png, err := code.PNG(qr.WithLogo(logo, 0.22))
+png, err := code.PNG(qr.WithLogo(logo, 0.2))
+```
+
+### Checking readability
+`Verify` renders the code with the given options, decodes the image and
+checks that it carries exactly the code's data. It also rejects colors that
+phone scanners commonly fail on: a foreground lighter than the background, or
+less than 40% luminance contrast. Call it before publishing a code with
+custom colors or a logo:
+
+```go
+opts := []qr.RenderOption{qr.WithForeground(brandBlue), qr.WithLogo(logo, 0.2)}
+if err := code.Verify(opts...); err != nil {
+    // errors.Is(err, qr.ErrUnreadable) or qr.ErrLogoTooLarge
+}
+png, err := code.PNG(opts...)
 ```
 
 ## Decoding
@@ -219,7 +236,8 @@ Every error wraps one of these sentinels, so callers can test categories with
 | `ErrInvalidVersion` | Version range outside 1–40 or with min > max. |
 | `ErrDataTooLong` | The data does not fit the largest allowed version at the requested level. |
 | `ErrUnencodableChar` | A character the requested segment mode cannot represent. |
-| `ErrLogoTooLarge` | The logo covers more than the ECC budget allows. |
+| `ErrLogoTooLarge` | The logo would use too much error correction capacity. |
+| `ErrUnreadable` | `Verify` could not read the rendering back, or its colors are risky for scanners. |
 | `ErrNotFound` | No QR Code was located in the image. |
 | `ErrDecodeFailed` | A symbol was located but could not be read. |
 | `ErrUnsupported` | The symbol uses a feature the decoder does not implement. |

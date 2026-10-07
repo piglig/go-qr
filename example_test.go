@@ -149,3 +149,22 @@ func ExampleBatch() {
 	// 1 true false
 	// 2 false true
 }
+
+func ExampleCode_Verify() {
+	code, _ := qr.Encode("https://example.com", qr.WithECC(qr.ECCHigh))
+
+	brand := []qr.RenderOption{
+		qr.WithForeground(color.RGBA{R: 0x1a, G: 0x3c, B: 0x6e, A: 0xff}),
+		qr.WithBackground(color.RGBA{R: 0xf5, G: 0xf0, B: 0xe1, A: 0xff}),
+	}
+	fmt.Println(code.Verify(brand...))
+
+	pastel := []qr.RenderOption{
+		qr.WithForeground(color.RGBA{R: 0x9c, G: 0xc5, B: 0xe8, A: 0xff}),
+		qr.WithBackground(color.White),
+	}
+	fmt.Println(errors.Is(code.Verify(pastel...), qr.ErrUnreadable))
+	// Output:
+	// <nil>
+	// true
+}

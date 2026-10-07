@@ -14,9 +14,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `Validate`).
 - `payload.Parse` turns decoded text back into a payload value, and every
   type implements the new `payload.Payload` interface.
+- `Code.Verify` renders a code, decodes it and checks the data, and rejects
+  inverted or low-contrast colors, reporting `ErrUnreadable`.
 
 ### Fixed
 
+- The logo size check estimated damage from the covered area and accepted
+  logos that made the symbol unreadable, such as a 0.2 logo on a version 2
+  symbol at ECC M. It now counts the codewords under the logo in each error
+  correction block and rejects logos that would use more than 75% of any
+  block's correction capacity.
 - `go install github.com/piglig/go-qr/tools/generator@latest` failed because
   the `tools` module used a `replace` directive. It now requires the released
   library, and CI tests it against the checkout through a Go workspace.
