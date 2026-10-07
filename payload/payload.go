@@ -74,13 +74,13 @@ func (w WiFi) String() string {
 //
 // Format reference: https://en.wikipedia.org/wiki/MeCard_(QR_code)
 type VCard struct {
-	Name     string // Surname,Given or free-form
-	Phone    string
-	Email    string
-	URL      string
-	Address  string
-	Org      string
-	Note     string
+	Name    string // Surname,Given or free-form
+	Phone   string
+	Email   string
+	URL     string
+	Address string
+	Org     string
+	Note    string
 }
 
 func (v VCard) String() string {

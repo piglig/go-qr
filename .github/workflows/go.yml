@@ -1,6 +1,3 @@
-# This workflow will build a golang project
-# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-go
-
 name: Go
 
 on:
@@ -9,32 +6,82 @@ on:
   pull_request:
     branches: [ "main", "dev" ]
 
-jobs:
+permissions:
+  contents: read
 
-  build:
+jobs:
+  test:
+    name: test (go ${{ matrix.go }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        go: [ "oldstable", "stable" ]
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Go
-        uses: actions/setup-go@v5
+      - uses: actions/setup-go@v5
         with:
-          go-version: '>=1.18.0'
-      - run: go version
+          go-version: ${{ matrix.go }}
+          cache-dependency-path: |
+            go.mod
+            tools/go.sum
+            example/go.mod
 
-#      - name: Build
-#        run: go build -v ./...
+      - name: gofmt
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "Run gofmt -w on:"; echo "$unformatted"; exit 1
+          fi
+
+      - name: Vet
+        run: |
+          go vet ./...
+          (cd tools && go vet ./...)
+          (cd example && go vet ./...)
 
       - name: Test
-        run: go test -v -race -coverprofile=coverage.out -covermode=atomic
-      - name: Vet
-        run: go vet ./...
-      - name: Upload coverage reports to Codecov
-        uses: codecov/codecov-action@v5
-        env:
-          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+        run: |
+          go test -race -coverprofile=coverage.out -covermode=atomic ./...
+          (cd tools && go test -race ./...)
+          (cd example && go build ./...)
 
-      - uses: dominikh/staticcheck-action@v1
+      - name: Fuzz smoke test
+        run: go test -run='^$' -fuzz='^FuzzDecodeNoPanic$' -fuzztime=30s .
+
+      - name: Staticcheck
+        if: matrix.go == 'stable'
+        uses: dominikh/staticcheck-action@v1
         with:
           version: "latest"
           install-go: false
+
+      - name: Upload coverage reports to Codecov
+        if: matrix.go == 'stable'
+        uses: codecov/codecov-action@v5
+        with:
+          files: coverage.out
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
+  minimum-go:
+    name: test (go.mod minimum)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: go test ./...
+
+  vulncheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+      - run: go install golang.org/x/vuln/cmd/govulncheck@latest
+      - run: govulncheck ./...
+      - run: cd tools && govulncheck ./...

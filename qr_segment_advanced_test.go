@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"strings"
 	"testing"
-
-	"github.com/stretchr/testify/assert"
 )
 
 func TestMakeSegmentsOptimally(t *testing.T) {
@@ -198,7 +196,7 @@ func TestMakeSegmentsOptimally(t *testing.T) {
 				t.Errorf("MakeSegmentsOptimally() error = %v, wantErr %v", err, tt.wantErr)
 			}
 
-			assert.Equal(t, tt.wantSegments, got)
+			assertEqual(t, tt.wantSegments, got)
 		})
 	}
 }
@@ -225,7 +223,7 @@ func TestCountUtf8Bytes(t *testing.T) {
 				t.Errorf("countUtf8Bytes() error = %v, wantErr %v", err, tt.wantErr)
 			}
 
-			assert.Equal(t, tt.wantData, got)
+			assertEqual(t, tt.wantData, got)
 		})
 	}
 }
