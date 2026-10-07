@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bytes"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -10,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/piglig/go-qr/v2"
+	"github.com/piglig/go-qr/v2/payload"
 )
 
 const (
@@ -112,7 +114,11 @@ Examples:
 
 	text, err := resolveContent(o.Content, o.Payload)
 	if err != nil {
-		return fmt.Errorf("payload: %w", err)
+		// Errors from the payload package already start with "payload: ".
+		if !errors.Is(err, payload.ErrInvalidEPC) {
+			err = fmt.Errorf("payload: %w", err)
+		}
+		return err
 	}
 	if o.GS1 {
 		if text, err = gs1FromHRI(text); err != nil {

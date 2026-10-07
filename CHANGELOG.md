@@ -14,6 +14,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   payment codes. `go-qr-mcp` uses `EPC.Validate` for its `iban-invalid`
   signal instead of its own checksum.
 
+### Fixed
+
+- The `generator` CLI no longer prints "payload: payload:" when the payload
+  package rejects an EPC payment.
+
 ## [2.3.0] - 2026-10-07
 
 ### Added
