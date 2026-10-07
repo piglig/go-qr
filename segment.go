@@ -246,7 +246,7 @@ func simpleSegments(text string, gs1 bool) []Segment {
 		s, _ := NumericSegment(text)
 		return []Segment{s}
 	case gs1 && isAlphanumeric(strings.ReplaceAll(text, string(rune(gs1Separator)), "")) &&
-		!strings.Contains(text, "") && !strings.Contains(text, "%"):
+		!strings.Contains(text, "\x1d\x1d") && !strings.Contains(text, "\x1d%"):
 		s, _ := AlphanumericSegment(gs1Alphanumeric(text))
 		return []Segment{s}
 	case !gs1 && isAlphanumeric(text):
