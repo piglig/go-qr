@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-10-07
+
 Version 2 redesigns the API around functional options. The module path is now
 `github.com/piglig/go-qr/v2` and the package is named `qr`.
 
@@ -72,7 +74,8 @@ optimally, including Kanji, so symbols can differ from v1 `EncodeText`.
 - Optimal segmentation is about 6× faster with 60× fewer allocations.
 - PNG rendering is about 10× faster (40 instead of 168,000 allocations), and
   PNGs without a logo are written as 1-bit paletted images.
-- Clean-image decoding is 5–27% faster.
+- Decoding is faster on clean images (5–27%) and rotated images (14–19%), and
+  images without contrast are rejected immediately (#109).
 
 ### Changed
 
