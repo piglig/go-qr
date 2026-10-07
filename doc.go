@@ -25,6 +25,9 @@
 //	err = code.WriteSVG(w, qr.WithForeground(navy), qr.WithBackground(color.Transparent))
 //	fmt.Print(code)
 //
+// Code.Verify decodes a rendering to confirm it is readable before it is
+// published.
+//
 // # Decoding
 //
 // Decode locates and reads a symbol in an image, including rotated, noisy,
@@ -45,8 +48,8 @@
 //
 // Every error wraps one of the sentinel values ErrInvalidArgument,
 // ErrInvalidVersion, ErrDataTooLong, ErrUnencodableChar, ErrLogoTooLarge,
-// ErrNotFound, ErrDecodeFailed or ErrUnsupported; test for them with
-// errors.Is.
+// ErrUnreadable, ErrNotFound, ErrDecodeFailed or ErrUnsupported; test for
+// them with errors.Is.
 //
 // All functions and methods are safe for concurrent use, and a *Code is
 // immutable.

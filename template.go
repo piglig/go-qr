@@ -15,6 +15,11 @@ type qrTemplate struct {
 	// modules are always false (the mask never touches them). Each grid's rows
 	// alias one backing allocation.
 	maskPatterns [8][][]bool
+
+	// codewordAt[y][x] is the index, in placement order, of the raw codeword
+	// that module (x, y) belongs to, or -1 for function modules and
+	// remainder bits.
+	codewordAt [][]int16
 }
 
 // templateCache maps version -> *qrTemplate. Templates are immutable once built,
@@ -47,6 +52,44 @@ func getTemplate(version int) *qrTemplate {
 		t.maskPatterns[m] = grid
 	}
 
+	t.codewordAt = codewordMap(b)
+
 	actual, _ := templateCache.LoadOrStore(version, t)
 	return actual.(*qrTemplate)
+}
+
+// codewordMap walks the codeword placement zig-zag of drawCodewords over the
+// builder's function-pattern map and records which codeword each module
+// carries.
+func codewordMap(b *builder) [][]int16 {
+	size := b.size
+	n := numRawDataModules(b.version) / 8 * 8
+	out := make([][]int16, size)
+	backing := make([]int16, size*size)
+	for y := range out {
+		out[y] = backing[y*size : (y+1)*size]
+		for x := range out[y] {
+			out[y][x] = -1
+		}
+	}
+	i := 0
+	for right := size - 1; right >= 1; right -= 2 {
+		if right == 6 {
+			right = 5
+		}
+		upward := (right+1)&2 == 0
+		for vert := 0; vert < size; vert++ {
+			y := vert
+			if upward {
+				y = size - 1 - vert
+			}
+			for j := 0; j < 2; j++ {
+				if x := right - j; !b.isFunction[y][x] && i < n {
+					out[y][x] = int16(i / 8)
+					i++
+				}
+			}
+		}
+	}
+	return out
 }

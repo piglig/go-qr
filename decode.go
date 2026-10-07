@@ -27,6 +27,8 @@ type DecodeResult struct {
 	Mask     int
 	Mirrored bool // the symbol was read from a mirror image
 	Segments []DecodedSegment
+
+	codewords []byte // corrected data codewords, for Code.Verify
 }
 
 type decodeConfig struct {
@@ -60,7 +62,12 @@ func Decode(img image.Image, opts ...DecodeOption) (*DecodeResult, error) {
 	for _, o := range opts {
 		o(&cfg)
 	}
+	return searchImage(img, cfg, decodeGrid)
+}
 
+// searchImage runs the fast and robust samplers over img, each on the image
+// as is and inverted, and returns the first grid that read decodes.
+func searchImage(img image.Image, cfg decodeConfig, read func([][]bool) (*DecodeResult, error)) (*DecodeResult, error) {
 	b := img.Bounds()
 	w, h := b.Dx(), b.Dy()
 	if w < 21 || h < 21 {
@@ -76,7 +83,7 @@ func Decode(img image.Image, opts ...DecodeOption) (*DecodeResult, error) {
 	try := func(grid [][]bool, err error) (*DecodeResult, error) {
 		if err == nil {
 			var res *DecodeResult
-			if res, err = decodeGrid(grid); err == nil {
+			if res, err = read(grid); err == nil {
 				return res, nil
 			}
 		}

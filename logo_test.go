@@ -115,11 +115,63 @@ func TestLogoTooLarge(t *testing.T) {
 	}
 }
 
-func TestEccRecoveryBudget(t *testing.T) {
-	assertInDelta(t, 0.05, eccRecoveryBudget(ECCLow), 1e-9)
-	assertInDelta(t, 0.12, eccRecoveryBudget(ECCMedium), 1e-9)
-	assertInDelta(t, 0.20, eccRecoveryBudget(ECCQuartile), 1e-9)
-	assertInDelta(t, 0.25, eccRecoveryBudget(ECCHigh), 1e-9)
+func TestCodewordMapMatchesPlacement(t *testing.T) {
+	for _, ver := range []int{1, 2, 7, 14, 27, 40} {
+		code := mustEncode(t, "x", WithVersionRange(ver, ver))
+		read := func(modules [][]bool) []byte {
+			b := newBuilder(ver, code.ECC())
+			b.drawFunctionPatterns()
+			for y := range modules {
+				copy(b.modules[y], modules[y])
+			}
+			return b.readCodewords()
+		}
+		orig := read(code.modules)
+		cwMap := getTemplate(ver).codewordAt
+		for _, k := range []int{0, len(orig) / 2, len(orig) - 1} {
+			flipped := make([][]bool, code.size)
+			for y := range flipped {
+				flipped[y] = append([]bool(nil), code.modules[y]...)
+				for x := range flipped[y] {
+					if int(cwMap[y][x]) == k {
+						flipped[y][x] = !flipped[y][x]
+					}
+				}
+			}
+			got := read(flipped)
+			for i := range got {
+				if (got[i] != orig[i]) != (i == k) {
+					t.Fatalf("version %d: flipping codeword %d changed codeword %d", ver, k, i)
+				}
+			}
+			if got[k] != ^orig[k] {
+				t.Fatalf("version %d: codeword %d not fully covered by the map", ver, k)
+			}
+		}
+	}
+}
+
+// TestLogoWithinLimitIsReadable renders the largest logo the limit allows
+// at every ECC level and a spread of versions, and decodes it.
+func TestLogoWithinLimitIsReadable(t *testing.T) {
+	logo := makeTestLogo(16, 16, red)
+	for _, ecc := range []ECC{ECCLow, ECCMedium, ECCQuartile, ECCHigh} {
+		for ver := 1; ver <= MaxVersion; ver += 3 {
+			code := mustEncode(t, "a", WithECC(ecc), WithoutECCBoost(), WithVersionRange(ver, ver))
+			best := 0.0
+			for r := 0.01; r < 0.99; r += 0.01 {
+				if (&logoConfig{img: logo, ratio: r}).validate(code) == nil {
+					best = r
+				}
+			}
+			if best == 0 {
+				continue
+			}
+			if err := code.Verify(WithLogo(logo, best), WithScale(3)); err != nil {
+				t.Errorf("version %d %v, ratio %.2f: %v", ver, ecc, best, err)
+			}
+		}
+	}
 }
 
 func TestLogoBoxParity(t *testing.T) {

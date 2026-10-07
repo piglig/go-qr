@@ -23,9 +23,10 @@ type logoConfig struct {
 // ratio is the logo side as a fraction of the symbol side (quiet zone
 // excluded); 0.15-0.22 is typical. The covered modules are lost, so the
 // symbol depends on error correction to stay readable: rendering fails with
-// ErrLogoTooLarge when the covered area exceeds a conservative budget for the
-// symbol's ECC level (5% L, 12% M, 20% Q, 25% H). Encode with
-// WithECC(ECCHigh) to allow the largest logos.
+// ErrLogoTooLarge when the codewords under the logo would use more than 75%
+// of the correction capacity of any error correction block, leaving the rest
+// for real-world damage. Encode with WithECC(ECCHigh) to allow the largest
+// logos.
 func WithLogo(img image.Image, ratio float64) RenderOption {
 	return func(c *renderConfig) { c.logo = &logoConfig{img: img, ratio: ratio} }
 }
@@ -40,21 +41,9 @@ func (l *logoConfig) validateOptions() error {
 	return nil
 }
 
-// eccRecoveryBudget returns the fraction of modules that can safely be
-// covered at the given ECC level. The values are below the nominal recovery
-// capacity because covered modules also hit format information, alignment
-// patterns and codewords unevenly.
-func eccRecoveryBudget(ecc ECC) float64 {
-	switch ecc {
-	case ECCMedium:
-		return 0.12
-	case ECCQuartile:
-		return 0.20
-	case ECCHigh:
-		return 0.25
-	}
-	return 0.05
-}
+// maxLogoDamage is the share of each error correction block's capacity that
+// a logo may consume. The rest is left for print defects, glare and blur.
+const maxLogoDamage = 0.75
 
 // boxModules returns the side, in modules, of the padded logo box for a
 // symbol of the given size. The logo side has the same parity as the symbol
@@ -67,18 +56,59 @@ func (l *logoConfig) boxModules(qrSize int) int {
 	return max(logo, 1) + 2 // one module of padding on each side
 }
 
-// validate checks that the logo fits the error correction budget of code.
+// validate checks that the logo leaves enough error correction capacity.
 func (l *logoConfig) validate(code *Code) error {
 	box := l.boxModules(code.Size())
 	if box >= code.Size() {
 		return fmt.Errorf("%w: logo box of %d modules covers the whole %d-module symbol", ErrLogoTooLarge, box, code.Size())
 	}
-	covered := float64(box*box) / float64(code.Size()*code.Size())
-	if budget := eccRecoveryBudget(code.ECC()); covered > budget {
-		return fmt.Errorf("%w: logo covers %.1f%% of modules, over the %.0f%% budget for ECC %v",
-			ErrLogoTooLarge, covered*100, budget*100, code.ECC())
+	if damage := logoDamage(code, box); damage > maxLogoDamage {
+		return fmt.Errorf("%w: logo uses %.0f%% of the error correction capacity of ECC %v, over the %.0f%% limit (use a smaller ratio or a higher ECC level)",
+			ErrLogoTooLarge, damage*100, code.ECC(), maxLogoDamage*100)
 	}
 	return nil
+}
+
+// logoDamage returns the largest fraction of any error correction block's
+// capacity used up by a centered logo box of the given side. Every codeword
+// with a module under the box counts as lost, whatever the logo looks like.
+func logoDamage(code *Code, box int) float64 {
+	ver, ecc := code.Version(), code.ECC()
+	numBlocks := int(numErrorCorrectionBlocks[ecc][ver])
+	eccLen := int(eccCodeWordsPerBlock[ecc][ver])
+	raw := numRawDataModules(ver) / 8
+
+	// Placement order to block: the inverse of the interleaving in
+	// addEccAndInterLeave.
+	numShort := numBlocks - raw%numBlocks
+	shortLen := raw / numBlocks
+	blockOf := make([]int, 0, raw)
+	for i := 0; i <= shortLen; i++ {
+		for j := 0; j < numBlocks; j++ {
+			if i != shortLen-eccLen || j >= numShort {
+				blockOf = append(blockOf, j)
+			}
+		}
+	}
+
+	codewordAt := getTemplate(ver).codewordAt
+	lost := make([]bool, raw)
+	perBlock := make([]int, numBlocks)
+	start := (code.Size() - box) / 2
+	for y := start; y < start+box; y++ {
+		for x := start; x < start+box; x++ {
+			if cw := codewordAt[y][x]; cw >= 0 && !lost[cw] {
+				lost[cw] = true
+				perBlock[blockOf[cw]]++
+			}
+		}
+	}
+	capacity := float64(eccLen / 2)
+	worst := 0.0
+	for _, n := range perBlock {
+		worst = max(worst, float64(n)/capacity)
+	}
+	return worst
 }
 
 // rects returns the padded box and the inner logo area in output units.

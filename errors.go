@@ -25,6 +25,10 @@ var (
 	// symbol's error correction can be expected to recover. See WithLogo.
 	ErrLogoTooLarge = errors.New("qr: logo too large")
 
+	// ErrUnreadable reports a rendering that Code.Verify could not read
+	// back, or whose colors phone scanners are likely to fail on.
+	ErrUnreadable = errors.New("qr: rendering is not readable")
+
 	// ErrNotFound reports that no QR Code could be located in an image.
 	ErrNotFound = errors.New("qr: no QR code found")
 
