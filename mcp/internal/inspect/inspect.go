@@ -5,7 +5,6 @@ package inspect
 
 import (
 	"fmt"
-	"math/big"
 	"net"
 	"net/url"
 	"reflect"
@@ -120,10 +119,12 @@ func fromPayload(p payload.Payload) Report {
 		}
 		r.field("reference", nonEmpty(v.Reference, v.Text))
 		r.signal(Caution, "payment", "Scanning starts a money transfer. Check the beneficiary and IBAN before confirming; payment code stickers are a common scam.")
-		if iban := strings.ReplaceAll(strings.ToUpper(v.IBAN), " ", ""); !validIBAN(iban) {
-			r.signal(Danger, "iban-invalid", "The IBAN checksum is invalid.")
+		// Validate the IBAN alone, so other field violations are not
+		// reported as a bad IBAN.
+		if err := (payload.EPC{Name: "x", IBAN: v.IBAN}).Validate(); err != nil {
+			r.signal(Danger, "iban-invalid", "The IBAN has the wrong length or check digits, so the transfer cannot be made as encoded.")
 		} else {
-			r.field("iban_country", iban[:2])
+			r.field("iban_country", strings.ToUpper(strings.TrimSpace(v.IBAN))[:2])
 		}
 	case payload.Contact:
 		r = Report{Kind: "contact", Action: fmt.Sprintf("Offers to save the contact %q.", nonEmpty(v.Name, strings.TrimSpace(v.GivenName+" "+v.FamilyName)))}
@@ -245,26 +246,6 @@ func embeddedURL(s string) string {
 		u = "http://" + u
 	}
 	return strings.TrimRight(u, ".,;:!?)")
-}
-
-// validIBAN checks the ISO 13616 mod-97 checksum.
-func validIBAN(iban string) bool {
-	if len(iban) < 15 || len(iban) > 34 {
-		return false
-	}
-	var digits strings.Builder
-	for _, c := range iban[4:] + iban[:4] {
-		switch {
-		case c >= '0' && c <= '9':
-			digits.WriteRune(c)
-		case c >= 'A' && c <= 'Z':
-			digits.WriteString(strconv.Itoa(int(c-'A') + 10))
-		default:
-			return false
-		}
-	}
-	n, ok := new(big.Int).SetString(digits.String(), 10)
-	return ok && new(big.Int).Mod(n, big.NewInt(97)).Int64() == 1
 }
 
 func (r *Report) field(name, value string) {

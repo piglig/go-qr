@@ -290,3 +290,12 @@ func TestGS1FromHRI(t *testing.T) {
 		t.Fatalf("decoded %+v", res)
 	}
 }
+
+func TestPayloadEPCRejectsBadIBAN(t *testing.T) {
+	var out, errOut bytes.Buffer
+	args := []string{"encode", "-stdout", "png", "-payload", "epc", "-content", "name=x,iban=DE88370400440532013000"}
+	err := run(args, &out, &errOut)
+	if err == nil || !strings.Contains(err.Error(), "check digits") {
+		t.Fatalf("error = %v, want the IBAN check digits to be rejected", err)
+	}
+}

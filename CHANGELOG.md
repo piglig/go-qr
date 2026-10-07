@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- The `generator` CLI (tools/v1.1.1) and `go-qr-mcp` (mcp/v0.1.1) are built
+  on v2.3.0, so they reject IBANs with wrong check digits when creating EPC
+  payment codes. `go-qr-mcp` uses `EPC.Validate` for its `iban-invalid`
+  signal instead of its own checksum.
+
 ## [2.3.0] - 2026-10-07
 
 ### Added
