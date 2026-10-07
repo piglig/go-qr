@@ -1,13 +1,11 @@
-# Decode benchmark harness
+# Benchmark harness
 
-Comparative benchmark for QR **decoders**: it pits any candidate decoder against
-a shared corpus and reports throughput, allocations, and decode success rate.
-Lives in the `tools` submodule because it imports gozxing — the main `go-qr`
-library stays dependency-free.
-
-Goal: establish a gozxing baseline **now**, before writing a line of the native
-decoder, so the decision to build (and the eventual claims) rest on numbers, not
-intuition.
+Comparative benchmarks for QR **encoders** (`BenchmarkEncodeCompare`: go-qr,
+skip2/go-qrcode, boombuler/barcode) and **decoders** (`BenchmarkDecodeClean`,
+`TestDecodeAccuracy`: go-qr's native `qr.Decode` and gozxing) over a shared
+corpus, reporting throughput, allocations, and decode success rate. It lives in
+the `tools` submodule because it imports those libraries; the main `go-qr`
+module stays dependency-free.
 
 ## What it measures
 
@@ -28,27 +26,26 @@ intuition.
   sensor noise (stdlib only, deterministic). This is the robustness column where
   the ZXing family is expected to lead.
 
-## Adding the native decoder
+## Adding a decoder
 
-The harness is pluggable. Once `go_qr.Decode(image.Image) (string, error)`
-exists, append one line to the registry in `decode_bench_test.go`:
+The harness is pluggable: append a `func(image.Image) (string, error)` to the
+registry in `decode_bench_test.go` and every benchmark and accuracy case runs
+against it:
 
 ```go
 var decoders = []decoderImpl{
 	{"gozxing", decodeGozxing},
-	{"native", go_qr.Decode},   // <-- add this
+	{"native", decodeNative},
 }
 ```
-
-Every benchmark and accuracy case then runs against both automatically.
 
 ## Running
 
 ```shell
 cd tools
 
-# Baseline / comparison throughput + allocations
-go test -run=^$ -bench=BenchmarkDecodeClean -benchmem ./bench/
+# Encoder and decoder throughput + allocations
+go test -run=^$ -bench='EncodeCompare|DecodeClean' -benchmem ./bench/
 
 # Robustness table (clean vs degraded success rate)
 go test -run=TestDecodeAccuracy -v ./bench/
