@@ -17,16 +17,17 @@ type decoderImpl struct {
 }
 
 // decoders is the registry every benchmark and accuracy case iterates over.
-//
-// To add the native decoder once it exists, append:
-//
-//	{"native", qr.Decode},
-//
-// Nothing else needs to change — baselines, allocs, and success-rate reports
-// will all pick it up automatically.
 var decoders = []decoderImpl{
 	{"gozxing", decodeGozxing},
-	{"native", qr.Decode},
+	{"native", decodeNative},
+}
+
+func decodeNative(img image.Image) (string, error) {
+	res, err := qr.Decode(img)
+	if err != nil {
+		return "", err
+	}
+	return res.Text, nil
 }
 
 func decodeGozxing(img image.Image) (string, error) {

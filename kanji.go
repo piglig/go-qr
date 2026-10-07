@@ -121,9 +121,16 @@ const packedKanjiToUnicode = "MAAwATAC/wz/DjD7/xr/G/8f/wEwmzCcALT/QACo/z7/4/8/MP
 // the character has no Kanji-mode encoding.
 var unicodeToKanji [1 << 16]int16
 
+// kanjiToUnicode maps a 13-bit QR Kanji value to its code point, or -1 for
+// unassigned values.
+var kanjiToUnicode [1 << 13]rune
+
 func init() {
 	for i := range unicodeToKanji {
 		unicodeToKanji[i] = -1
+	}
+	for i := range kanjiToUnicode {
+		kanjiToUnicode[i] = -1
 	}
 	packed, err := base64.StdEncoding.DecodeString(packedKanjiToUnicode)
 	if err != nil {
@@ -131,9 +138,11 @@ func init() {
 	}
 	for i := 0; i+1 < len(packed); i += 2 {
 		c := int(packed[i])<<8 | int(packed[i+1])
-		if c != 0xFFFF {
-			unicodeToKanji[c] = int16(i / 2)
+		if c == 0xFFFF {
+			continue
 		}
+		unicodeToKanji[c] = int16(i / 2)
+		kanjiToUnicode[i/2] = rune(c)
 	}
 }
 
@@ -144,4 +153,39 @@ func kanjiValue(r rune) (int, bool) {
 		return 0, false
 	}
 	return int(unicodeToKanji[r]), true
+}
+
+// kanjiRune returns the character for a 13-bit QR Kanji value.
+func kanjiRune(v int) (rune, bool) {
+	if v < 0 || v >= len(kanjiToUnicode) || kanjiToUnicode[v] < 0 {
+		return 0, false
+	}
+	return kanjiToUnicode[v], true
+}
+
+// kanjiToShiftJIS expands a 13-bit QR Kanji value into its two Shift_JIS
+// bytes (ISO/IEC 18004 §7.4.6, in reverse).
+func kanjiToShiftJIS(v int) (byte, byte) {
+	c := (v/0xC0)<<8 | v%0xC0
+	if c < 0x1F00 {
+		c += 0x8140
+	} else {
+		c += 0xC140
+	}
+	return byte(c >> 8), byte(c)
+}
+
+// shiftJISToKanji compacts a Shift_JIS double-byte code into its 13-bit QR
+// Kanji value, reporting false outside the two ranges QR Kanji mode covers.
+func shiftJISToKanji(b1, b2 byte) (int, bool) {
+	c := int(b1)<<8 | int(b2)
+	switch {
+	case 0x8140 <= c && c <= 0x9FFC:
+		c -= 0x8140
+	case 0xE040 <= c && c <= 0xEBBF:
+		c -= 0xC140
+	default:
+		return 0, false
+	}
+	return (c>>8)*0xC0 + c&0xFF, true
 }
