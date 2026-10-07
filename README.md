@@ -161,17 +161,30 @@ freshly rendered.
 | Micro QR, rMQR, structured append, FNC1/GS1, Hanzi, other ECIs | ❌ `ErrUnsupported` |
 
 ## Structured Payloads
-The `payload` package builds the strings that phone scanners recognize:
+The `payload` package builds the strings that phone scanners act on, and
+parses decoded text back into them:
 
 ```go
 import "github.com/piglig/go-qr/v2/payload"
 
 wifi := payload.WiFi{SSID: "home", Password: "s3cret", Auth: payload.WPA}
 code, err := qr.Encode(wifi.String())
+
+p, err := payload.Parse(res.Text) // after qr.Decode
+if w, ok := p.(payload.WiFi); ok {
+    fmt.Println("join", w.SSID)
+}
 ```
 
-Available: `WiFi`, `VCard` (MECARD), `Email` (`mailto:`), `SMS` (`sms:`),
-`Tel`, `Geo`, `URL`.
+| Type | Format | Scanner action |
+| --- | --- | --- |
+| `WiFi` | `WIFI:` | Join a network |
+| `VCard` | `MECARD:` | Save a contact (compact) |
+| `Contact` | vCard 3.0 | Save a contact with several phones and emails |
+| `Event` | iCalendar `VEVENT` | Add a calendar event |
+| `OTP` | `otpauth://` | Enroll a 2FA authenticator (TOTP/HOTP) |
+| `EPC` | EPC069-12 (GiroCode) | Prefill a SEPA transfer; check it with `Validate` |
+| `Email`, `SMS`, `Tel`, `Geo`, `URL` | `mailto:`, `sms:`, `tel:`, `geo:`, `http(s)://` | Compose, call, open a map or a page |
 
 ## Batch Processing
 `Batch` encodes and renders jobs on a worker pool and returns results in job

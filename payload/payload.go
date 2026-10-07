@@ -1,11 +1,12 @@
-// Package payload provides constructors for structured QR code payloads.
-//
-// These types produce canonical strings consumable by standard QR code
-// scanners (e.g. Wi-Fi auto-join, contact import, mail compose). Pass the
-// result to qr.Encode.
+// Package payload builds and parses the structured strings that phone
+// scanners act on: joining a Wi-Fi network, saving a contact, adding a
+// calendar event, enrolling a 2FA authenticator, starting a SEPA transfer,
+// and so on. Encode the result of String with qr.Encode:
 //
 //	wifi := payload.WiFi{SSID: "home", Password: "s3cret", Auth: payload.WPA}
-//	code, _ := qr.Encode(wifi.String())
+//	code, err := qr.Encode(wifi.String())
+//
+// Parse turns decoded text back into one of these types.
 package payload
 
 import (
@@ -14,18 +15,23 @@ import (
 	"strings"
 )
 
-// escape escapes the reserved characters for MECARD/WiFi-style payloads:
-// \ ; , " :
-func escape(s string) string {
-	r := strings.NewReplacer(
-		`\`, `\\`,
-		`;`, `\;`,
-		`,`, `\,`,
-		`"`, `\"`,
-		`:`, `\:`,
-	)
-	return r.Replace(s)
+// Payload is implemented by every payload type in this package: WiFi, VCard,
+// Contact, Email, SMS, Tel, Geo, URL, OTP, Event and EPC.
+type Payload interface {
+	String() string
 }
+
+// meCardEscaper escapes the characters reserved in MECARD and Wi-Fi
+// payloads: \ ; , " :
+var meCardEscaper = strings.NewReplacer(
+	`\`, `\\`,
+	`;`, `\;`,
+	`,`, `\,`,
+	`"`, `\"`,
+	`:`, `\:`,
+)
+
+func escape(s string) string { return meCardEscaper.Replace(s) }
 
 // WiFiAuth is the Wi-Fi authentication type.
 type WiFiAuth string
