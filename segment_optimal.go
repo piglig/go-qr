@@ -78,7 +78,7 @@ func charModes(runes []rune, ver int, gs1 bool) []Mode {
 		case gs1 && r == '%':
 			cur[1] = prev[1] + 66
 			step[1] = ModeAlphanumeric
-		case r < utf8.RuneSelf && isAlphanumericByte(byte(r)), gs1 && r == gs1Separator:
+		case r < utf8.RuneSelf && isAlphanumericByte(byte(r)), gs1 && r == gs1Separator && gs1AlnumSeparator(runes, i):
 			cur[1] = prev[1] + 33
 			step[1] = ModeAlphanumeric
 		}
