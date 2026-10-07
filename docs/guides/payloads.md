@@ -53,7 +53,8 @@ event := payload.Event{
 
 **SEPA payment.** Amounts are in cents to avoid floating point. The
 specification requires at least error correction level M, and `Validate`
-checks its field rules:
+checks its field rules and the IBAN's check digits, so a mistyped IBAN is
+caught before it is printed:
 
 ```go
 pay := payload.EPC{Name: "Red Cross", IBAN: "BE72 0000 0000 1616", Amount: 2500, Text: "Donation"}

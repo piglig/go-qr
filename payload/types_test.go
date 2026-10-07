@@ -56,6 +56,26 @@ func TestEvent(t *testing.T) {
 	assertContains(t, day.String(), "DTSTART;VALUE=DATE:20261001\r\nDTEND;VALUE=DATE:20261002\r\n")
 }
 
+func TestValidIBAN(t *testing.T) {
+	for _, iban := range []string{
+		"BE72000000001616", "DE89370400440532013000", "GB82WEST12345698765432",
+		"FR1420041010050500013M02606", "NL91ABNA0417164300", "CH9300762011623852957",
+		"MT84MALT011000012345MTLCAST001S", "NO9386011117947",
+	} {
+		if !validIBAN(iban) {
+			t.Errorf("validIBAN(%q) = false", iban)
+		}
+	}
+	for _, iban := range []string{
+		"", "DE8", "DE00370400440532013000", "GB82WEST12345698765431",
+		"gb82WEST12345698765432", "G182WEST12345698765432", "GBX2WEST12345698765432",
+	} {
+		if validIBAN(iban) {
+			t.Errorf("validIBAN(%q) = true", iban)
+		}
+	}
+}
+
 func TestEPC(t *testing.T) {
 	e := EPC{
 		Name: "Red Cross", IBAN: "BE72 0000 0000 1616", BIC: "bpotbeb1",
@@ -72,6 +92,10 @@ func TestEPC(t *testing.T) {
 	for name, bad := range map[string]EPC{
 		"no name":         {IBAN: "DE89370400440532013000"},
 		"short IBAN":      {Name: "x", IBAN: "DE89"},
+		"IBAN checksum":   {Name: "x", IBAN: "DE88370400440532013000"},
+		"IBAN typo":       {Name: "x", IBAN: "DE89370400440532013001"},
+		"IBAN symbols":    {Name: "x", IBAN: "DE89-3704-0044-0532-0130"},
+		"IBAN no country": {Name: "x", IBAN: "1289370400440532013000"},
 		"bad BIC":         {Name: "x", IBAN: "DE89370400440532013000", BIC: "ABC"},
 		"negative amount": {Name: "x", IBAN: "DE89370400440532013000", Amount: -1},
 		"huge amount":     {Name: "x", IBAN: "DE89370400440532013000", Amount: maxEPCAmount + 1},

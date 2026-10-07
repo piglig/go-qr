@@ -24,6 +24,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the fast path mistook for the finder pattern at five times the real module
   size. It occurred in about 1 in 10,000 symbols with a fixed mask, and in
   small images the robust path could not recover. Found by `FuzzEncode`.
+- `EPC.Validate` checks the IBAN's ISO 13616 mod-97 check digits and its
+  country code, not only its length, so a mistyped IBAN is rejected when
+  the code is created instead of when someone scans it.
 
 ### Changed
 
