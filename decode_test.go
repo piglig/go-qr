@@ -345,13 +345,13 @@ func TestParseBitstreamMalformed(t *testing.T) {
 		{"truncated kanji segment", pack(0x8, 4, 9, 8), ErrDecodeFailed},
 		{"invalid ECI designator", pack(0x7, 4, 0xE0, 8), ErrDecodeFailed},
 		{"unknown mode", pack(0xF, 4), ErrDecodeFailed},
-		{"structured append", pack(0x3, 4), ErrUnsupported},
-		{"FNC1", pack(0x5, 4), ErrUnsupported},
+		{"truncated structured append", pack(0x3, 4), ErrDecodeFailed},
+		{"FNC1 second position", pack(0x9, 4), ErrUnsupported},
 		{"hanzi", pack(0xD, 4), ErrUnsupported},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			if _, _, err := parseBitstream(tc.data, 1); !errors.Is(err, tc.want) {
+			if _, err := parseBitstream(tc.data, 1); !errors.Is(err, tc.want) {
 				t.Errorf("error = %v, want %v", err, tc.want)
 			}
 		})

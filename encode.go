@@ -1,6 +1,9 @@
 package qr
 
-import "fmt"
+import (
+	"errors"
+	"fmt"
+)
 
 // EncodeOption configures Encode, EncodeBytes and EncodeSegments.
 type EncodeOption func(*encodeConfig)
@@ -13,6 +16,7 @@ type encodeConfig struct {
 	boost          bool
 	simple         bool
 	utf8ECI        bool
+	gs1            bool
 }
 
 func newEncodeConfig(opts []EncodeOption) (encodeConfig, error) {
@@ -74,6 +78,16 @@ func WithUTF8ECI() EncodeOption {
 	return func(c *encodeConfig) { c.utf8ECI = true }
 }
 
+// WithGS1 marks the data as a GS1 element string, such as
+// "01095011015300031725010110ABC123", by writing the FNC1-in-first-position
+// indicator. Separate a variable-length element from the next one with the
+// ASCII GS character (0x1D); Encode turns it into the FNC1 code GS1 readers
+// expect. Do not include the human-readable parentheses around application
+// identifiers. Ignored by EncodeBytes and EncodeSegments.
+func WithGS1() EncodeOption {
+	return func(c *encodeConfig) { c.gs1 = true }
+}
+
 // Encode encodes text into a QR Code. By default it uses ECCMedium (boosted
 // when there is room), the smallest fitting version, optimal mode switching
 // between numeric, alphanumeric, byte and Kanji segments, and the
@@ -83,23 +97,89 @@ func Encode(text string, opts ...EncodeOption) (*Code, error) {
 	if err != nil {
 		return nil, err
 	}
+	segs, err := textSegments(text, c, nil)
+	if err != nil {
+		return nil, err
+	}
+	return encodeSegments(segs, c)
+}
 
-	var prefix []Segment
+// textSegments returns the segments that encode text under c: the given
+// header, then the FNC1 and ECI designators the options call for, then the
+// data.
+func textSegments(text string, c encodeConfig, header []Segment) ([]Segment, error) {
+	prefix := append([]Segment(nil), header...)
+	if c.gs1 {
+		prefix = append(prefix, fnc1Segment())
+	}
 	if c.utf8ECI && !isASCII(text) {
 		eci, _ := ECISegment(eciUTF8)
-		prefix = []Segment{eci}
+		prefix = append(prefix, eci)
+	}
+	if c.simple {
+		return append(prefix, simpleSegments(text, c.gs1)...), nil
+	}
+	data, err := optimalSegments(text, c, totalBits(prefix, MinVersion))
+	if err != nil {
+		return nil, err
+	}
+	return append(prefix, data...), nil
+}
+
+// maxStructuredAppend is the largest number of symbols in a structured
+// append sequence.
+const maxStructuredAppend = 16
+
+// EncodeStructured encodes text across the fewest symbols, up to 16, that
+// each fit the options, linking them with structured append headers so a
+// reader can reassemble the message (see JoinStructuredAppend). Restrict the
+// size of each symbol with WithVersionRange. A text that fits in one symbol
+// yields a single code without a header. The text is split between
+// characters, so every symbol holds valid UTF-8.
+func EncodeStructured(text string, opts ...EncodeOption) ([]*Code, error) {
+	c, err := newEncodeConfig(opts)
+	if err != nil {
+		return nil, err
+	}
+	if code, err := Encode(text, opts...); err == nil {
+		return []*Code{code}, nil
+	} else if !errors.Is(err, ErrDataTooLong) {
+		return nil, err
 	}
 
-	var segs []Segment
-	if c.simple {
-		segs = simpleSegments(text)
-	} else {
-		segs, err = optimalSegments(text, c, totalBits(prefix, MinVersion))
-		if err != nil {
+	var parity byte
+	for i := 0; i < len(text); i++ {
+		parity ^= text[i]
+	}
+	runes := []rune(text)
+	for n := 2; n <= min(maxStructuredAppend, len(runes)); n++ {
+		codes, err := encodeParts(runes, n, parity, c)
+		if err == nil {
+			return codes, nil
+		}
+		if !errors.Is(err, ErrDataTooLong) {
 			return nil, err
 		}
 	}
-	return encodeSegments(append(prefix, segs...), c)
+	return nil, fmt.Errorf("%w: text does not fit in %d symbols of versions %d..%d",
+		ErrDataTooLong, maxStructuredAppend, c.minVer, c.maxVer)
+}
+
+// encodeParts encodes runes as n symbols holding nearly equal numbers of
+// characters.
+func encodeParts(runes []rune, n int, parity byte, c encodeConfig) ([]*Code, error) {
+	codes := make([]*Code, n)
+	for i := range codes {
+		part := string(runes[i*len(runes)/n : (i+1)*len(runes)/n])
+		segs, err := textSegments(part, c, []Segment{structuredAppendSegment(i, n, parity)})
+		if err != nil {
+			return nil, err
+		}
+		if codes[i], err = encodeSegments(segs, c); err != nil {
+			return nil, err
+		}
+	}
+	return codes, nil
 }
 
 // EncodeBytes encodes binary data in a single byte-mode segment.

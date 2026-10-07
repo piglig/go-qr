@@ -16,6 +16,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   type implements the new `payload.Payload` interface.
 - `Code.Verify` renders a code, decodes it and checks the data, and rejects
   inverted or low-contrast colors, reporting `ErrUnreadable`.
+- `EncodeStructured` splits long text over up to 16 symbols with structured
+  append headers; the decoder reports them in
+  `DecodeResult.StructuredAppend`, and `JoinStructuredAppend` reassembles
+  the message.
+- `WithGS1` encodes GS1 element strings with FNC1 in first position, and the
+  decoder reads them, reporting `DecodeResult.GS1`. `ModeStructuredAppend`
+  and `ModeFNC1` describe the new segments.
 
 ### Fixed
 

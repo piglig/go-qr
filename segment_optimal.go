@@ -21,7 +21,7 @@ func optimalSegments(text string, c encodeConfig, extraBits int) ([]Segment, err
 	}
 	if !utf8.ValidString(text) {
 		// Invalid UTF-8 can only be carried byte for byte.
-		return simpleSegments(text), nil
+		return simpleSegments(text, c.gs1), nil
 	}
 	runes := []rune(text)
 	if len(runes) > maxOptimalChars {
@@ -31,7 +31,7 @@ func optimalSegments(text string, c encodeConfig, extraBits int) ([]Segment, err
 	var segs []Segment
 	for ver := c.minVer; ; ver++ {
 		if ver == c.minVer || ver == 10 || ver == 27 {
-			segs = splitSegments(text, runes, charModes(runes, ver))
+			segs = splitSegments(text, runes, charModes(runes, ver, c.gs1), c.gs1)
 		}
 		capacityBits := numDataCodewords(ver, c.ecc) * 8
 		usedBits := totalBits(segs, ver)
@@ -55,8 +55,9 @@ var optimalModes = [4]Mode{ModeByte, ModeAlphanumeric, ModeNumeric, ModeKanji}
 // charModes returns the mode of every character in the cheapest encoding of
 // runes at version ver. It is a dynamic program over (character, mode) pairs;
 // costs are in sixths of a bit so that alphanumeric (5.5 bits/char) and
-// numeric (3.33 bits/char) stay integral.
-func charModes(runes []rune, ver int) []Mode {
+// numeric (3.33 bits/char) stay integral. With gs1, the GS separator is
+// alphanumeric ('%') and '%' costs two alphanumeric characters ("%%").
+func charModes(runes []rune, ver int, gs1 bool) []Mode {
 	const n = len(optimalModes)
 	var head [n]int // cost of starting a new segment in each mode
 	for j, m := range optimalModes {
@@ -73,7 +74,11 @@ func charModes(runes []rune, ver int) []Mode {
 
 		cur[0] = prev[0] + utf8.RuneLen(r)*8*6
 		step[0] = ModeByte
-		if r < utf8.RuneSelf && isAlphanumericByte(byte(r)) {
+		switch {
+		case gs1 && r == '%':
+			cur[1] = prev[1] + 66
+			step[1] = ModeAlphanumeric
+		case r < utf8.RuneSelf && isAlphanumericByte(byte(r)), gs1 && r == gs1Separator:
 			cur[1] = prev[1] + 33
 			step[1] = ModeAlphanumeric
 		}
@@ -132,7 +137,7 @@ func modeColumn(m Mode) int {
 // splitSegments groups consecutive characters with the same mode into
 // segments. text and runes are the same string; modes[i] is the mode of
 // runes[i].
-func splitSegments(text string, runes []rune, modes []Mode) []Segment {
+func splitSegments(text string, runes []rune, modes []Mode, gs1 bool) []Segment {
 	var segs []Segment
 	start, pos := 0, 0 // byte offsets into text
 	for i, r := range runes {
@@ -140,7 +145,7 @@ func splitSegments(text string, runes []rune, modes []Mode) []Segment {
 		if i+1 < len(runes) && modes[i+1] == modes[i] {
 			continue
 		}
-		segs = append(segs, makeSegment(modes[i], text[start:pos]))
+		segs = append(segs, makeSegment(modes[i], text[start:pos], gs1))
 		start = pos
 	}
 	return segs
@@ -148,13 +153,16 @@ func splitSegments(text string, runes []rune, modes []Mode) []Segment {
 
 // makeSegment builds a segment of mode m for s, which charModes has already
 // verified to be encodable in that mode.
-func makeSegment(m Mode, s string) Segment {
+func makeSegment(m Mode, s string, gs1 bool) Segment {
 	var seg Segment
 	var err error
 	switch m {
 	case ModeNumeric:
 		seg, err = NumericSegment(s)
 	case ModeAlphanumeric:
+		if gs1 {
+			s = gs1Alphanumeric(s)
+		}
 		seg, err = AlphanumericSegment(s)
 	case ModeKanji:
 		seg, err = KanjiSegment(s)

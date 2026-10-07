@@ -12,11 +12,13 @@ type Mode uint8
 
 // Segment modes supported by this package (ISO/IEC 18004 §7.4).
 const (
-	ModeNumeric      Mode = 0x1 // decimal digits 0-9
-	ModeAlphanumeric Mode = 0x2 // 0-9, A-Z, space and $%*+-./:
-	ModeByte         Mode = 0x4 // arbitrary bytes
-	ModeECI          Mode = 0x7 // extended channel interpretation designator
-	ModeKanji        Mode = 0x8 // Shift_JIS double-byte characters
+	ModeNumeric          Mode = 0x1 // decimal digits 0-9
+	ModeAlphanumeric     Mode = 0x2 // 0-9, A-Z, space and $%*+-./:
+	ModeStructuredAppend Mode = 0x3 // position of the symbol in a sequence
+	ModeByte             Mode = 0x4 // arbitrary bytes
+	ModeFNC1             Mode = 0x5 // FNC1 in first position: GS1 data
+	ModeECI              Mode = 0x7 // extended channel interpretation designator
+	ModeKanji            Mode = 0x8 // Shift_JIS double-byte characters
 )
 
 // String returns the mode name, such as "numeric".
@@ -26,8 +28,12 @@ func (m Mode) String() string {
 		return "numeric"
 	case ModeAlphanumeric:
 		return "alphanumeric"
+	case ModeStructuredAppend:
+		return "structured append"
 	case ModeByte:
 		return "byte"
+	case ModeFNC1:
+		return "fnc1"
 	case ModeECI:
 		return "eci"
 	case ModeKanji:
@@ -158,6 +164,31 @@ func ECISegment(assignment int) (Segment, error) {
 // eciUTF8 is the ECI assignment number for UTF-8.
 const eciUTF8 = 26
 
+// structuredAppendSegment returns the header that marks a symbol as number
+// index (0-based) of total symbols carrying one message whose bytes XOR to
+// parity (ISO/IEC 18004 §8).
+func structuredAppendSegment(index, total int, parity byte) Segment {
+	var bb bitBuffer
+	bb.appendBits(index, 4)
+	bb.appendBits(total-1, 4)
+	bb.appendBits(int(parity), 8)
+	return Segment{mode: ModeStructuredAppend, data: bb}
+}
+
+// fnc1Segment returns the FNC1-in-first-position indicator that marks the
+// data as a GS1 element string.
+func fnc1Segment() Segment { return Segment{mode: ModeFNC1} }
+
+// gs1Separator is the ASCII GS character that separates variable-length GS1
+// element strings. Alphanumeric segments write it as '%' and a literal '%'
+// as "%%" (ISO/IEC 18004 §7.4.8.2); other modes carry it as is.
+const gs1Separator = 0x1D
+
+// gs1Alphanumeric rewrites s for an alphanumeric segment in a GS1 symbol.
+func gs1Alphanumeric(s string) string {
+	return strings.NewReplacer("%", "%%", string(rune(gs1Separator)), "%").Replace(s)
+}
+
 // isNumeric reports whether s is non-empty and contains only ASCII digits.
 func isNumeric(s string) bool {
 	if s == "" {
@@ -197,15 +228,19 @@ func isASCII(s string) bool {
 }
 
 // simpleSegments encodes text as a single segment in the most compact mode
-// that can hold all of it: numeric, alphanumeric or byte.
-func simpleSegments(text string) []Segment {
+// that can hold all of it: numeric, alphanumeric or byte. With gs1, the GS
+// separator counts as alphanumeric.
+func simpleSegments(text string, gs1 bool) []Segment {
 	switch {
 	case text == "":
 		return nil
 	case isNumeric(text):
 		s, _ := NumericSegment(text)
 		return []Segment{s}
-	case isAlphanumeric(text):
+	case gs1 && isAlphanumeric(strings.ReplaceAll(text, string(rune(gs1Separator)), "")):
+		s, _ := AlphanumericSegment(gs1Alphanumeric(text))
+		return []Segment{s}
+	case !gs1 && isAlphanumeric(text):
 		s, _ := AlphanumericSegment(text)
 		return []Segment{s}
 	}
@@ -218,7 +253,7 @@ func totalBits(segs []Segment, ver int) int {
 	total := 0
 	for _, s := range segs {
 		ccBits := s.mode.charCountBits(ver)
-		if s.numChars >= 1<<ccBits && s.mode != ModeECI {
+		if ccBits > 0 && s.numChars >= 1<<ccBits {
 			return -1
 		}
 		total += 4 + ccBits + s.data.len()
