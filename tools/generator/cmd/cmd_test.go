@@ -271,3 +271,35 @@ func TestParseKV_EscapesCommasAndEquals(t *testing.T) {
 		t.Fatalf("unexpected parse: %v", kv)
 	}
 }
+
+func TestRun_EncodeStdoutText(t *testing.T) {
+	var out, errOut bytes.Buffer
+	if err := run([]string{"encode", "-stdout", "text", "-quiet-zone", "1", "hi"}, &out, &errOut); err != nil {
+		t.Fatal(err)
+	}
+	code, err := qr.Encode("hi", qr.WithECC(qr.ECCHigh))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var want bytes.Buffer
+	if err := code.WriteText(&want, qr.WithQuietZone(1)); err != nil {
+		t.Fatal(err)
+	}
+	if out.String() != want.String() {
+		t.Fatalf("text output differs:\n%s\nwant:\n%s", out.String(), want.String())
+	}
+}
+
+func TestRun_EncodeQuietZone(t *testing.T) {
+	var out, errOut bytes.Buffer
+	if err := run([]string{"encode", "-stdout", "png", "-scale", "1", "-quiet-zone", "0", "-ecc", "low", "hi"}, &out, &errOut); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := png.DecodeConfig(bytes.NewReader(out.Bytes()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Width != 21 {
+		t.Fatalf("PNG width = %d, want 21 (version 1, no quiet zone)", cfg.Width)
+	}
+}

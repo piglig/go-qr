@@ -3,171 +3,133 @@ package qr
 import (
 	"bytes"
 	"encoding/base64"
-	"errors"
 	"fmt"
 	"image"
 	"image/draw"
 	"image/png"
+	"strconv"
+	"strings"
 )
 
-// logoConfig holds the configuration for embedding a logo in the center of a QR code.
+// logoConfig holds a logo to draw over the center of the symbol.
 type logoConfig struct {
-	img       image.Image
-	sizeRatio float64
+	img   image.Image
+	ratio float64
 }
 
-// WithLogo embeds the given image in the center of the QR code.
+// WithLogo draws img over the center of the symbol, on a background-colored
+// pad one module wide.
 //
-// sizeRatio is the logo side length as a fraction of the QR code's module-area
-// side length (excluding the quiet-zone border). Typical values are 0.15–0.22.
-// A 1-module-wide white padding is drawn between the logo and the surrounding
-// QR modules to keep finder patterns readable.
-//
-// The logo occludes a portion of the QR modules and relies on error correction
-// to remain scannable. Higher error correction levels tolerate larger logos;
-// rendering will fail if the occluded area exceeds what the chosen ECC can
-// realistically recover.
-func WithLogo(img image.Image, sizeRatio float64) Option {
-	return func(q *QrCodeImgConfig) {
-		q.logo = &logoConfig{img: img, sizeRatio: sizeRatio}
+// ratio is the logo side as a fraction of the symbol side (quiet zone
+// excluded); 0.15-0.22 is typical. The covered modules are lost, so the
+// symbol depends on error correction to stay readable: rendering fails with
+// ErrLogoTooLarge when the covered area exceeds a conservative budget for the
+// symbol's ECC level (5% L, 12% M, 20% Q, 25% H). Encode with
+// WithECC(ECCHigh) to allow the largest logos.
+func WithLogo(img image.Image, ratio float64) RenderOption {
+	return func(c *renderConfig) { c.logo = &logoConfig{img: img, ratio: ratio} }
+}
+
+func (l *logoConfig) validateOptions() error {
+	switch {
+	case l.img == nil:
+		return fmt.Errorf("%w: nil logo image", ErrInvalidArgument)
+	case !(l.ratio > 0 && l.ratio < 1):
+		return fmt.Errorf("%w: logo ratio %v must be in (0, 1)", ErrInvalidArgument, l.ratio)
 	}
+	return nil
 }
 
-// eccRecoveryBudget returns the fraction of modules that can safely be occluded
-// for the given ECC level. Values are conservative: the spec defines recovery
-// capacity per codeword, but in practice finder-pattern position and masking
-// make the usable budget smaller.
-func eccRecoveryBudget(ecl ECC) float64 {
-	switch ecl {
-	case ECCLow:
-		return 0.05
+// eccRecoveryBudget returns the fraction of modules that can safely be
+// covered at the given ECC level. The values are below the nominal recovery
+// capacity because covered modules also hit format information, alignment
+// patterns and codewords unevenly.
+func eccRecoveryBudget(ecc ECC) float64 {
+	switch ecc {
 	case ECCMedium:
 		return 0.12
 	case ECCQuartile:
 		return 0.20
 	case ECCHigh:
 		return 0.25
-	default:
-		return 0.05
 	}
+	return 0.05
 }
 
-// logoRect computes the logo's occluded rectangle in image-pixel coordinates,
-// including the 1-module white padding. It also returns the occluded area as
-// a fraction of the QR module area (excluding the border).
-func (l *logoConfig) logoRect(qrSize, scale, border int) (image.Rectangle, float64, error) {
-	if l.sizeRatio <= 0 || l.sizeRatio >= 1 {
-		return image.Rectangle{}, 0, fmt.Errorf("logo sizeRatio must be in (0, 1), got %v", l.sizeRatio)
+// boxModules returns the side, in modules, of the padded logo box for a
+// symbol of the given size. The logo side has the same parity as the symbol
+// so the box centers on whole modules.
+func (l *logoConfig) boxModules(qrSize int) int {
+	logo := int(float64(qrSize) * l.ratio)
+	if logo%2 != qrSize%2 {
+		logo--
 	}
-	if l.img == nil {
-		return image.Rectangle{}, 0, errors.New("logo image is nil")
-	}
-
-	// Logo side in modules, rounded down to an even integer so it centers cleanly.
-	logoModules := int(float64(qrSize) * l.sizeRatio)
-	if logoModules < 1 {
-		logoModules = 1
-	}
-	if logoModules%2 != qrSize%2 {
-		// Match parity with qrSize so the logo can be pixel-centered.
-		logoModules--
-		if logoModules < 1 {
-			logoModules = 1
-		}
-	}
-
-	const paddingModules = 1
-	boxModules := logoModules + 2*paddingModules
-	if boxModules >= qrSize {
-		return image.Rectangle{}, 0, fmt.Errorf("logo too large: covers %d of %d modules", boxModules, qrSize)
-	}
-
-	// Center of the module area in image pixels. border is measured in modules.
-	centerPx := border*scale + (qrSize*scale)/2
-	halfPx := (boxModules * scale) / 2
-	rect := image.Rect(centerPx-halfPx, centerPx-halfPx, centerPx+halfPx, centerPx+halfPx)
-
-	occludedRatio := float64(boxModules*boxModules) / float64(qrSize*qrSize)
-	return rect, occludedRatio, nil
+	return max(logo, 1) + 2 // one module of padding on each side
 }
 
-// validate checks that the logo configuration is compatible with the QR code's
-// error correction level.
-func (l *logoConfig) validate(q *Code, scale, border int) error {
-	_, ratio, err := l.logoRect(q.Size(), scale, border)
-	if err != nil {
-		return err
+// validate checks that the logo fits the error correction budget of code.
+func (l *logoConfig) validate(code *Code) error {
+	box := l.boxModules(code.Size())
+	if box >= code.Size() {
+		return fmt.Errorf("%w: logo box of %d modules covers the whole %d-module symbol", ErrLogoTooLarge, box, code.Size())
 	}
-	budget := eccRecoveryBudget(q.ecc)
-	if ratio > budget {
-		return fmt.Errorf("logo occludes %.1f%% of QR modules, exceeds ECC %v budget of %.1f%% (use a smaller sizeRatio or a higher ECC)",
-			ratio*100, q.ecc, budget*100)
+	covered := float64(box*box) / float64(code.Size()*code.Size())
+	if budget := eccRecoveryBudget(code.ECC()); covered > budget {
+		return fmt.Errorf("%w: logo covers %.1f%% of modules, over the %.0f%% budget for ECC %v",
+			ErrLogoTooLarge, covered*100, budget*100, code.ECC())
 	}
 	return nil
 }
 
-// overlayOnImage composites the logo (with white padding) onto the given RGBA image.
-func (l *logoConfig) overlayOnImage(dst *image.RGBA, qrSize, scale, border int) error {
-	rect, _, err := l.logoRect(qrSize, scale, border)
-	if err != nil {
-		return err
-	}
-
-	// White padding box.
-	draw.Draw(dst, rect, &image.Uniform{C: image.White}, image.Point{}, draw.Src)
-
-	// Inset for the actual logo (strip 1-module padding on each side).
-	inset := scale
-	logoRect := image.Rect(rect.Min.X+inset, rect.Min.Y+inset, rect.Max.X-inset, rect.Max.Y-inset)
-
-	// Scale the source image into logoRect using nearest-neighbor. A high-quality
-	// scaler would pull in golang.org/x/image; nearest is sufficient since logos
-	// are typically pre-sized by the caller.
-	drawScaled(dst, logoRect, l.img)
-	return nil
+// rects returns the padded box and the inner logo area in output units.
+func (l *logoConfig) rects(qrSize int, c *renderConfig) (box, inner image.Rectangle) {
+	b := l.boxModules(qrSize)
+	min := (c.quietZone + (qrSize-b)/2) * c.scale
+	box = image.Rect(min, min, min+b*c.scale, min+b*c.scale)
+	return box, box.Inset(c.scale)
 }
 
-// drawScaled performs nearest-neighbor scaling of src into dst's dstRect.
-func drawScaled(dst *image.RGBA, dstRect image.Rectangle, src image.Image) {
+// overlay draws the pad and the scaled logo onto img.
+func (l *logoConfig) overlay(img *image.RGBA, qrSize int, c *renderConfig) {
+	box, inner := l.rects(qrSize, c)
+	draw.Draw(img, box, image.NewUniform(c.bg), image.Point{}, draw.Src)
+	drawScaled(img, inner, l.img)
+}
+
+// drawScaled draws src into r of dst with nearest-neighbor scaling, blending
+// over what is already there.
+func drawScaled(dst *image.RGBA, r image.Rectangle, src image.Image) {
 	sb := src.Bounds()
-	dw := dstRect.Dx()
-	dh := dstRect.Dy()
-	if dw <= 0 || dh <= 0 || sb.Dx() <= 0 || sb.Dy() <= 0 {
+	if r.Empty() || sb.Empty() {
 		return
 	}
-	for y := 0; y < dh; y++ {
-		sy := sb.Min.Y + y*sb.Dy()/dh
-		for x := 0; x < dw; x++ {
-			sx := sb.Min.X + x*sb.Dx()/dw
-			dst.Set(dstRect.Min.X+x, dstRect.Min.Y+y, src.At(sx, sy))
+	scaled := image.NewRGBA(image.Rect(0, 0, r.Dx(), r.Dy()))
+	for y := 0; y < r.Dy(); y++ {
+		sy := sb.Min.Y + y*sb.Dy()/r.Dy()
+		for x := 0; x < r.Dx(); x++ {
+			scaled.Set(x, y, src.At(sb.Min.X+x*sb.Dx()/r.Dx(), sy))
 		}
 	}
+	draw.Draw(dst, r, scaled, image.Point{}, draw.Over)
 }
 
-// svgEmbed returns the SVG fragment rendering the logo: a white background
-// rect plus a base64-embedded <image>.
-func (l *logoConfig) svgEmbed(qrSize, scale, border int) (string, error) {
-	rect, _, err := l.logoRect(qrSize, scale, border)
-	if err != nil {
-		return "", err
-	}
-
+// writeSVG writes the pad and the logo, embedded as a PNG data URI.
+func (l *logoConfig) writeSVG(sb *strings.Builder, qrSize int, c *renderConfig) error {
 	var buf bytes.Buffer
 	if err := png.Encode(&buf, l.img); err != nil {
-		return "", fmt.Errorf("failed to encode logo as PNG for SVG embedding: %w", err)
+		return fmt.Errorf("qr: encode logo for SVG: %w", err)
 	}
-	encoded := base64.StdEncoding.EncodeToString(buf.Bytes())
+	box, inner := l.rects(qrSize, c)
+	if !colorIsTransparent(c.bg) {
+		sb.WriteString("\t<rect" + svgRectAttrs(box) + " fill=\"" + colorToSVG(c.bg) + "\"/>\n")
+	}
+	sb.WriteString("\t<image" + svgRectAttrs(inner) + " href=\"data:image/png;base64,")
+	sb.WriteString(base64.StdEncoding.EncodeToString(buf.Bytes()))
+	sb.WriteString("\"/>\n")
+	return nil
+}
 
-	inset := scale
-	logoX := rect.Min.X + inset
-	logoY := rect.Min.Y + inset
-	logoW := rect.Dx() - 2*inset
-	logoH := rect.Dy() - 2*inset
-
-	return fmt.Sprintf(
-		"\t<rect x=\"%d\" y=\"%d\" width=\"%d\" height=\"%d\" fill=\"#FFFFFF\"/>\n"+
-			"\t<image x=\"%d\" y=\"%d\" width=\"%d\" height=\"%d\" href=\"data:image/png;base64,%s\"/>\n",
-		rect.Min.X, rect.Min.Y, rect.Dx(), rect.Dy(),
-		logoX, logoY, logoW, logoH, encoded,
-	), nil
+func svgRectAttrs(r image.Rectangle) string {
+	return ` x="` + strconv.Itoa(r.Min.X) + `" y="` + strconv.Itoa(r.Min.Y) +
+		`" width="` + strconv.Itoa(r.Dx()) + `" height="` + strconv.Itoa(r.Dy()) + `"`
 }

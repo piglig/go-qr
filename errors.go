@@ -6,7 +6,7 @@ import "errors"
 // callers can test for a category with errors.Is.
 var (
 	// ErrInvalidArgument reports an invalid option or argument, such as a mask
-	// outside 0-7 or an unknown error correction level.
+	// outside 0-7, an unknown error correction level or a zero scale.
 	ErrInvalidArgument = errors.New("qr: invalid argument")
 
 	// ErrInvalidVersion reports a version range outside
@@ -21,12 +21,9 @@ var (
 	// cannot represent.
 	ErrUnencodableChar = errors.New("qr: unencodable character")
 
-	// ErrInvalidConfig reports an invalid image configuration (non-positive
-	// scale, negative border, etc.).
-	ErrInvalidConfig = errors.New("qr: invalid image config")
-
-	// ErrInvalidImageOutput reports an unsupported output file extension.
-	ErrInvalidImageOutput = errors.New("qr: invalid image output")
+	// ErrLogoTooLarge reports a logo that covers more modules than the
+	// symbol's error correction can be expected to recover. See WithLogo.
+	ErrLogoTooLarge = errors.New("qr: logo too large")
 
 	// ErrNotFound reports that no QR Code could be located in an image.
 	ErrNotFound = errors.New("qr: no QR code found")

@@ -58,7 +58,7 @@ func CleanCorpus(scale int) ([]Sample, error) {
 		if err != nil {
 			return nil, err
 		}
-		img, err := code.ToImage(qr.NewQrCodeImgConfig(scale, 4))
+		img, err := code.Image(qr.WithScale(scale))
 		if err != nil {
 			return nil, err
 		}

@@ -18,7 +18,7 @@ func FuzzDecodeRoundTrip(f *testing.F) {
 		if err != nil {
 			t.Skip() // unencodable / too long — not a decode concern
 		}
-		img, err := qr.ToImage(NewQrCodeImgConfig(4, 4))
+		img, err := qr.Image(WithScale(4), WithQuietZone(4))
 		if err != nil {
 			t.Fatalf("render %q: %v", s, err)
 		}

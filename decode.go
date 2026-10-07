@@ -184,6 +184,22 @@ func binarizeFast(img image.Image, b image.Rectangle, w, h int) []bool {
 				out[y*w+x] = luma < 128*1000
 			}
 		}
+	case *image.Paletted:
+		// Classify each palette entry once; PNGs written by this package are
+		// two-color paletted images.
+		darkIndex := make([]bool, len(im.Palette))
+		for i, c := range im.Palette {
+			r, g, bl, _ := c.RGBA()
+			darkIndex[i] = (299*r+587*g+114*bl)/1000 < 0x8000
+		}
+		for y := 0; y < h; y++ {
+			row := (b.Min.Y+y-im.Rect.Min.Y)*im.Stride + (b.Min.X - im.Rect.Min.X)
+			for x := 0; x < w; x++ {
+				if idx := int(im.Pix[row+x]); idx < len(darkIndex) {
+					out[y*w+x] = darkIndex[idx]
+				}
+			}
+		}
 	case *image.Gray:
 		for y := 0; y < h; y++ {
 			row := (b.Min.Y+y-im.Rect.Min.Y)*im.Stride + (b.Min.X - im.Rect.Min.X)

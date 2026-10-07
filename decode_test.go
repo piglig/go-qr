@@ -1,8 +1,10 @@
 package qr
 
 import (
+	"bytes"
 	"image"
 	"image/color"
+	"image/png"
 	"math"
 	"strings"
 	"testing"
@@ -31,7 +33,7 @@ func TestDecodeRoundTrip(t *testing.T) {
 				if err != nil {
 					t.Fatalf("encode: %v", err)
 				}
-				img, err := qr.ToImage(NewQrCodeImgConfig(scale, 4))
+				img, err := qr.Image(WithScale(scale), WithQuietZone(4))
 				if err != nil {
 					t.Fatalf("render: %v", err)
 				}
@@ -53,7 +55,7 @@ func TestDecodeDetailed(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	img, err := qr.ToImage(NewQrCodeImgConfig(6, 4))
+	img, err := qr.Image(WithScale(6), WithQuietZone(4))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -84,7 +86,7 @@ func TestRSCorrectsErrors(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	img, err := qr.ToImage(NewQrCodeImgConfig(8, 4))
+	img, err := qr.Image(WithScale(8), WithQuietZone(4))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -131,7 +133,7 @@ func TestDecodeRotated(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		img, err := qr.ToImage(NewQrCodeImgConfig(8, 6)) // generous quiet zone
+		img, err := qr.Image(WithScale(8), WithQuietZone(6)) // generous quiet zone
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -182,4 +184,29 @@ func itoa(n int) string {
 		n /= 10
 	}
 	return string(b[i:])
+}
+
+func TestDecodePalettedPNG(t *testing.T) {
+	code, err := Encode("paletted round trip")
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, err := code.PNG(WithScale(3))
+	if err != nil {
+		t.Fatal(err)
+	}
+	img, err := png.Decode(bytes.NewReader(data))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := img.(*image.Paletted); !ok {
+		t.Fatalf("decoded PNG is %T, want *image.Paletted", img)
+	}
+	got, err := Decode(img)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "paletted round trip" {
+		t.Fatalf("Decode = %q", got)
+	}
 }

@@ -1,145 +1,101 @@
 package qr
 
 import (
+	"context"
+	"fmt"
 	"runtime"
 	"sync"
 )
 
-// Format selects the output format for RenderBatch.
+// Format selects the output of a BatchJob.
 type Format int
 
 const (
-	// FormatPNG renders to a PNG byte slice.
-	FormatPNG Format = iota
-	// FormatSVG renders to an SVG byte slice. The WithOptimalSVG option on
-	// the job's Config is honored.
-	FormatSVG
+	FormatNone Format = iota // encode only; BatchResult.Data is nil
+	FormatPNG                // PNG bytes, as returned by Code.PNG
+	FormatSVG                // SVG bytes, as returned by Code.SVG
 )
 
-// BatchInput is one QR code to encode.
-type BatchInput struct {
-	Text string
-	ECC  ECC
-}
-
-// BatchEncodeResult is the result of encoding one BatchInput. Results are
-// returned in input order; a failed item's QR is nil and Err describes the
-// failure, but other items continue to be processed.
-type BatchEncodeResult struct {
-	QR  *Code
-	Err error
-}
-
-// EncodeBatch encodes the given inputs concurrently and returns results in
-// input order.
-//
-// concurrency bounds the number of workers; values <= 0 default to
-// runtime.NumCPU(). A failure for one input does not cancel the others.
-func EncodeBatch(inputs []BatchInput, concurrency int) []BatchEncodeResult {
-	results := make([]BatchEncodeResult, len(inputs))
-	runWorkers(len(inputs), concurrency, func(i int) {
-		qr, err := Encode(inputs[i].Text, WithECC(inputs[i].ECC))
-		results[i] = BatchEncodeResult{QR: qr, Err: err}
-	})
-	return results
-}
-
-// BatchJob is one encode-and-render task for RenderBatch.
+// BatchJob is one text to encode, and optionally render, in Batch.
 type BatchJob struct {
 	Text   string
-	ECC    ECC
+	Encode []EncodeOption
+	Render []RenderOption // used when Format is not FormatNone
 	Format Format
-	// Config is the rendering configuration. If nil, a default
-	// NewQrCodeImgConfig(10, 4) is used. Colors are read from the config
-	// (WithLight / WithDark); defaults are white/black.
-	Config *QrCodeImgConfig
 }
 
-// BatchRenderResult is the result of one BatchJob. QR is the encoded code
-// (useful even on render failure for diagnostics); Bytes holds the rendered
-// output on success.
-type BatchRenderResult struct {
-	QR    *Code
-	Bytes []byte
-	Err   error
+// BatchResult is the outcome of one BatchJob. On failure Err is set; Code is
+// still set when encoding succeeded but rendering failed.
+type BatchResult struct {
+	Code *Code
+	Data []byte
+	Err  error
 }
 
-// RenderBatch encodes and renders each job concurrently, returning results
-// in input order.
-//
-// concurrency bounds the number of workers; values <= 0 default to
-// runtime.NumCPU(). A failure for one job does not cancel the others.
-func RenderBatch(jobs []BatchJob, concurrency int) []BatchRenderResult {
-	results := make([]BatchRenderResult, len(jobs))
-	runWorkers(len(jobs), concurrency, func(i int) {
-		results[i] = renderOne(jobs[i])
+// Batch encodes and renders jobs concurrently and returns the results in job
+// order. concurrency bounds the number of workers; values <= 0 mean
+// runtime.GOMAXPROCS(0). A failing job does not stop the others. When ctx is
+// canceled, jobs that have not started fail with ctx.Err().
+func Batch(ctx context.Context, jobs []BatchJob, concurrency int) []BatchResult {
+	results := make([]BatchResult, len(jobs))
+	runWorkers(ctx, len(jobs), concurrency, func(i int) {
+		results[i] = runJob(jobs[i])
+	}, func(i int, err error) {
+		results[i] = BatchResult{Err: err}
 	})
 	return results
 }
 
-func renderOne(job BatchJob) BatchRenderResult {
-	qr, err := Encode(job.Text, WithECC(job.ECC))
+func runJob(job BatchJob) (res BatchResult) {
+	defer func() {
+		if r := recover(); r != nil {
+			res = BatchResult{Err: fmt.Errorf("qr: batch job panicked: %v", r)}
+		}
+	}()
+
+	code, err := Encode(job.Text, job.Encode...)
 	if err != nil {
-		return BatchRenderResult{Err: err}
+		return BatchResult{Err: err}
 	}
-	cfg := job.Config
-	if cfg == nil {
-		cfg = NewQrCodeImgConfig(10, 4)
-	}
-	var bytes []byte
+	res.Code = code
 	switch job.Format {
+	case FormatNone:
 	case FormatPNG:
-		bytes, err = qr.ToPNGBytes(cfg)
+		res.Data, res.Err = code.PNG(job.Render...)
 	case FormatSVG:
-		bytes, err = qr.ToSVGBytes(cfg)
+		res.Data, res.Err = code.SVG(job.Render...)
 	default:
-		return BatchRenderResult{QR: qr, Err: errInvalidFormat(job.Format)}
+		res.Err = fmt.Errorf("%w: unknown batch format %d", ErrInvalidArgument, job.Format)
 	}
-	return BatchRenderResult{QR: qr, Bytes: bytes, Err: err}
+	return res
 }
 
-// runWorkers runs fn(i) for i in [0, n) across a bounded worker pool.
-// For tiny batches (n == 1 or concurrency == 1) it runs synchronously to
-// avoid goroutine overhead.
-func runWorkers(n, concurrency int, fn func(int)) {
-	if n == 0 {
-		return
-	}
+// runWorkers calls do(i) for every i in [0, n) on up to concurrency
+// goroutines. Indices not started before ctx is done get skip(i, ctx.Err()).
+func runWorkers(ctx context.Context, n, concurrency int, do func(int), skip func(int, error)) {
 	if concurrency <= 0 {
-		concurrency = runtime.NumCPU()
+		concurrency = runtime.GOMAXPROCS(0)
 	}
-	if concurrency > n {
-		concurrency = n
-	}
-	if concurrency == 1 {
-		for i := 0; i < n; i++ {
-			fn(i)
-		}
-		return
-	}
+	concurrency = min(concurrency, n)
 
-	jobs := make(chan int, concurrency)
+	next := make(chan int)
 	var wg sync.WaitGroup
-	for w := 0; w < concurrency; w++ {
-		wg.Add(1)
+	wg.Add(concurrency)
+	for range concurrency {
 		go func() {
 			defer wg.Done()
-			for i := range jobs {
-				fn(i)
+			for i := range next {
+				if err := ctx.Err(); err != nil {
+					skip(i, err)
+					continue
+				}
+				do(i)
 			}
 		}()
 	}
-	for i := 0; i < n; i++ {
-		jobs <- i
+	for i := range n {
+		next <- i
 	}
-	close(jobs)
+	close(next)
 	wg.Wait()
 }
-
-type invalidFormatError Format
-
-func (e invalidFormatError) Error() string {
-	return "qr: invalid batch format"
-}
-
-func errInvalidFormat(f Format) error { return invalidFormatError(f) }

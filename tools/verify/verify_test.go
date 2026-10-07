@@ -37,7 +37,7 @@ func TestRoundTrip(t *testing.T) {
 			if err != nil {
 				t.Fatalf("encode: %v", err)
 			}
-			b, err := code.ToPNGBytes(qr.NewQrCodeImgConfig(10, 4))
+			b, err := code.PNG()
 			if err != nil {
 				t.Fatalf("render: %v", err)
 			}
@@ -55,7 +55,7 @@ func TestRoundTrip_WithLogo(t *testing.T) {
 		t.Fatal(err)
 	}
 	logo := whiteImage(40, 40)
-	b, err := code.ToPNGBytes(qr.NewQrCodeImgConfig(10, 4, qr.WithLogo(logo, 0.2)))
+	b, err := code.PNG(qr.WithLogo(logo, 0.2))
 	if err != nil {
 		t.Fatal(err)
 	}
