@@ -32,7 +32,7 @@ func robustSample(bm []bool, w, h int) ([][]bool, error) {
 		return bm[y*w+x]
 	}
 
-	finders, err := findFinders(dark, w, h)
+	finders, err := findFinders(bm, dark, w, h)
 	if err != nil {
 		return nil, err
 	}
@@ -81,7 +81,9 @@ func robustSample(bm []bool, w, h int) ([][]bool, error) {
 }
 
 // findFinders scans for finder patterns and returns the three strongest.
-func findFinders(dark func(x, y int) bool, w, h int) ([]finderPattern, error) {
+// The row scan reads bm directly; dark (bounds-checked) serves the cross
+// checks.
+func findFinders(bm []bool, dark func(x, y int) bool, w, h int) ([]finderPattern, error) {
 	var cands []finderPattern
 
 	add := func(cx, cy, module float64) {
@@ -102,8 +104,8 @@ func findFinders(dark func(x, y int) bool, w, h int) ([]finderPattern, error) {
 	for y := 0; y < h; y++ {
 		s = [5]int{}
 		state := 0
-		for x := 0; x < w; x++ {
-			if dark(x, y) {
+		for x, d := range bm[y*w : (y+1)*w] {
+			if d {
 				if state&1 == 1 {
 					state++
 				}

@@ -100,7 +100,8 @@ func TestRSCorrectsErrors(t *testing.T) {
 	img := mustImage(t, mustEncode(t, text, WithECC(ECCHigh)), WithScale(8))
 	w, h := img.Bounds().Dx(), img.Bounds().Dy()
 	l := toLuma(img)
-	modules, err := fastSample(l, w, h, otsuThreshold(l), false)
+	t0, _, _ := otsuThreshold(l)
+	modules, err := fastSample(l, w, h, t0, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -450,7 +451,7 @@ func TestReadVersionNear(t *testing.T) {
 		w, h := img.Bounds().Dx(), img.Bounds().Dy()
 		bm := binarizeHybrid(toLuma(img), w, h)
 		dark := func(x, y int) bool { return x >= 0 && y >= 0 && x < w && y < h && bm[y*w+x] }
-		finders, err := findFinders(dark, w, h)
+		finders, err := findFinders(bm, dark, w, h)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -501,4 +502,14 @@ func TestDecodeIgnoresStrayFinder(t *testing.T) {
 		}
 	}
 	assertEqual(t, "stray finder nearby", decodeText(t, canvas))
+}
+
+func TestDecodeFlatImageFailsFast(t *testing.T) {
+	flat := image.NewGray(image.Rect(0, 0, 50, 50))
+	for i := range flat.Pix {
+		flat.Pix[i] = 128 + uint8(i%10) // range 9 < minContrast
+	}
+	if _, err := Decode(flat); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("error = %v, want ErrNotFound", err)
+	}
 }

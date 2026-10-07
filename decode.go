@@ -67,6 +67,10 @@ func Decode(img image.Image, opts ...DecodeOption) (*DecodeResult, error) {
 		return nil, fmt.Errorf("%w: image too small (%dx%d)", ErrNotFound, w, h)
 	}
 	l := toLuma(img)
+	threshold, lo, hi := otsuThreshold(l)
+	if hi-lo < minContrast {
+		return nil, fmt.Errorf("%w: image has no contrast", ErrNotFound)
+	}
 
 	var firstErr error
 	try := func(grid [][]bool, err error) (*DecodeResult, error) {
@@ -84,7 +88,6 @@ func Decode(img image.Image, opts ...DecodeOption) (*DecodeResult, error) {
 		return nil, err
 	}
 
-	threshold := otsuThreshold(l)
 	var adaptive []bool
 	for _, inverted := range []bool{false, true} {
 		if res, err := try(fastSample(l, w, h, threshold, inverted)); err == nil || errors.Is(err, ErrUnsupported) {
@@ -280,6 +283,10 @@ func toLuma(img image.Image) []uint8 {
 	return out
 }
 
+// minContrast is the smallest luminance range in which a symbol could be
+// distinguished; flatter images are rejected without searching.
+const minContrast = 16
+
 // lumaPremul returns the luminance of an 8-bit alpha-premultiplied color
 // composited over white, with the coefficients of color.GrayModel.
 func lumaPremul(r, g, b, a uint32) uint8 {
@@ -289,7 +296,7 @@ func lumaPremul(r, g, b, a uint32) uint8 {
 // binarizeGlobal thresholds the whole image at the level that best separates
 // its luminance histogram into two classes (Otsu's method).
 func binarizeGlobal(l []uint8, w, h int) []bool {
-	t := otsuThreshold(l)
+	t, _, _ := otsuThreshold(l)
 	out := make([]bool, w*h)
 	for i, v := range l {
 		out[i] = v <= t
@@ -298,9 +305,10 @@ func binarizeGlobal(l []uint8, w, h int) []bool {
 }
 
 // otsuThreshold returns the luminance t that maximizes the between-class
-// variance of the classes [0, t] and (t, 255]. The histogram is built from
-// every other pixel, which is plenty to place the threshold.
-func otsuThreshold(l []uint8) uint8 {
+// variance of the classes [0, t] and (t, 255], and the lowest and highest
+// luminance seen. The histogram is built from every other pixel, which is
+// plenty to place the threshold.
+func otsuThreshold(l []uint8) (t, lo, hi uint8) {
 	var hist [256]int
 	for i := 0; i < len(l); i += 2 {
 		hist[l[i]]++
@@ -309,6 +317,12 @@ func otsuThreshold(l []uint8) uint8 {
 	for i, n := range hist {
 		sumAll += i * n
 	}
+	for lo < 255 && hist[lo] == 0 {
+		lo++
+	}
+	for hi = 255; hi > 0 && hist[hi] == 0; hi-- {
+	}
+
 	var best float64
 	bestT, wB, sumB := 127, 0, 0
 	for t, n := range hist {
@@ -327,7 +341,7 @@ func otsuThreshold(l []uint8) uint8 {
 			best, bestT = v, t
 		}
 	}
-	return uint8(bestT)
+	return uint8(bestT), lo, hi
 }
 
 // binarizeHybrid thresholds each 8x8 block against the average black point
@@ -386,10 +400,11 @@ func binarizeHybrid(l []uint8, w, h int) []bool {
 					sum += black[(cy+dy)*bw+cx+dx]
 				}
 			}
-			t := sum / 25
+			t := uint8(sum / 25)
 			for y := y0; y < y0+block; y++ {
-				for x := x0; x < x0+block; x++ {
-					out[y*w+x] = int(l[y*w+x]) <= t
+				dst := out[y*w+x0 : y*w+x0+block]
+				for i, v := range l[y*w+x0 : y*w+x0+block] {
+					dst[i] = v <= t
 				}
 			}
 		}
