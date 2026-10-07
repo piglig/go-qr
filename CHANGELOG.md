@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `go install github.com/piglig/go-qr/tools/generator@latest` failed because
+  the `tools` module used a `replace` directive. It now requires the released
+  library, and CI tests it against the checkout through a Go workspace.
+
 ## [2.0.0] - 2026-10-07
 
 Version 2 redesigns the API around functional options. The module path is now
