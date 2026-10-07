@@ -32,9 +32,9 @@ func (c *Code) Verify(opts ...RenderOption) error {
 	for _, dark := range cfg.darkColors() {
 		switch contrast := bg - luminanceOverWhite(dark); {
 		case contrast < 0:
-			return fmt.Errorf("%w: dark color %v is lighter than the background; many scanners cannot read inverted codes", ErrUnreadable, dark)
+			return fmt.Errorf("%w: dark color %s is lighter than the background; many scanners cannot read inverted codes", ErrUnreadable, colorToSVG(dark))
 		case contrast < minSymbolContrast:
-			return fmt.Errorf("%w: contrast of %v is %.0f%%, below the %.0f%% scanners need", ErrUnreadable, dark, contrast*100, minSymbolContrast*100)
+			return fmt.Errorf("%w: contrast of %s is %.0f%%, below the %.0f%% scanners need", ErrUnreadable, colorToSVG(dark), contrast*100, minSymbolContrast*100)
 		}
 	}
 

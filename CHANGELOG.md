@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- `Code.Verify` names colors in its errors as `#RRGGBB` instead of Go struct
+  syntax.
+- The `generator` CLI (tools/v1.1.0) is built on v2.2.0 and exposes its
+  options: `-gs1` (including the `(01)...` human-readable form),
+  `-structured`, `-utf8-eci`, `-mask`, `-min-version`/`-max-version`,
+  `-no-boost`, style flags (`-module`, `-finder`, `-fg`, `-bg`,
+  `-gradient`, `-finder-color`), and the `contact`, `event`, `otp` and
+  `epc` payloads. `-verify` now uses `Code.Verify`, including the contrast
+  checks. `decode` accepts several images, joins structured append
+  sequences, and prints details with `-json`.
+
 ## [2.2.0] - 2026-10-07
 
 ### Added

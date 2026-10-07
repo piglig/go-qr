@@ -239,7 +239,7 @@ func TestRun_EncodeNoContentShowsUsage(t *testing.T) {
 	}
 }
 
-func TestRun_DecodeRequiresExactlyOnePath(t *testing.T) {
+func TestRun_DecodeRequiresAPath(t *testing.T) {
 	var out, errOut bytes.Buffer
 	if err := run([]string{"decode"}, &out, &errOut); err == nil {
 		t.Fatal("expected error when decode has no path")
