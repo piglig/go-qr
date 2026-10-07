@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>go-qr playground</title>
+<meta name="description" content="Encode, style, verify and decode QR codes in your browser with go-qr, a zero-dependency Go library compiled to WebAssembly.">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="top">
+  <div class="wrap top-inner">
+    <div>
+      <h1>go-qr <span class="tag">playground</span></h1>
+      <p class="sub">A zero-dependency Go QR library, running here as WebAssembly. Nothing leaves your browser.</p>
+    </div>
+    <nav>
+      <a href="https://github.com/piglig/go-qr">GitHub</a>
+      <a href="https://pkg.go.dev/github.com/piglig/go-qr/v2">Docs</a>
+    </nav>
+  </div>
+</header>
+
+<div id="loading" class="loading">Loading the Go runtime…</div>
+
+<main class="wrap">
+  <section class="card" id="create">
+    <h2>Create</h2>
+    <div class="grid">
+      <form id="form" class="controls" autocomplete="off">
+        <label class="field">
+          <span>Content</span>
+          <textarea id="text" rows="3">https://github.com/piglig/go-qr</textarea>
+        </label>
+
+        <div class="field">
+          <span>Style presets</span>
+          <div class="chips" id="presets">
+            <button type="button" data-preset="classic">Classic</button>
+            <button type="button" data-preset="dots">Dots</button>
+            <button type="button" data-preset="rounded">Rounded</button>
+            <button type="button" data-preset="gradient">Gradient</button>
+            <button type="button" data-preset="brand">Brand</button>
+          </div>
+        </div>
+
+        <div class="row">
+          <label class="field">
+            <span>Error correction</span>
+            <select id="ecc">
+              <option value="L">L · 7%</option>
+              <option value="M" selected>M · 15%</option>
+              <option value="Q">Q · 25%</option>
+              <option value="H">H · 30%</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>Quiet zone</span>
+            <input id="quietZone" type="range" min="0" max="8" value="4">
+          </label>
+        </div>
+
+        <div class="row">
+          <label class="field">
+            <span>Modules</span>
+            <select id="moduleShape">
+              <option value="square">Square</option>
+              <option value="dot">Dots</option>
+              <option value="rounded">Rounded</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>Finders</span>
+            <select id="finderShape">
+              <option value="square">Square</option>
+              <option value="rounded">Rounded</option>
+              <option value="circle">Circle</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="row">
+          <label class="field color"><span>Foreground</span><input id="fg" type="color" value="#000000"></label>
+          <label class="field color"><span>Background</span><input id="bg" type="color" value="#ffffff"></label>
+          <label class="field check"><input id="transparent" type="checkbox"> Transparent</label>
+        </div>
+
+        <fieldset>
+          <legend><label><input id="useGradient" type="checkbox"> Gradient</label></legend>
+          <div class="row" data-for="useGradient">
+            <label class="field color"><span>From</span><input id="gradFrom" type="color" value="#1a237e"></label>
+            <label class="field color"><span>To</span><input id="gradTo" type="color" value="#00695c"></label>
+            <label class="field"><span>Angle <output id="angleOut">45°</output></span><input id="gradAngle" type="range" min="0" max="360" value="45"></label>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend><label><input id="useFinderColor" type="checkbox"> Finder colors</label></legend>
+          <div class="row" data-for="useFinderColor">
+            <label class="field color"><span>Ring</span><input id="finderRing" type="color" value="#c62828"></label>
+            <label class="field color"><span>Center</span><input id="finderCenter" type="color" value="#000000"></label>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>Logo</legend>
+          <div class="row">
+            <label class="field"><input id="logo" type="file" accept="image/png,image/jpeg,image/gif"></label>
+            <label class="field"><span>Size <output id="ratioOut">0.20</output></span><input id="logoRatio" type="range" min="0.05" max="0.35" step="0.01" value="0.2"></label>
+            <button type="button" id="clearLogo" class="link">Remove</button>
+          </div>
+        </fieldset>
+
+        <details>
+          <summary>Encoding</summary>
+          <label class="check"><input id="simple" type="checkbox"> Single mode (no optimal segmentation)</label>
+          <label class="check"><input id="utf8eci" type="checkbox"> Declare UTF-8 with an ECI</label>
+        </details>
+      </form>
+
+      <div class="preview">
+        <div id="qr" class="qr" aria-live="polite"></div>
+        <div id="status" class="status"></div>
+        <dl id="meta" class="meta"></dl>
+        <div class="actions">
+          <button type="button" id="dlPng">Download PNG</button>
+          <button type="button" id="dlSvg" class="secondary">Download SVG</button>
+        </div>
+        <details class="code">
+          <summary>Go code</summary>
+          <pre><code id="goCode"></code></pre>
+        </details>
+      </div>
+    </div>
+  </section>
+
+  <section class="card" id="read">
+    <h2>Read</h2>
+    <p class="hint">Drop an image, pick a file or use your camera. The decoder handles rotation, noise, low contrast, inverted and mirrored codes; hold the camera square to the code, as perspective correction is not implemented yet.</p>
+    <div class="grid">
+      <div>
+        <label id="drop" class="drop">
+          <input id="file" type="file" accept="image/*" hidden>
+          <span>Drop an image here or <u>choose a file</u></span>
+        </label>
+        <div class="actions">
+          <button type="button" id="camera">Use camera</button>
+          <button type="button" id="readCreated" class="secondary">Read the code above</button>
+        </div>
+        <video id="video" playsinline muted hidden></video>
+        <canvas id="canvas" hidden></canvas>
+      </div>
+      <div>
+        <div id="decodeStatus" class="status"></div>
+        <pre id="decoded" class="decoded" hidden></pre>
+        <dl id="decodeMeta" class="meta"></dl>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="wrap foot">
+  <p>Built with <a href="https://github.com/piglig/go-qr">github.com/piglig/go-qr/v2</a>. MIT licensed.</p>
+</footer>
+
+<script src="wasm_exec.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
