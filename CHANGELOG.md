@@ -12,11 +12,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `Decode` corrects perspective, so it reads photos taken at an angle. The
   robust path samples the grid through a perspective transform anchored on
   the bottom-right alignment pattern, falling back to the intersection of
-  the finder edges and then to the parallelogram of the finder centers, and
-  tries up to three finder triples. In simulated phone photos it reads 83%
-  of symbols, up from 7% (gozxing: 42%); tilts up to 30° decode almost
-  always. Clean images take the unchanged fast path; the robust path is
-  about 7% slower. See [Performance](docs/performance.md).
+  the finder edges, or to the parallelogram of the finder centers when the
+  edges cannot be traced. In simulated phone photos it reads 82% of
+  symbols, up from 7% (gozxing: 42%); tilts up to 30° decode almost always.
+  Clean images take the unchanged fast path; the robust path is about 8%
+  slower, and up to 11% on images it cannot decode. See
+  [Performance](docs/performance.md).
 - `TestRobustness` in `tools/bench` sweeps tilt, module size, blur and lens
   distortion through a simulated camera and compares decoders.
 

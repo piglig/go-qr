@@ -451,11 +451,11 @@ func TestReadVersion(t *testing.T) {
 		w, h := img.Bounds().Dx(), img.Bounds().Dy()
 		bm := binarizeHybrid(toLuma(img), w, h)
 		dark := func(x, y int) bool { return x >= 0 && y >= 0 && x < w && y < h && bm[y*w+x] }
-		triples, err := findFinderTriples(bm, dark, w, h)
+		finders, err := findFinders(bm, dark, w, h)
 		if err != nil {
 			t.Fatal(err)
 		}
-		g, err := newSymbolGeometry(dark, triples[0])
+		g, err := newSymbolGeometry(dark, finders)
 		if err != nil {
 			t.Fatal(err)
 		}

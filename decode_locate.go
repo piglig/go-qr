@@ -12,17 +12,20 @@ import (
 // 1:1:3:1:1 run-ratio scan and cross-checks, picks the triples that look
 // like one symbol, and samples the module grid through a perspective
 // transform. The transform's fourth point, near the bottom-right corner, is
-// the hard part; several estimates are tried in turn, most precise first:
+// the hard part. At most two estimates are tried, most precise first:
 //
 //  1. the bottom-right alignment pattern (version 2 and up), searched for
-//     around the position the other estimates predict;
+//     around the position the next estimate predicts;
 //  2. the intersection of the outer edges of the top-right and bottom-left
-//     finders, which follows the perspective of the symbol;
-//  3. the parallelogram completion of the three finder centers, which is
-//     exact without perspective.
+//     finders, which follows the perspective of the symbol, or, when those
+//     edges cannot be traced, the parallelogram completion of the three
+//     finder centers, which is exact without perspective.
 //
 // This is the scheme of ZXing and zxing-cpp; quirc and ZBar differ mostly in
-// how they find the edges.
+// how they find the edges. Trying more candidates, such as the
+// parallelogram after a failed edge estimate or other finder triples,
+// rescued under 2% of symbols in the robustness sweeps, at the cost of more
+// work on images that do not decode.
 
 type finderPattern struct {
 	x, y       float64 // center in image space
@@ -30,11 +33,8 @@ type finderPattern struct {
 	count      int     // number of merged horizontal hits (confidence)
 }
 
-// maxFinderTriples bounds how many finder triples are tried per image.
-const maxFinderTriples = 3
-
 // robustDecode locates symbols in a binarized image and passes candidate
-// module grids to read until one decodes. It returns the most specific error
+// module grids to read until one decodes. It returns the first error
 // otherwise.
 func robustDecode(bm []bool, w, h int, read func([][]bool) (*DecodeResult, error)) (*DecodeResult, error) {
 	dark := func(x, y int) bool {
@@ -43,29 +43,22 @@ func robustDecode(bm []bool, w, h int, read func([][]bool) (*DecodeResult, error
 		}
 		return bm[y*w+x]
 	}
-	triples, err := findFinderTriples(bm, dark, w, h)
+	finders, err := findFinders(bm, dark, w, h)
 	if err != nil {
 		return nil, err
 	}
-
-	var firstErr error
-	note := func(err error) {
-		if firstErr == nil || errors.Is(firstErr, ErrNotFound) && !errors.Is(err, ErrNotFound) {
-			firstErr = err
-		}
+	g, err := newSymbolGeometry(dark, finders)
+	if err != nil {
+		return nil, err
 	}
-	for _, t := range triples {
-		g, err := newSymbolGeometry(dark, t)
-		if err != nil {
-			note(err)
-			continue
+	var firstErr error
+	for _, p := range g.transforms(dark) {
+		res, err := read(sampleGrid(dark, p, g.dim))
+		if err == nil || errors.Is(err, ErrUnsupported) {
+			return res, err
 		}
-		for _, p := range g.transforms(dark) {
-			res, err := read(sampleGrid(dark, p, g.dim))
-			if err == nil || errors.Is(err, ErrUnsupported) {
-				return res, err
-			}
-			note(err)
+		if firstErr == nil {
+			firstErr = err
 		}
 	}
 	return nil, firstErr
@@ -162,7 +155,7 @@ func (g *symbolGeometry) affine(u, v float64) (float64, float64) {
 }
 
 // transforms returns the candidate module-to-image transforms, most precise
-// first.
+// first: at most two.
 func (g *symbolGeometry) transforms(dark func(x, y int) bool) []perspective {
 	d := float64(g.dim)
 	finders := func(u4, v4, x4, y4 float64) (perspective, bool) {
@@ -202,10 +195,10 @@ func (g *symbolGeometry) transforms(dark func(x, y int) bool) []perspective {
 			}
 		}
 	}
-	if okE {
+	switch {
+	case okE:
 		out = append(out, edge)
-	}
-	if okP {
+	case okP:
 		out = append(out, parallelogram)
 	}
 	return out
@@ -375,10 +368,10 @@ func sampleGrid(dark func(x, y int) bool, p perspective, dim int) [][]bool {
 	return modules
 }
 
-// findFinderTriples scans for finder patterns and returns the triples that
-// best fit one symbol, best first. The row scan reads bm directly; dark
-// (bounds-checked) serves the cross checks.
-func findFinderTriples(bm []bool, dark func(x, y int) bool, w, h int) ([][3]finderPattern, error) {
+// findFinders scans for finder patterns and returns the triple that best fits
+// one symbol. The row scan reads bm directly; dark (bounds-checked) serves
+// the cross checks.
+func findFinders(bm []bool, dark func(x, y int) bool, w, h int) ([3]finderPattern, error) {
 	var cands []finderPattern
 
 	add := func(cx, cy, module float64) {
@@ -437,53 +430,34 @@ func findFinderTriples(bm []bool, dark func(x, y int) bool, w, h int) ([][3]find
 	return selectFinders(cands)
 }
 
-// selectFinders returns up to maxFinderTriples candidate triples that look
-// most like the finders of one symbol, best first: similar module sizes,
-// placed at the corners of a roughly right isosceles triangle at least 14
-// modules on a side. Data modules can mimic the 1:1:3:1:1 pattern, and the
-// strongest candidates alone are not reliable in large symbols.
-func selectFinders(cands []finderPattern) ([][3]finderPattern, error) {
+// selectFinders picks the three candidates that look most like the finders
+// of one symbol: similar module sizes, placed at the corners of a roughly
+// right isosceles triangle at least 14 modules on a side. Data modules can
+// mimic the 1:1:3:1:1 pattern, and the strongest candidates alone are not
+// reliable in large symbols.
+func selectFinders(cands []finderPattern) ([3]finderPattern, error) {
 	if len(cands) < 3 {
-		return nil, fmt.Errorf("%w: found %d finder patterns", ErrNotFound, len(cands))
+		return [3]finderPattern{}, fmt.Errorf("%w: found %d finder patterns", ErrNotFound, len(cands))
 	}
 	sort.Slice(cands, func(i, j int) bool { return cands[i].count > cands[j].count })
 	if len(cands) > maxFinderCandidates {
 		cands = cands[:maxFinderCandidates]
 	}
 
-	type scored struct {
-		t     [3]finderPattern
-		score float64
-	}
-	var best []scored
+	best, bestScore := [3]int{}, math.Inf(1)
 	for i := 0; i < len(cands); i++ {
 		for j := i + 1; j < len(cands); j++ {
 			for k := j + 1; k < len(cands); k++ {
-				s := finderTripleScore(cands[i], cands[j], cands[k])
-				if math.IsInf(s, 1) {
-					continue
-				}
-				if len(best) == maxFinderTriples && s >= best[len(best)-1].score {
-					continue
-				}
-				n := sort.Search(len(best), func(x int) bool { return best[x].score > s })
-				best = append(best, scored{})
-				copy(best[n+1:], best[n:])
-				best[n] = scored{[3]finderPattern{cands[i], cands[j], cands[k]}, s}
-				if len(best) > maxFinderTriples {
-					best = best[:maxFinderTriples]
+				if s := finderTripleScore(cands[i], cands[j], cands[k]); s < bestScore {
+					best, bestScore = [3]int{i, j, k}, s
 				}
 			}
 		}
 	}
-	if len(best) == 0 {
-		return nil, fmt.Errorf("%w: no three finder patterns form a symbol", ErrNotFound)
+	if math.IsInf(bestScore, 1) {
+		return [3]finderPattern{}, fmt.Errorf("%w: no three finder patterns form a symbol", ErrNotFound)
 	}
-	out := make([][3]finderPattern, len(best))
-	for i, b := range best {
-		out[i] = b.t
-	}
-	return out, nil
+	return [3]finderPattern{cands[best[0]], cands[best[1]], cands[best[2]]}, nil
 }
 
 // maxFinderCandidates bounds the O(n³) triple search.
@@ -495,7 +469,7 @@ func finderTripleScore(a, b, c finderPattern) float64 {
 	lo := min(a.moduleSize, b.moduleSize, c.moduleSize)
 	hi := max(a.moduleSize, b.moduleSize, c.moduleSize)
 	// Perspective makes the nearer finders larger and the triangle less
-	// regular; the tolerances allow about 50 degrees of tilt, and each
+	// regular; the tolerances allow about 50 degrees of tilt, and the
 	// triple is verified by decoding it.
 	if hi > 2*lo {
 		return math.Inf(1)

@@ -31,16 +31,17 @@ only if the text matches; neither decoder returned a wrong text.
 | Distortion | go-qr | gozxing (`TRY_HARDER`) |
 | --- | --- | --- |
 | tilt 20° | **100%** | 56% |
-| tilt 30° | **97%** | 31% |
-| tilt 40° | **81%** | 0% |
-| 2 px per module | **78%** | 75% |
-| 1.5 px per module | 22% | **28%** |
+| tilt 30° | **94%** | 31% |
+| tilt 40° | **75%** | 0% |
+| 2 px per module | 72% | **75%** |
+| 1.5 px per module | 19% | **28%** |
 | blur σ 2 px | **100%** | 56% |
 | barrel distortion k₁ = −0.1 | **62%** | 56% |
-| phone mix | **83%** | 42% |
+| phone mix | **82%** | 42% |
 
-Large symbols under barrel distortion remain the weak spot: a single
-perspective transform cannot follow curved edges.
+Large symbols under barrel distortion and modules under 2.5 pixels remain
+the weak spots: a single perspective transform cannot follow curved edges,
+and a module that narrow blurs into its neighbors.
 
 ## Cost of features
 
