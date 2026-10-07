@@ -1,0 +1,43 @@
+name: Bug report
+description: Something does not work as documented.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. If a code does not scan, please run `code.Verify(opts...)` with your render options first and include its result.
+        For security issues, use [private reporting](https://github.com/piglig/go-qr/security/advisories/new) instead.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Reproduction
+      description: The smallest program or input that shows the problem. Attach images that fail to decode.
+      render: go
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: go-qr version
+      description: Output of `go list -m github.com/piglig/go-qr/v2`
+      placeholder: github.com/piglig/go-qr/v2 v2.1.0
+    validations:
+      required: true
+  - type: input
+    id: go
+    attributes:
+      label: Go version and platform
+      description: Output of `go version`
+      placeholder: go version go1.25.0 linux/amd64
+  - type: input
+    id: reader
+    attributes:
+      label: Scanner or reader (if relevant)
+      placeholder: iPhone camera, ZXing 3.5, ...

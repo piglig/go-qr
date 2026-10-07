@@ -27,6 +27,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- The documentation is reorganized into a short README and a `docs/`
+  directory with a tutorial, task guides, reference pages and background,
+  plus contributing and security guides.
 - The decoder's fast path measures the module pitch across the center of
   the top-left finder instead of along its top edge, so styled finders
   decode without the slower fallback.

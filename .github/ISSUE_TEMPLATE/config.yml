@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Documentation
+    url: https://github.com/piglig/go-qr/tree/main/docs
+    about: Guides, reference and troubleshooting.
+  - name: Report a security vulnerability
+    url: https://github.com/piglig/go-qr/security/advisories/new
+    about: Please report vulnerabilities privately.

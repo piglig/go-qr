@@ -200,3 +200,15 @@ func ExampleWithGradient() {
 	fmt.Println(strings.Contains(string(svg), "<linearGradient"))
 	// Output: true
 }
+
+func ExampleDecode() {
+	code, _ := qr.Encode("decode me", qr.WithECC(qr.ECCQuartile))
+	img, _ := code.Image(qr.WithModuleShape(qr.ModuleDot))
+
+	res, err := qr.Decode(img)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println(res.Text, res.Version, res.ECC)
+	// Output: decode me 1 Q
+}
