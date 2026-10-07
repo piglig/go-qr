@@ -8,6 +8,8 @@
 
 > 🎶 Minimalist, zero-dependency QR code generator **and decoder** for Go.
 
+**[Try it in your browser →](https://piglig.github.io/go-qr/)** Encode, style, verify and decode codes with the library compiled to WebAssembly.
+
 ## Contents
 - [Features](#features)
 - [Installation](#installation)

@@ -37,17 +37,19 @@ jobs:
       # tools/go.mod pins the released library so `go install` works; the
       # workspace makes CI build and test the tools against this checkout.
       - name: Use workspace
-        run: go work init . ./tools
+        run: go work init . ./tools ./demo
 
       - name: Vet
         run: |
           go vet ./...
           (cd tools && go vet ./...)
+          (cd demo && go vet ./... && GOOS=js GOARCH=wasm go vet ./...)
 
       - name: Test
         run: |
           go test -race -coverprofile=coverage.out -covermode=atomic ./...
           (cd tools && go test -race ./...)
+          (cd demo && go test ./... && GOOS=js GOARCH=wasm go build -o /dev/null .)
 
       - name: Fuzz smoke test
         run: |
@@ -89,6 +91,6 @@ jobs:
         with:
           go-version: stable
       - run: go install golang.org/x/vuln/cmd/govulncheck@latest
-      - run: go work init . ./tools
+      - run: go work init . ./tools ./demo
       - run: govulncheck ./...
       - run: cd tools && govulncheck ./...
