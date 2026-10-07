@@ -268,49 +268,55 @@ func findAlignment(dark func(x, y int) bool, guess perspective, c float64) (floa
 	at := func(x, y, a, b float64) bool {
 		return dark(int(math.Floor(x+a*ux+b*vx)), int(math.Floor(y+a*uy+b*vy)))
 	}
+	// score counts the template points that match, giving up once two
+	// differ: only matches with at most one mismatch are of interest.
 	score := func(x, y float64) int {
-		n := 0
-		if at(x, y, 0, 0) {
-			n++
+		miss := 0
+		if !at(x, y, 0, 0) {
+			miss++
 		}
-		for _, p := range light {
-			if !at(x, y, p.a, p.b) {
-				n++
+		for i := range light {
+			if at(x, y, light[i].a, light[i].b) {
+				if miss++; miss == 2 {
+					return 0
+				}
+			}
+			if !at(x, y, darkRing[i].a, darkRing[i].b) {
+				if miss++; miss == 2 {
+					return 0
+				}
 			}
 		}
-		for _, p := range darkRing {
-			if at(x, y, p.a, p.b) {
-				n++
-			}
-		}
-		return n
+		return 17 - miss
 	}
 
 	// Search outward ring by ring, in steps of a third of a module, so the
 	// usual case, a pattern close to the estimate, ends early. A perfect
 	// match ends the search; otherwise the best match with at most one
-	// mismatch within the radius is taken.
+	// mismatch is taken once the rings reach 4, 8 or 16 modules.
 	const steps = 3
-	for _, radius := range []int{4, 8, 16} {
-		best, bx, by := 0, 0.0, 0.0
-		for k := 0; k <= radius*steps; k++ {
-			for i := -k; i <= k; i++ {
-				for j := -k; j <= k; j++ {
-					if max(abs(i), abs(j)) != k {
-						continue
-					}
-					a, b := float64(i)/steps, float64(j)/steps
-					x, y := ex+a*ux+b*vx, ey+a*uy+b*vy
-					if s := score(x, y); s > best {
-						best, bx, by = s, x, y
-					}
-				}
-			}
-			if best == 17 {
-				break
-			}
+	best, bx, by := 0, 0.0, 0.0
+	try := func(i, j int) {
+		a, b := float64(i)/steps, float64(j)/steps
+		x, y := ex+a*ux+b*vx, ey+a*uy+b*vy
+		if s := score(x, y); s > best {
+			best, bx, by = s, x, y
 		}
-		if best >= 16 {
+	}
+	for k := 0; k <= 16*steps; k++ {
+		// The ring of positions at Chebyshev distance k.
+		if k == 0 {
+			try(0, 0)
+		}
+		for i := -k; i <= k && k > 0; i++ {
+			try(i, -k)
+			try(i, k)
+		}
+		for j := -k + 1; j < k; j++ {
+			try(-k, j)
+			try(k, j)
+		}
+		if best == 17 || best >= 16 && (k == 4*steps || k == 8*steps || k == 16*steps) {
 			x, y := refineAlignment(dark, bx, by, ux, uy, vx, vy)
 			return x, y, true
 		}
