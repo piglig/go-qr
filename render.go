@@ -16,6 +16,9 @@ type renderConfig struct {
 	fg, bg    color.Color
 	logo      *logoConfig
 	xmlHeader bool
+
+	moduleShape ModuleShape
+	finderShape FinderShape
 }
 
 const (
@@ -35,6 +38,10 @@ func newRenderConfig(opts []RenderOption) (renderConfig, error) {
 		return c, fmt.Errorf("%w: quiet zone %d must not be negative", ErrInvalidArgument, c.quietZone)
 	case c.fg == nil || c.bg == nil:
 		return c, fmt.Errorf("%w: nil color", ErrInvalidArgument)
+	case !c.moduleShape.valid():
+		return c, fmt.Errorf("%w: unknown module shape %d", ErrInvalidArgument, c.moduleShape)
+	case !c.finderShape.valid():
+		return c, fmt.Errorf("%w: unknown finder shape %d", ErrInvalidArgument, c.finderShape)
 	}
 	if c.logo != nil {
 		if err := c.logo.validateOptions(); err != nil {
