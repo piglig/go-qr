@@ -323,7 +323,7 @@ func TestSimpleSegments(t *testing.T) {
 
 	for _, tt := range cases {
 		t.Run(tt.name, func(t *testing.T) {
-			got := simpleSegments(tt.text)
+			got := simpleSegments(tt.text, false)
 			if len(got) != len(tt.wantSegments) {
 				t.Fatalf("got %d segments, want %d", len(got), len(tt.wantSegments))
 			}
@@ -406,7 +406,7 @@ func assertSegment(t *testing.T, want, got Segment) {
 }
 
 func TestSimpleSegmentsEmpty(t *testing.T) {
-	if segs := simpleSegments(""); len(segs) != 0 {
+	if segs := simpleSegments("", false); len(segs) != 0 {
 		t.Fatalf("simpleSegments(\"\") = %d segments, want 0", len(segs))
 	}
 }
@@ -414,7 +414,8 @@ func TestSimpleSegmentsEmpty(t *testing.T) {
 func TestModeString(t *testing.T) {
 	for m, want := range map[Mode]string{
 		ModeNumeric: "numeric", ModeAlphanumeric: "alphanumeric", ModeByte: "byte",
-		ModeKanji: "kanji", ModeECI: "eci", Mode(0x3): "Mode(0x3)",
+		ModeKanji: "kanji", ModeECI: "eci", ModeStructuredAppend: "structured append",
+		ModeFNC1: "fnc1", Mode(0x6): "Mode(0x6)",
 	} {
 		assertEqual(t, want, m.String())
 	}

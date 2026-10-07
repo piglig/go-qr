@@ -148,7 +148,7 @@ func TestEncodeSegments(t *testing.T) {
 
 	for _, tt := range cases {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := EncodeSegments(simpleSegments(tt.text), WithECC(tt.ecl))
+			got, err := EncodeSegments(simpleSegments(tt.text, false), WithECC(tt.ecl))
 			if (err != nil) != tt.wantErr {
 				t.Errorf("EncodeSegments() error = %v, wantErr %v", err, tt.wantErr)
 			}

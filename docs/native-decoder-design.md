@@ -374,7 +374,8 @@ The v2 decoder keeps the pipeline above, with these differences:
   fixes the dimension instead of trusting the finder-spacing estimate (§4.4).
 - **Segments.** Kanji decodes through the encoder's table. Byte data honors
   ECI 26, 1, 3, 20, 27 and 170, and falls back to UTF-8 or ISO-8859-1 without
-  an ECI. Structured append, FNC1, Hanzi and other ECIs return
+  an ECI. Structured append and FNC1 in first position (GS1) are decoded
+  (added in v2.1); FNC1 in second position, Hanzi and other ECIs return
   `ErrUnsupported`.
 - **Still out of scope.** Perspective correction through the alignment pattern
   and multiple symbols per image.

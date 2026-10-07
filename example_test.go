@@ -168,3 +168,19 @@ func ExampleCode_Verify() {
 	// <nil>
 	// true
 }
+
+func ExampleEncodeStructured() {
+	text := strings.Repeat("A long message split across symbols. ", 8)
+	codes, err := qr.EncodeStructured(text, qr.WithECC(qr.ECCLow), qr.WithVersionRange(1, 3))
+	if err != nil {
+		panic(err)
+	}
+	results := make([]*qr.DecodeResult, len(codes))
+	for i, c := range codes {
+		img, _ := c.Image()
+		results[i], _ = qr.Decode(img)
+	}
+	joined, _ := qr.JoinStructuredAppend(results...)
+	fmt.Println(len(codes), "symbols, intact:", joined == text)
+	// Output: 6 symbols, intact: true
+}

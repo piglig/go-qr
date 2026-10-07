@@ -31,23 +31,31 @@ const noECI = -1
 
 // Mode indicators this decoder recognizes but does not support.
 const (
-	modeStructuredAppend = 0x3
-	modeFNC1First        = 0x5
-	modeFNC1Second       = 0x9
-	modeHanzi            = 0xD // GB/T 18284 Chinese mode
+	modeFNC1Second = 0x9 // FNC1 in second position (AIM application identifier)
+	modeHanzi      = 0xD // GB/T 18284 Chinese mode
 )
 
+// bitstream is the parsed content of a symbol's data codewords.
+type bitstream struct {
+	text       string
+	segs       []DecodedSegment
+	structured *StructuredAppend
+	gs1        bool
+}
+
 // parseBitstream walks the segment structure of the corrected data codewords
-// (the reverse of encodeSegments) and returns the decoded text and segments.
+// (the reverse of encodeSegments) and returns the decoded text, segments and
+// symbol-level indicators.
 //
 // Byte segments are interpreted by the ECI in effect: UTF-8 (26),
 // ISO-8859-1 (1, 3), Shift_JIS (20) or ASCII (27, 170). Without an ECI, a
 // segment that is valid UTF-8 is read as UTF-8 and anything else as
-// ISO-8859-1, which matches what common encoders emit.
-func parseBitstream(data []byte, ver int) (string, []DecodedSegment, error) {
+// ISO-8859-1, which matches what common encoders emit. In a GS1 symbol, '%'
+// in alphanumeric segments stands for the GS separator and "%%" for '%'.
+func parseBitstream(data []byte, ver int) (bitstream, error) {
 	r := &bitReader{data: data}
+	var out bitstream
 	var text []byte
-	var segs []DecodedSegment
 	eci := noECI
 
 	for r.remaining() >= 4 {
@@ -55,29 +63,40 @@ func parseBitstream(data []byte, ver int) (string, []DecodedSegment, error) {
 		mode := Mode(bits)
 		switch mode {
 		case 0: // terminator
-			return string(text), segs, nil
+			out.text = string(text)
+			return out, nil
 		case ModeECI:
 			v, err := readECI(r)
 			if err != nil {
-				return "", nil, err
+				return bitstream{}, err
 			}
 			eci = v
-			segs = append(segs, DecodedSegment{Mode: ModeECI, ECI: v})
+			out.segs = append(out.segs, DecodedSegment{Mode: ModeECI, ECI: v})
+			continue
+		case ModeStructuredAppend:
+			v, ok := r.read(16)
+			if !ok {
+				return bitstream{}, fmt.Errorf("%w: truncated structured append header", ErrDecodeFailed)
+			}
+			out.structured = &StructuredAppend{Index: v >> 12, Total: (v>>8)&0xF + 1, Parity: byte(v)}
+			out.segs = append(out.segs, DecodedSegment{Mode: ModeStructuredAppend, ECI: eci})
+			continue
+		case ModeFNC1:
+			out.gs1 = true
+			out.segs = append(out.segs, DecodedSegment{Mode: ModeFNC1, ECI: eci})
 			continue
 		case ModeNumeric, ModeAlphanumeric, ModeByte, ModeKanji:
-		case modeStructuredAppend:
-			return "", nil, fmt.Errorf("%w: structured append", ErrUnsupported)
-		case modeFNC1First, modeFNC1Second:
-			return "", nil, fmt.Errorf("%w: FNC1 (GS1) mode", ErrUnsupported)
+		case modeFNC1Second:
+			return bitstream{}, fmt.Errorf("%w: FNC1 in second position", ErrUnsupported)
 		case modeHanzi:
-			return "", nil, fmt.Errorf("%w: Hanzi mode", ErrUnsupported)
+			return bitstream{}, fmt.Errorf("%w: Hanzi mode", ErrUnsupported)
 		default:
-			return "", nil, fmt.Errorf("%w: unknown mode %#x", ErrDecodeFailed, bits)
+			return bitstream{}, fmt.Errorf("%w: unknown mode %#x", ErrDecodeFailed, bits)
 		}
 
 		count, ok := r.read(mode.charCountBits(ver))
 		if !ok {
-			return "", nil, fmt.Errorf("%w: truncated character count", ErrDecodeFailed)
+			return bitstream{}, fmt.Errorf("%w: truncated character count", ErrDecodeFailed)
 		}
 
 		seg := DecodedSegment{Mode: mode, NumChars: count, ECI: eci}
@@ -88,7 +107,11 @@ func parseBitstream(data []byte, ver int) (string, []DecodedSegment, error) {
 			text = append(text, seg.Data...)
 		case ModeAlphanumeric:
 			seg.Data, err = readAlphanumeric(r, count)
-			text = append(text, seg.Data...)
+			if out.gs1 {
+				text = appendGS1Alphanumeric(text, seg.Data)
+			} else {
+				text = append(text, seg.Data...)
+			}
 		case ModeByte:
 			if seg.Data, err = readBytes(r, count); err == nil {
 				text, err = appendCharset(text, seg.Data, eci)
@@ -97,11 +120,29 @@ func parseBitstream(data []byte, ver int) (string, []DecodedSegment, error) {
 			seg.Data, text, err = readKanji(r, count, text)
 		}
 		if err != nil {
-			return "", nil, err
+			return bitstream{}, err
 		}
-		segs = append(segs, seg)
+		out.segs = append(out.segs, seg)
 	}
-	return string(text), segs, nil
+	out.text = string(text)
+	return out, nil
+}
+
+// appendGS1Alphanumeric appends alphanumeric data from a GS1 symbol,
+// turning '%' into the GS separator and "%%" into '%'.
+func appendGS1Alphanumeric(text, data []byte) []byte {
+	for i := 0; i < len(data); i++ {
+		switch {
+		case data[i] != '%':
+			text = append(text, data[i])
+		case i+1 < len(data) && data[i+1] == '%':
+			text = append(text, '%')
+			i++
+		default:
+			text = append(text, gs1Separator)
+		}
+	}
+	return text
 }
 
 // readECI reads an ECI assignment number in its 1-, 2- or 3-byte form.

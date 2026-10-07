@@ -79,6 +79,25 @@ fmt.Println(code.Version(), code.ECC(), code.Mask(), code.Size())
 
 `EncodeBytes(data, opts...)` encodes binary data in a single byte segment.
 
+### Long data and GS1
+`EncodeStructured` spreads text that is too long for one symbol over up to 16
+symbols linked by structured append headers. Readers report each symbol's
+position, and `JoinStructuredAppend` reassembles the message:
+
+```go
+codes, err := qr.EncodeStructured(longText, qr.WithVersionRange(1, 10))
+// ... later, after decoding every symbol in any order:
+text, err := qr.JoinStructuredAppend(results...)
+```
+
+`WithGS1()` marks the data as a GS1 element string for logistics and retail
+systems. Separate variable-length elements with the ASCII GS character
+(`\x1d`); `DecodeResult.GS1` reports such symbols:
+
+```go
+code, err := qr.Encode("0109501101530003"+"17250101"+"10ABC123\x1d"+"21XYZ", qr.WithGS1())
+```
+
 ### Explicit segments
 To control the encoding exactly, build segments and pass them to
 `EncodeSegments`:
@@ -175,7 +194,8 @@ freshly rendered.
 | ECI 26 (UTF-8), 1/3 (ISO-8859-1), 20 (Shift_JIS), 27/170 (ASCII) | ✅ |
 | Byte data without ECI | UTF-8 if valid, otherwise ISO-8859-1 |
 | Perspective distortion, multiple symbols per image | ❌ |
-| Micro QR, rMQR, structured append, FNC1/GS1, Hanzi, other ECIs | ❌ `ErrUnsupported` |
+| Structured append and GS1 (FNC1 in first position) | ✅ |
+| Micro QR, rMQR, FNC1 in second position, Hanzi, other ECIs | ❌ `ErrUnsupported` |
 
 ## Structured Payloads
 The `payload` package builds the strings that phone scanners act on, and

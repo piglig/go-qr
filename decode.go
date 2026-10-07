@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"image"
+	"strings"
 )
 
 // DecodedSegment describes one segment of a decoded symbol.
@@ -19,6 +20,14 @@ type DecodedSegment struct {
 	Data []byte
 }
 
+// StructuredAppend identifies a symbol as one of a sequence that together
+// carries a single message (ISO/IEC 18004 §8). See JoinStructuredAppend.
+type StructuredAppend struct {
+	Index  int  // position in the sequence, from 0
+	Total  int  // number of symbols in the sequence, 1 to 16
+	Parity byte // XOR of the message bytes, the same in every symbol
+}
+
 // DecodeResult is a decoded symbol.
 type DecodeResult struct {
 	Text     string // the payload as UTF-8
@@ -27,6 +36,12 @@ type DecodeResult struct {
 	Mask     int
 	Mirrored bool // the symbol was read from a mirror image
 	Segments []DecodedSegment
+
+	// StructuredAppend is set when the symbol is part of a sequence.
+	StructuredAppend *StructuredAppend
+	// GS1 reports an FNC1-in-first-position symbol: Text is a GS1 element
+	// string whose variable-length elements end with the GS character.
+	GS1 bool
 
 	codewords []byte // corrected data codewords, for Code.Verify
 }
@@ -138,11 +153,14 @@ func decodeModules(grid [][]bool) (*DecodeResult, error) {
 	if err != nil {
 		return nil, err
 	}
-	text, segs, err := parseBitstream(data, ver)
+	bs, err := parseBitstream(data, ver)
 	if err != nil {
 		return nil, err
 	}
-	return &DecodeResult{Text: text, Version: ver, ECC: ecc, Mask: mask, Segments: segs}, nil
+	return &DecodeResult{
+		Text: bs.text, Version: ver, ECC: ecc, Mask: mask, Segments: bs.segs,
+		StructuredAppend: bs.structured, GS1: bs.gs1,
+	}, nil
 }
 
 func transpose(grid [][]bool) [][]bool {
@@ -417,4 +435,41 @@ func binarizeHybrid(l []uint8, w, h int) []bool {
 		}
 	}
 	return out
+}
+
+// JoinStructuredAppend reassembles the message of a structured append
+// sequence from its decoded symbols, given in any order. Every symbol of the
+// sequence must be present exactly once, and all must agree on the length
+// and parity of the sequence; the error wraps ErrInvalidArgument otherwise.
+func JoinStructuredAppend(parts ...*DecodeResult) (string, error) {
+	if len(parts) == 0 {
+		return "", fmt.Errorf("%w: no symbols to join", ErrInvalidArgument)
+	}
+	first := parts[0].StructuredAppend
+	if first == nil {
+		return "", fmt.Errorf("%w: symbol 0 is not part of a structured append sequence", ErrInvalidArgument)
+	}
+	ordered := make([]*DecodeResult, first.Total)
+	for i, p := range parts {
+		sa := p.StructuredAppend
+		switch {
+		case sa == nil:
+			return "", fmt.Errorf("%w: symbol %d is not part of a structured append sequence", ErrInvalidArgument, i)
+		case sa.Total != first.Total || sa.Parity != first.Parity:
+			return "", fmt.Errorf("%w: symbol %d belongs to a different sequence", ErrInvalidArgument, i)
+		case sa.Index >= sa.Total:
+			return "", fmt.Errorf("%w: symbol %d has index %d of %d", ErrInvalidArgument, i, sa.Index, sa.Total)
+		case ordered[sa.Index] != nil:
+			return "", fmt.Errorf("%w: duplicate symbol %d of the sequence", ErrInvalidArgument, sa.Index)
+		}
+		ordered[sa.Index] = p
+	}
+	var sb strings.Builder
+	for i, p := range ordered {
+		if p == nil {
+			return "", fmt.Errorf("%w: symbol %d of %d is missing", ErrInvalidArgument, i, first.Total)
+		}
+		sb.WriteString(p.Text)
+	}
+	return sb.String(), nil
 }
