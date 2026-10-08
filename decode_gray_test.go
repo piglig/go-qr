@@ -73,13 +73,13 @@ func TestThresholdLargeModules(t *testing.T) {
 
 func TestRangePyramid(t *testing.T) {
 	// A 10×10-block image, flat except for one block of contrast at (8, 8).
-	lo := make([]int, 100)
-	hi := make([]int, 100)
+	lo := make([]uint8, 100)
+	hi := make([]uint8, 100)
 	for i := range lo {
 		lo[i], hi[i] = 200, 200
 	}
 	lo[88], hi[88] = 10, 240
-	p := newRangePyramid(10, 10, func(i int) (int, int) { return lo[i], hi[i] })
+	p := newRangePyramid(10, 10, func(i int) (uint8, uint8) { return lo[i], hi[i] })
 	if _, _, ok := p.contrast(1, 1, 24); !ok {
 		t.Fatal("no contrast found from the far corner")
 	}
@@ -87,7 +87,7 @@ func TestRangePyramid(t *testing.T) {
 	if l != 10 || h != 240 {
 		t.Errorf("contrast next to the block = %d..%d, want 10..240", l, h)
 	}
-	flat := newRangePyramid(4, 4, func(int) (int, int) { return 100, 110 })
+	flat := newRangePyramid(4, 4, func(int) (uint8, uint8) { return 100, 110 })
 	if _, _, ok := flat.contrast(0, 0, 24); ok {
 		t.Error("contrast found in a flat image")
 	}

@@ -116,12 +116,12 @@ type rangePyramid struct {
 }
 
 type rangeLevel struct {
-	lo, hi []int // over 3×3 cells around each cell
+	lo, hi []uint8 // over 3×3 cells around each cell
 	w, h   int
 }
 
-func newRangePyramid(bw, bh int, at func(i int) (lo, hi int)) *rangePyramid {
-	lo, hi := make([]int, bw*bh), make([]int, bw*bh)
+func newRangePyramid(bw, bh int, at func(i int) (lo, hi uint8)) *rangePyramid {
+	lo, hi := make([]uint8, bw*bh), make([]uint8, bw*bh)
 	for i := range lo {
 		lo[i], hi[i] = at(i)
 	}
@@ -129,10 +129,10 @@ func newRangePyramid(bw, bh int, at func(i int) (lo, hi int)) *rangePyramid {
 	w, h := bw, bh
 	for w > 1 || h > 1 {
 		nw, nh := (w+1)/2, (h+1)/2
-		clo, chi := make([]int, nw*nh), make([]int, nw*nh)
+		clo, chi := make([]uint8, nw*nh), make([]uint8, nw*nh)
 		for y := 0; y < nh; y++ {
 			for x := 0; x < nw; x++ {
-				l, u := 255, 0
+				l, u := uint8(255), uint8(0)
 				for dy := 0; dy < 2; dy++ {
 					for dx := 0; dx < 2; dx++ {
 						if yy, xx := 2*y+dy, 2*x+dx; yy < h && xx < w {
@@ -144,20 +144,20 @@ func newRangePyramid(bw, bh int, at func(i int) (lo, hi int)) *rangePyramid {
 			}
 		}
 		// Window ranges over 3×3 cells, separably.
-		tlo, thi := make([]int, nw*nh), make([]int, nw*nh)
+		tlo, thi := make([]uint8, nw*nh), make([]uint8, nw*nh)
 		for y := 0; y < nh; y++ {
 			for x := 0; x < nw; x++ {
-				l, u := 255, 0
+				l, u := uint8(255), uint8(0)
 				for xx := max(0, x-1); xx <= min(nw-1, x+1); xx++ {
 					l, u = min(l, clo[y*nw+xx]), max(u, chi[y*nw+xx])
 				}
 				tlo[y*nw+x], thi[y*nw+x] = l, u
 			}
 		}
-		wlo, whi := make([]int, nw*nh), make([]int, nw*nh)
+		wlo, whi := make([]uint8, nw*nh), make([]uint8, nw*nh)
 		for y := 0; y < nh; y++ {
 			for x := 0; x < nw; x++ {
-				l, u := 255, 0
+				l, u := uint8(255), uint8(0)
 				for yy := max(0, y-1); yy <= min(nh-1, y+1); yy++ {
 					l, u = min(l, tlo[yy*nw+x]), max(u, thi[yy*nw+x])
 				}
@@ -175,8 +175,8 @@ func newRangePyramid(bw, bh int, at func(i int) (lo, hi int)) *rangePyramid {
 func (p *rangePyramid) contrast(bx, by, minRange int) (int, int, bool) {
 	for k, lv := range p.levels {
 		i := (by>>(k+1))*lv.w + bx>>(k+1)
-		if lv.hi[i]-lv.lo[i] > minRange {
-			return lv.lo[i], lv.hi[i], true
+		if int(lv.hi[i])-int(lv.lo[i]) > minRange {
+			return int(lv.lo[i]), int(lv.hi[i]), true
 		}
 	}
 	return 0, 0, false
