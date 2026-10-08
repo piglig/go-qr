@@ -26,3 +26,6 @@ go.work.sum
 # Demo build outputs (built by the Pages workflow)
 /demo/web/qr.wasm
 /demo/web/wasm_exec.js
+
+# Local Claude Code settings
+/.claude/settings.local.json

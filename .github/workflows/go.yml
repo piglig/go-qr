@@ -87,6 +87,29 @@ jobs:
           go-version-file: go.mod
       - run: go test ./...
 
+  # The test job builds tools and mcp against this checkout. This one builds
+  # them as `go install ...@latest` does, against the library release their
+  # go.mod pins, so a change there that needs unreleased library code fails
+  # here until the library is released and the pin bumped.
+  released-library:
+    name: test (tools and mcp on the pinned library)
+    runs-on: ubuntu-latest
+    env:
+      GOWORK: off
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+          cache-dependency-path: |
+            tools/go.sum
+            mcp/go.sum
+      - name: Test
+        run: |
+          for m in tools mcp; do
+            (cd $m && go mod verify && go vet ./... && go test ./...)
+          done
+
   vulncheck:
     runs-on: ubuntu-latest
     steps:
