@@ -276,6 +276,21 @@ func fastSample(l []uint8, w, h int, threshold uint8, inverted bool) ([][]bool, 
 func toLuma(img image.Image) []uint8 {
 	b := img.Bounds()
 	w, h := b.Dx(), b.Dy()
+	// Gray images and the luma plane of YCbCr ones, which JPEG decodes to,
+	// are used in place when their rows are contiguous: the decoder only
+	// reads the luminance.
+	switch im := img.(type) {
+	case *image.Gray:
+		if im.Stride == w {
+			off := im.PixOffset(b.Min.X, b.Min.Y)
+			return im.Pix[off : off+w*h : off+w*h]
+		}
+	case *image.YCbCr:
+		if im.YStride == w {
+			off := im.YOffset(b.Min.X, b.Min.Y)
+			return im.Y[off : off+w*h : off+w*h]
+		}
+	}
 	out := make([]uint8, w*h)
 	switch im := img.(type) {
 	case *image.Gray:
@@ -405,7 +420,7 @@ func hybridThresholds(l []uint8, w, h int) *thresholdMap {
 
 	// Block statistics first; a pyramid of their ranges serves blocks that
 	// have no contrast of their own.
-	type stat struct{ lo, hi, avg int }
+	type stat struct{ lo, hi, avg uint8 }
 	stats := make([]stat, bw*bh)
 	for by := 0; by < bh; by++ {
 		y0 := origin(by, h)
@@ -418,17 +433,17 @@ func hybridThresholds(l []uint8, w, h int) *thresholdMap {
 					lo, hi = min(lo, int(v)), max(hi, int(v))
 				}
 			}
-			stats[by*bw+bx] = stat{lo, hi, sum / (block * block)}
+			stats[by*bw+bx] = stat{uint8(lo), uint8(hi), uint8(sum / (block * block))}
 		}
 	}
-	pyr := newRangePyramid(bw, bh, func(i int) (int, int) { return stats[i].lo, stats[i].hi })
+	pyr := newRangePyramid(bw, bh, func(i int) (uint8, uint8) { return stats[i].lo, stats[i].hi })
 
-	black := make([]int, bw*bh)
+	black := make([]uint8, bw*bh)
 	for by := 0; by < bh; by++ {
 		for bx := 0; bx < bw; bx++ {
 			st := stats[by*bw+bx]
-			avg := st.avg
-			if st.hi-st.lo <= minRange {
+			avg := int(st.avg)
+			if int(st.hi)-int(st.lo) <= minRange {
 				// Uniform block. It may lie inside a module larger than the
 				// thresholding window: take the midpoint of the smallest
 				// surrounding window, in powers of two, that has contrast.
@@ -437,16 +452,16 @@ func hybridThresholds(l []uint8, w, h int) *thresholdMap {
 				} else {
 					// No contrast anywhere near: assume it is light unless the
 					// neighbors' black point says otherwise.
-					avg = st.lo / 2
+					avg = int(st.lo) / 2
 					if by > 0 && bx > 0 {
-						nb := (black[(by-1)*bw+bx] + 2*black[by*bw+bx-1] + black[(by-1)*bw+bx-1]) / 4
-						if st.lo < nb {
+						nb := (int(black[(by-1)*bw+bx]) + 2*int(black[by*bw+bx-1]) + int(black[(by-1)*bw+bx-1])) / 4
+						if int(st.lo) < nb {
 							avg = nb
 						}
 					}
 				}
 			}
-			black[by*bw+bx] = avg
+			black[by*bw+bx] = uint8(avg)
 		}
 	}
 
@@ -459,7 +474,7 @@ func hybridThresholds(l []uint8, w, h int) *thresholdMap {
 			sum := 0
 			for dy := -2; dy <= 2; dy++ {
 				for _, b := range black[(cy+dy)*bw+cx-2 : (cy+dy)*bw+cx+3] {
-					sum += b
+					sum += int(b)
 				}
 			}
 			thr[by*bw+bx] = uint8(sum / 25)

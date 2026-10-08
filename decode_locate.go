@@ -654,6 +654,12 @@ func finderTripleScore(a, b, c finderPattern) float64 {
 // checkFinderRatio reports whether the five run lengths match 1:1:3:1:1 and
 // returns the estimated module size.
 func checkFinderRatio(s [5]int) (float64, bool) {
+	// The tolerances below put the center run above 1.5 modules and the
+	// others below, so a center run that is not the longest fails them; this
+	// rejects most run sequences with integer comparisons only.
+	if s[2] <= s[0] || s[2] <= s[1] || s[2] <= s[3] || s[2] <= s[4] {
+		return 0, false
+	}
 	total := 0
 	for _, v := range s {
 		if v == 0 {
