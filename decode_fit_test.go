@@ -163,3 +163,28 @@ func TestDecodeLensDistortion(t *testing.T) {
 		t.Fatalf("Decode: %v", err)
 	}
 }
+
+// TestDecodeMissingFinder covers structural completion: one finder pattern
+// is painted over, as glare or damage would erase it, and the symbol is
+// rotated so the fast path does not apply.
+func TestDecodeMissingFinder(t *testing.T) {
+	for _, n := range []int{20, 120, 300} {
+		text := strings.Repeat("c", n)
+		code := mustEncode(t, text, WithECC(ECCHigh))
+		const scale, qz = 6, 8
+		for corner, at := range map[string][2]int{"top-left": {0, 0}, "top-right": {code.Size() - 7, 0}, "bottom-left": {0, code.Size() - 7}} {
+			img := mustImage(t, code, WithScale(scale), WithQuietZone(qz))
+			// Paint the finder and its separator mid-gray.
+			x0, y0 := (qz+at[0]-1)*scale, (qz+at[1]-1)*scale
+			for y := y0; y < y0+9*scale; y++ {
+				for x := x0; x < x0+9*scale; x++ {
+					img.Set(x, y, color.Gray{Y: 128})
+				}
+			}
+			res, err := Decode(rotateGray(img, 0.2))
+			if err != nil || res.Text != text {
+				t.Errorf("version %d, %s finder missing: %v", code.Version(), corner, err)
+			}
+		}
+	}
+}

@@ -54,8 +54,8 @@ func robustDecode(tm *thresholdMap, inverted bool, scale int, l []uint8, lw, lh 
 	if scale == 1 {
 		step = finderRowStep(w * h)
 	}
-	triples, err := findFindersStep(tm, inverted, dark, step)
-	if err != nil {
+	triples, cands, err := findFindersStep(tm, inverted, dark, step)
+	if err != nil && len(cands) < 2 {
 		return nil, err
 	}
 
@@ -70,7 +70,7 @@ func robustDecode(tm *thresholdMap, inverted bool, scale int, l []uint8, lw, lh 
 		dim      int
 		score    = -1.0
 		first    *symbolGeometry
-		firstErr error
+		firstErr = err // set when no triple was found
 	)
 search:
 	for ti, t := range triples {
@@ -95,6 +95,15 @@ search:
 			if score >= goodTimingScore {
 				break search
 			}
+		}
+	}
+	// Structural completion: when no triple's timing patterns read back
+	// well, a finder may be unreadable, covered by glare, damage or the
+	// image edge. Pairs of well-supported finders imply the third, and the
+	// hypotheses are fitted and scored like real triples.
+	if score < goodTimingScore && len(cands) >= 2 {
+		if m, d, s, ok := completeSymbol(dark, cands); ok && s > score+completionMargin {
+			model, dim = m, d
 		}
 	}
 	if model != nil {
@@ -128,7 +137,15 @@ type symbolGeometry struct {
 	// to √2 in a rotated symbol, so they are not used for geometry.
 	tlC, tlR, trC, trR, blC, blR float64
 	dim                          int
+	// virtual is 1 + the index (top-left, top-right, bottom-left) of a
+	// finder that was inferred from the other two rather than seen, or 0.
+	virtual int
 }
+
+// completionMargin is how much better an inferred finder's fit must read
+// back to replace a fit of seen finders: a triple that reads back almost as
+// well usually decodes, and a hypothesis can match by chance.
+const completionMargin = 0.1
 
 // goodTimingScore is the timing pattern agreement at which a fit is accepted
 // without trying other finder assignments.
@@ -149,7 +166,14 @@ func newSymbolGeometryCorner(dark func(x, y int) bool, t [3]finderPattern, k int
 	case 2:
 		tl, tr, bl = handed(bl, tl, tr)
 	}
-	g := &symbolGeometry{tl: tl, tr: tr, bl: bl}
+	return newSymbolGeometryOrdered(dark, tl, tr, bl, 0)
+}
+
+// newSymbolGeometryOrdered locates a symbol from its top-left, top-right and
+// bottom-left finders; virtual marks one of them as inferred, as in
+// symbolGeometry.
+func newSymbolGeometryOrdered(dark func(x, y int) bool, tl, tr, bl finderPattern, virtual int) (*symbolGeometry, error) {
+	g := &symbolGeometry{tl: tl, tr: tr, bl: bl, virtual: virtual}
 	top, left := dist(tl, tr), dist(tl, bl)
 	if top == 0 || left == 0 {
 		return nil, fmt.Errorf("%w: degenerate finder triple", ErrNotFound)
@@ -162,6 +186,16 @@ func newSymbolGeometryCorner(dark func(x, y int) bool, t [3]finderPattern, k int
 	g.tlR = finderModuleAlong(dark, tl, g.rx, g.ry)
 	g.trR = finderModuleAlong(dark, tr, g.rx, g.ry)
 	g.blR = finderModuleAlong(dark, bl, g.rx, g.ry)
+	// An inferred finder cannot be measured: it takes the module sizes of
+	// the finder across the symbol's edge from it.
+	switch virtual {
+	case 1:
+		g.tlC, g.tlR = g.trC, g.blR
+	case 2:
+		g.trC, g.trR = g.tlC, g.tlR
+	case 3:
+		g.blC, g.blR = g.tlC, g.tlR
+	}
 
 	// Finder centers span size-7 modules along each edge. Under perspective
 	// the module size varies along the edge; the mean of the two ends is a
@@ -449,7 +483,8 @@ func (s scaledMapper) apply(u, v float64) (float64, float64) {
 // triples that best fit one symbol, best first. The row scan reads bm
 // directly; dark (bounds-checked) serves the cross checks.
 func findFinders(tm *thresholdMap, inverted bool, dark func(x, y int) bool) ([][3]finderPattern, error) {
-	return findFindersStep(tm, inverted, dark, 1)
+	triples, _, err := findFindersStep(tm, inverted, dark, 1)
+	return triples, err
 }
 
 // finderRowStep returns how many rows apart the finder scan runs in an image
@@ -470,8 +505,9 @@ func finderRowStep(px int) int {
 }
 
 // findFindersStep is findFinders scanning every step-th row; each hit then
-// counts for step rows in a candidate's support.
-func findFindersStep(tm *thresholdMap, inverted bool, dark func(x, y int) bool, step int) ([][3]finderPattern, error) {
+// counts for step rows in a candidate's support. It also returns every
+// candidate found.
+func findFindersStep(tm *thresholdMap, inverted bool, dark func(x, y int) bool, step int) ([][3]finderPattern, []finderPattern, error) {
 	h := tm.h
 	var cands []finderPattern
 
@@ -523,7 +559,8 @@ func findFindersStep(tm *thresholdMap, inverted bool, dark func(x, y int) bool, 
 		}
 	}
 
-	return selectFinders(cands)
+	triples, err := selectFinders(append([]finderPattern(nil), cands...))
+	return triples, cands, err
 }
 
 // maxFinderTriples bounds how many finder triples are fitted per image.

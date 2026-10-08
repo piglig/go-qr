@@ -1,6 +1,9 @@
 package qr
 
-import "math"
+import (
+	"math"
+	"sort"
+)
 
 // Structural fit: the robust path's geometry model.
 //
@@ -437,12 +440,17 @@ const minFinderCorners = 4
 // correctly through it. It reports false when the finders' corners cannot
 // be measured, such as with circular finder styles.
 func (g *symbolGeometry) fitSymbol(dark func(x, y int) bool) (*gridModel, int, float64, bool) {
-	fcs := [3]finderCorners{
-		traceFinderCorners(dark, g.tl, g.cx, g.cy, g.tlC, g.rx, g.ry, g.tlR),
-		traceFinderCorners(dark, g.tr, g.cx, g.cy, g.trC, g.rx, g.ry, g.trR),
-		traceFinderCorners(dark, g.bl, g.cx, g.cy, g.blC, g.rx, g.ry, g.blR),
+	var fcs [3]finderCorners
+	for i, f := range [3]finderPattern{g.tl, g.tr, g.bl} {
+		if g.virtual != i+1 {
+			cm, rm := [3]float64{g.tlC, g.trC, g.blC}[i], [3]float64{g.tlR, g.trR, g.blR}[i]
+			fcs[i] = traceFinderCorners(dark, f, g.cx, g.cy, cm, g.rx, g.ry, rm)
+		}
 	}
-	for _, fc := range fcs {
+	for i, fc := range fcs {
+		if g.virtual == i+1 {
+			continue
+		}
 		n := 0
 		for level := range fc.ok {
 			for _, ok := range fc.ok[level] {
@@ -460,6 +468,13 @@ func (g *symbolGeometry) fitSymbol(dark func(x, y int) bool) (*gridModel, int, f
 		cs := finderCorrespondences(fcs[0], 0, 0)
 		cs = append(cs, finderCorrespondences(fcs[1], d-7, 0)...)
 		cs = append(cs, finderCorrespondences(fcs[2], 0, d-7)...)
+		if g.virtual != 0 {
+			// The inferred finder's center is a guess that the alignment
+			// patterns and timing patterns then correct.
+			f := [3]finderPattern{g.tl, g.tr, g.bl}[g.virtual-1]
+			u, v := [3][2]float64{{3.5, 3.5}, {d - 3.5, 3.5}, {3.5, d - 3.5}}[g.virtual-1][0], [3][2]float64{{3.5, 3.5}, {d - 3.5, 3.5}, {3.5, d - 3.5}}[g.virtual-1][1]
+			cs = append(cs, correspondence{u, v, f.x, f.y, virtualWeight})
+		}
 		h, ok := fitHomography(cs)
 		return h, cs, ok
 	}
@@ -649,4 +664,93 @@ func locateAlignment(dark func(x, y int) bool, h perspective, u, v, radius float
 	x1, y1 := h.apply(u+1, v)
 	x2, y2 := h.apply(u, v+1)
 	return searchAlignment(dark, ex, ey, x1-ex, y1-ey, x2-ex, y2-ey, []float64{radius})
+}
+
+// virtualWeight is the fit weight of an inferred finder's center.
+const virtualWeight = 6
+
+// Structural completion.
+
+// minCompletionSupport is the least support, the share of the rows a finder
+// spans that confirmed it, of a finder used to infer a missing one.
+const minCompletionSupport = 0.7
+
+// maxCompletionFinders bounds the finders paired for completion.
+const maxCompletionFinders = 5
+
+// completeSymbol infers a missing third finder from pairs of well-supported
+// candidates and returns the best-fitting symbol. Two finders that share an
+// edge of the symbol leave the third on either side of either of them; two
+// on a diagonal leave it on either side of their midpoint.
+func completeSymbol(dark func(x, y int) bool, cands []finderPattern) (*gridModel, int, float64, bool) {
+	var strong []finderPattern
+	for _, c := range cands {
+		if float64(c.count) >= minCompletionSupport*1.5*c.moduleSize {
+			strong = append(strong, c)
+		}
+	}
+	sort.Slice(strong, func(i, j int) bool { return strong[i].count > strong[j].count })
+	if len(strong) > maxCompletionFinders {
+		strong = strong[:maxCompletionFinders]
+	}
+	var (
+		best      *gridModel
+		bestDim   int
+		bestScore = -1.0
+	)
+	try := func(tl, tr, bl finderPattern, virtual finderPattern) {
+		idx := 0
+		switch virtual {
+		case tl:
+			idx = 1
+		case tr:
+			idx = 2
+		case bl:
+			idx = 3
+		}
+		g, err := newSymbolGeometryOrdered(dark, tl, tr, bl, idx)
+		if err != nil {
+			return
+		}
+		if m, d, s, ok := g.fitSymbol(dark); ok && s > bestScore {
+			best, bestDim, bestScore = m, d, s
+		}
+	}
+	for i := 0; i < len(strong); i++ {
+		for j := i + 1; j < len(strong); j++ {
+			a, b := strong[i], strong[j]
+			if max(a.moduleSize, b.moduleSize) > 2*min(a.moduleSize, b.moduleSize) {
+				continue
+			}
+			module := (a.moduleSize + b.moduleSize) / 2
+			dx, dy := b.x-a.x, b.y-a.y
+			if math.Hypot(dx, dy) < 14*0.8/math.Sqrt2*module {
+				continue
+			}
+			px, py := -dy, dx // perpendicular, same length
+			v := func(x, y float64) finderPattern {
+				return finderPattern{x: x, y: y, moduleSize: module}
+			}
+			// a and b share an edge: either is the top-left corner.
+			for _, corner := range [2]finderPattern{a, b} {
+				other := b
+				if corner == b {
+					other = a
+				}
+				for _, sgn := range [2]float64{1, -1} {
+					c := v(corner.x+sgn*px, corner.y+sgn*py)
+					tl, tr, bl := handed(corner, other, c)
+					try(tl, tr, bl, c)
+				}
+			}
+			// a and b are the top-right and bottom-left finders.
+			mx, my := (a.x+b.x)/2, (a.y+b.y)/2
+			for _, sgn := range [2]float64{1, -1} {
+				c := v(mx+sgn*px/2, my+sgn*py/2)
+				tl, tr, bl := handed(c, a, b)
+				try(tl, tr, bl, c)
+			}
+		}
+	}
+	return best, bestDim, bestScore, best != nil
 }
