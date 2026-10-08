@@ -1,6 +1,9 @@
 name: Release
 
-# Releases are made from main by this workflow only; tags are protected.
+# Releases are made from main by this workflow only. Release tags are
+# protected by a ruleset that only the RELEASE_DEPLOY_KEY deploy key may
+# bypass, so the workflow checks out and pushes tags with that key; the
+# GitHub release is then created for the existing tag.
 #
 # - The library is released when a merged commit adds a version heading to
 #   CHANGELOG.md that has no tag yet (scripts/release.sh opens that PR).
@@ -39,6 +42,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          ssh-key: ${{ secrets.RELEASE_DEPLOY_KEY }}
 
       - name: Find an untagged version
         id: version
@@ -68,7 +72,9 @@ jobs:
           V: ${{ steps.version.outputs.version }}
         run: |
           awk -v h="## [$V]" 'index($0, h) == 1 {on=1; next} /^## \[/ {if (on) exit} on' CHANGELOG.md > notes.md
-          gh release create "v$V" --target "$GITHUB_SHA" --title "v$V" --notes-file notes.md --latest
+          git tag "v$V" "$GITHUB_SHA"
+          git push origin "refs/tags/v$V"
+          gh release create "v$V" --verify-tag --title "v$V" --notes-file notes.md --latest
           # Ask the module proxy for the version so that it is available,
           # and Dependabot sees it, right away.
           GOPROXY=https://proxy.golang.org GOWORK=off go list -m "github.com/piglig/go-qr/v2@v$V" ||
@@ -88,6 +94,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          ssh-key: ${{ secrets.RELEASE_DEPLOY_KEY }}
 
       - name: Decide whether to release
         id: version
@@ -154,6 +161,8 @@ jobs:
             echo "go install github.com/piglig/go-qr/$pkg@v$V"
             echo '```'
           } > notes.md
-          gh release create "$M/v$V" --target "$GITHUB_SHA" --title "$M/v$V" --notes-file notes.md --latest=false
+          git tag "$M/v$V" "$GITHUB_SHA"
+          git push origin "refs/tags/$M/v$V"
+          gh release create "$M/v$V" --verify-tag --title "$M/v$V" --notes-file notes.md --latest=false
           GOPROXY=https://proxy.golang.org go list -m "github.com/piglig/go-qr/$M@v$V" ||
             echo "::warning::The module proxy does not list $M/v$V yet."

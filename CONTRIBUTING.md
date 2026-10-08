@@ -192,6 +192,28 @@ tab, choosing the module and a patch or minor version.
 The library is always released first: `tools` and `mcp` must build against
 a published version, which CI checks on every pull request.
 
+### Repository setup
+
+Done once by the repository owner. The rulesets in
+[.github/rulesets](.github/rulesets) protect `main` (squash-merged pull
+requests with passing checks only) and the release tags (only deploy keys
+may create them). In a repository owned by a user, rulesets cannot exempt
+GitHub Actions itself, so the release workflow pushes tags with a deploy
+key:
+
+```shell
+ssh-keygen -t ed25519 -N "" -C "go-qr release" -f release_key
+gh repo deploy-key add release_key.pub --allow-write --title "release workflow"
+gh secret set RELEASE_DEPLOY_KEY < release_key
+rm release_key release_key.pub
+gh api -X POST repos/piglig/go-qr/rulesets --input .github/rulesets/release-tags.json
+gh api -X POST repos/piglig/go-qr/rulesets --input .github/rulesets/main.json
+```
+
+To change a ruleset later, edit its file and apply it with
+`gh api -X PUT repos/piglig/go-qr/rulesets/<id> --input <file>`
+(`gh api repos/piglig/go-qr/rulesets` lists the ids).
+
 ## AI coding assistants
 
 Contributions written with AI assistants are welcome, under the same rules.
