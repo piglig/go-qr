@@ -7,6 +7,7 @@ import (
 	"image/color"
 	"image/png"
 	"math"
+	"math/rand"
 	"strconv"
 	"strings"
 	"testing"
@@ -560,6 +561,62 @@ func TestDecodeUndeclaredShiftJIS(t *testing.T) {
 		}
 		if res.Text != c.want {
 			t.Errorf("%s: got %q, want %q", c.name, res.Text, c.want)
+		}
+	}
+}
+
+func BenchmarkDecodePerspective(b *testing.B) {
+	code, _ := Encode("https://github.com/piglig/go-qr?ref=bench&v=1")
+	img, _ := code.Image(WithScale(6))
+	w := float64(img.Bounds().Dx())
+	q := [4][2]float64{{0.08 * w, 0.1 * w}, {0.92 * w, 0.04 * w}, {0.96 * w, 0.96 * w}, {0.04 * w, 0.9 * w}}
+	warped := warpPerspective(img, q, int(w), int(w))
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		if _, err := Decode(warped); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+// benchPhoto is a w×h textured gray image, with a rotated symbol of 3-pixel
+// modules pasted in when withCode is set.
+func benchPhoto(w, h int, withCode bool) *image.Gray {
+	img := image.NewGray(image.Rect(0, 0, w, h))
+	r := rand.New(rand.NewSource(int64(w)))
+	for i := range img.Pix {
+		img.Pix[i] = uint8(150 + r.Intn(60))
+	}
+	if withCode {
+		code, _ := Encode("https://github.com/piglig/go-qr?ref=bench&v=1")
+		sym, _ := code.Image(WithScale(3), WithQuietZone(6))
+		rot := rotateGray(sym, 0.1)
+		sb := rot.Bounds()
+		for y := 0; y < sb.Dy(); y++ {
+			copy(img.Pix[(h/2+y)*w+w/3:], rot.Pix[y*rot.Stride:y*rot.Stride+sb.Dx()])
+		}
+	}
+	return img
+}
+
+func BenchmarkDecodePhoto(b *testing.B) {
+	img := benchPhoto(2400, 1800, true)
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if _, err := Decode(img); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func BenchmarkDecodeNoCode(b *testing.B) {
+	img := benchPhoto(640, 480, false)
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if _, err := Decode(img); err == nil {
+			b.Fatal("decoded an image without a code")
 		}
 	}
 }

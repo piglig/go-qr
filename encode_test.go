@@ -139,3 +139,20 @@ func TestCodeModuleOutOfRange(t *testing.T) {
 		t.Error("Module(0, 0) should be the dark finder corner")
 	}
 }
+
+func BenchmarkEncode(b *testing.B) {
+	for _, c := range []struct{ name, text string }{
+		{"v1", "HELLO WORLD"},
+		{"v4", "https://github.com/piglig/go-qr?ref=bench&v=1"},
+		{"v20", strings.Repeat("The quick brown fox jumps over the lazy dog. ", 15)},
+	} {
+		b.Run(c.name, func(b *testing.B) {
+			b.ReportAllocs()
+			for i := 0; i < b.N; i++ {
+				if _, err := Encode(c.text); err != nil {
+					b.Fatal(err)
+				}
+			}
+		})
+	}
+}

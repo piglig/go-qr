@@ -1,0 +1,105 @@
+name: Regression
+
+# Compares the pull request with its base on the same runner: benchmark
+# time and allocations of the library, and decode rates of the synthetic
+# distortion sweeps, which are deterministic. The comparison tables are in
+# the job summary. A maintainer can accept a measured trade-off with the
+# accept-regression label; the tables are still reported.
+
+on:
+  pull_request:
+    branches: [ "main" ]
+    types: [ opened, synchronize, reopened, labeled, unlabeled ]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: regression-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+env:
+  # Batch benchmarks are left out: they run in parallel and are too noisy.
+  BENCH: Decode|Encode|PNG|SVG|Image|Segments
+
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: new
+          fetch-depth: 0
+
+      - name: Check for Go changes
+        id: changed
+        working-directory: new
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          if git diff --quiet "$BASE" HEAD -- '*.go' '*go.mod' '*go.sum'; then
+            echo "No Go changes; nothing to compare."
+            echo "go=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "go=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.changed.outputs.go == 'true'
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: old
+
+      - uses: actions/setup-go@v5
+        if: steps.changed.outputs.go == 'true'
+        with:
+          go-version: stable
+          cache-dependency-path: |
+            new/go.mod
+            new/tools/go.sum
+
+      - name: Benchmarks
+        if: steps.changed.outputs.go == 'true'
+        run: |
+          for d in old new; do (cd $d && go work init . ./tools && go test -c -o /dev/null .); done
+          # Alternate the two versions so that drifts in the runner's speed
+          # affect both alike.
+          for i in $(seq 8); do
+            for d in old new; do
+              (cd $d && go test -run='^$' -bench="$BENCH" -benchmem -benchtime=200ms -count=1 .) >> $d-bench.txt
+            done
+          done
+
+      - name: Distortion sweeps
+        if: steps.changed.outputs.go == 'true'
+        run: |
+          (cd new/tools && go test -run=TestRobustness ./bench/ -sweep -sweep-native -sweep-out "$GITHUB_WORKSPACE/new-sweep.json")
+          if ! (cd old/tools && go test -run=TestRobustness ./bench/ -sweep -sweep-native -sweep-out "$GITHUB_WORKSPACE/old-sweep.json"); then
+            echo "::notice::The base cannot write sweep counts; sweeps are not compared."
+            rm -f old-sweep.json
+          fi
+
+      - name: Compare
+        if: steps.changed.outputs.go == 'true'
+        env:
+          ACCEPT: ${{ contains(github.event.pull_request.labels.*.name, 'accept-regression') }}
+        run: |
+          (cd new/tools && go build -o "$RUNNER_TEMP/regress" ./regress)
+          status=0
+          printf '## Benchmarks\n\n' > report.md
+          "$RUNNER_TEMP/regress" bench old-bench.txt new-bench.txt >> report.md || status=1
+          if [ -f old-sweep.json ]; then
+            printf '\n## Distortion sweeps (go-qr decodes)\n\n' >> report.md
+            "$RUNNER_TEMP/regress" sweep old-sweep.json new-sweep.json >> report.md || status=1
+          fi
+          cat report.md >> "$GITHUB_STEP_SUMMARY"
+          cat report.md
+          if [ $status -ne 0 ]; then
+            if [ "$ACCEPT" = true ]; then
+              echo "::warning::Regressions accepted with the accept-regression label."
+            else
+              echo "::error::Regressions found; see the job summary. A maintainer can accept a measured trade-off with the accept-regression label."
+              exit 1
+            fi
+          fi
