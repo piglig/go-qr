@@ -77,7 +77,13 @@ Byte segments are interpreted by the ECI in effect:
 | 1, 3 | ISO-8859-1 |
 | 20 | Shift_JIS |
 | 27, 170 | ASCII |
-| none | UTF-8 if the bytes are valid UTF-8, otherwise ISO-8859-1 |
+| none | UTF-8 if the bytes are valid UTF-8; Shift_JIS if they read as Japanese; otherwise ISO-8859-1 |
+
+Japanese encoders commonly write Shift_JIS without an ECI. Bytes are taken
+for Shift_JIS, *since v2.4.1*, when they form valid Shift_JIS and contain a
+run of three or more katakana or kanji, or bytes 0x80 to 0x9F, which are
+control codes in ISO-8859-1. A run of three accented capitals such as
+"ÀÉÎ" also reads as katakana; use an ECI when that matters.
 
 Other ECIs return `ErrUnsupported`; the raw bytes are still in `Segments` if
 you need them.

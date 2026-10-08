@@ -532,3 +532,34 @@ func TestDecodeFastPathTopRowLikeFinder(t *testing.T) {
 		t.Fatalf("metadata %+v does not match the code", res)
 	}
 }
+
+// TestDecodeUndeclaredShiftJIS covers byte segments in Shift_JIS without an
+// ECI, which Japanese encoders commonly write, and Latin-1 text that must
+// not be taken for it.
+func TestDecodeUndeclaredShiftJIS(t *testing.T) {
+	for _, c := range []struct {
+		name string
+		data []byte
+		want string
+	}{
+		{"half-width katakana", []byte("\xc3\xde\xbb\xde\xb2\xddQR\r\nhttp://d-qr.net/ex/"), "ﾃﾞｻﾞｲﾝQR\r\nhttp://d-qr.net/ex/"},
+		{"double-byte", []byte("Google \x83\x82\x83o\x83C\x83\x8b\r\nhttp://google.jp"), "Google モバイル\r\nhttp://google.jp"},
+		{"one kanji", []byte("\x88\xa4"), "愛"},
+		{"Latin-1 é", []byte("caf\xe9"), "café"},
+		{"Latin-1 Å", []byte("\xc5ngstr\xf6m"), "Ångström"},
+		{"Latin-1 words", []byte("na\xefve r\xe9sum\xe9, Gr\xf6\xdfe, se\xf1or \xd1and\xfa"), "naïve résumé, Größe, señor Ñandú"},
+		{"Latin-1 é pairs", []byte("\xe9l\xe8ve"), "élève"},
+	} {
+		code, err := EncodeSegments([]Segment{BytesSegment(c.data)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		res, err := Decode(mustImage(t, code, WithScale(4)))
+		if err != nil {
+			t.Fatalf("%s: %v", c.name, err)
+		}
+		if res.Text != c.want {
+			t.Errorf("%s: got %q, want %q", c.name, res.Text, c.want)
+		}
+	}
+}

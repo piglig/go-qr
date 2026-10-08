@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `Decode` read byte segments in Shift_JIS without an ECI, which Japanese
+  encoders commonly write, as ISO-8859-1, so Japanese text came out as
+  "ÃÞ»Þ²Ý". Such segments are now read as Shift_JIS when they form valid
+  Shift_JIS with a run of katakana or kanji, or contain bytes that
+  ISO-8859-1 leaves as control codes. Found on ZXing's test photos, where
+  go-qr now reads 166 of 179 (zxing-cpp: 165).
+
 ### Changed
 
 - The `generator` CLI (tools/v1.1.3) and `go-qr-mcp` (mcp/v0.1.2) are built
