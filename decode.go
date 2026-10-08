@@ -572,17 +572,21 @@ func JoinStructuredAppend(parts ...*DecodeResult) (string, error) {
 // The finder spans 7 of at least 21 modules, so a run sequence wider than a
 // third of the symbol is not the finder, even if its ratios match: the top
 // row 7:5:9:5:7 (the finder edge, then data) fits 1:1:3:1:1 within the
-// ratio tolerance at about five times the real pitch.
+// ratio tolerance at about five times the real pitch. For the same reason
+// only the top third of the rows can cross the finder, and each row is
+// followed no further than a third of the width.
 func finderPitch(dark func(x, y int) bool, minX, minY, maxX, maxY int) (float64, bool) {
 	maxTotal := (maxX-minX+1)/3 + 1
+	maxY = min(maxY, minY+(maxY-minY+1)/3+1)
+	stopX := min(maxX, minX+maxTotal)
 	var totals []int
-	for y := minY; y <= minY+(maxY-minY)/2; y++ {
+	for y := minY; y <= maxY; y++ {
 		if !dark(minX, y) {
 			continue
 		}
 		var s [5]int
 		state, x := 0, minX
-		for ; x <= maxX && state < 5; x++ {
+		for ; x <= stopX && state < 5; x++ {
 			if dark(x, y) != (state%2 == 0) {
 				state++
 				if state == 5 {
@@ -591,7 +595,7 @@ func finderPitch(dark func(x, y int) bool, minX, minY, maxX, maxY int) (float64,
 			}
 			s[state]++
 		}
-		complete := state == 5 || (state == 4 && x > maxX)
+		complete := state == 5 || (state == 4 && x > stopX && stopX == maxX)
 		total := s[0] + s[1] + s[2] + s[3] + s[4]
 		if _, ok := checkFinderRatio(s); complete && ok && total <= maxTotal {
 			totals = append(totals, total)
