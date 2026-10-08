@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Byte segments without an ECI that are not UTF-8 are read by a model of
+  text instead of fixed rules. Each segment is read both as Shift_JIS and as
+  Windows-1252, and each reading is scored by how its characters follow
+  each other in text. All undeclared segments of a symbol are judged
+  together, and a Kanji mode segment counts for Shift_JIS. On 220 test
+  strings (two sets written after the model was fixed) it picks the right
+  character set for 217, against 206 for the rules of v2.4.1, which missed
+  short half-width katakana words and Windows-1252 text.
+- Undeclared single-byte text is read as Windows-1252, a superset of
+  ISO-8859-1 for text, so “quotes”, dashes and € come out as such rather
+  than as control codes. Segments with ECI 1 or 3 are still read as
+  ISO-8859-1.
+
+### Fixed
+
+- A Shift_JIS lead byte followed by a byte that cannot end a Shift_JIS
+  character, such as é followed by a space, no longer passes as Shift_JIS.
+
 ## [2.4.1] - 2026-10-08
 
 ### Fixed
