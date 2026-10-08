@@ -4,7 +4,7 @@
 
 Security fixes are released for the latest minor version of v2. Version 1 is
 no longer maintained; please upgrade (see
-[Upgrading to v2](docs/upgrading-to-v2.md)).
+[Upgrading to v2](docs/guides/upgrading-to-v2.md)).
 
 | Version | Supported |
 | --- | --- |

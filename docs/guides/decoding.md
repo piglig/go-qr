@@ -64,7 +64,7 @@ also read mirrored.
 Modules should be at least 2 pixels wide. Large symbols (version 20 and up)
 in photos are the hardest case: lens distortion bends their grid more than
 the model follows. Move closer to the code rather than zooming out. See
-[Performance](../performance.md#reading-photos) for how the decoder
+[Performance](../explanation/performance.md#reading-photos) for how the decoder
 compares with others on real photos.
 
 ### Text encodings
@@ -81,7 +81,7 @@ Byte segments are interpreted by the ECI in effect:
 
 Encoders often omit the ECI: Japanese ones write Shift_JIS, others
 ISO-8859-1 or, from Windows software, Windows-1252, which puts “quotes”,
-dashes and € where ISO-8859-1 has control codes. *Since v2.4.2*, the decoder
+dashes and € where ISO-8859-1 has control codes. *Since v2.5*, the decoder
 reads the bytes both ways and scores each reading by how characters follow
 each other in text: accented letters sit inside words, katakana and kanji
 run together, a half-width katakana rarely stands alone where the Latin-1
@@ -111,5 +111,6 @@ bug worth surfacing.
 
 The decoder is fuzz-tested against arbitrary images and malformed
 bitstreams, and returns errors rather than panicking. Its cost grows with
-the number of pixels, so downscale very large images (for example, to at
-most 1,000 pixels on the long side) before decoding untrusted uploads.
+the number of pixels, about 50 ms for a 12-megapixel photo, and decoding
+the image file itself costs more. Check the dimensions of untrusted uploads
+with `image.DecodeConfig` and reject oversized ones before decoding them.

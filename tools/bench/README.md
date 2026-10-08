@@ -1,36 +1,54 @@
-# Benchmark harness
+# Benchmarks and accuracy tests
 
-Comparative benchmarks for QR **encoders** (`BenchmarkEncodeCompare`: go-qr,
-skip2/go-qrcode, boombuler/barcode) and **decoders** (`BenchmarkDecodeClean`,
-`TestDecodeAccuracy`: go-qr's native `qr.Decode` and gozxing) over a shared
-corpus, reporting throughput, allocations, and decode success rate. It lives in
-the `tools` submodule because it imports those libraries; the main `go-qr`
-module stays dependency-free.
+Compares go-qr with other QR Code libraries. It lives in the `tools` module
+because it imports them; the library module stays dependency-free. The
+results are published in [Performance](../../docs/explanation/performance.md).
 
-## What it measures
-
-| Metric | Where | Why |
+| Test | Compares | Measures |
 | --- | --- | --- |
-| `ns/op` | `BenchmarkDecodeClean` | Latency on crisp, self-generated images (the verify path). |
-| `B/op`, `allocs/op` | `BenchmarkDecodeClean` (`-benchmem`) | GC pressure — the clearest Go-native-vs-Java-port win surface. |
-| success rate | `TestDecodeAccuracy` | Robustness on clean vs degraded corpora. Latency is meaningless if it can't read the code. |
+| `BenchmarkEncodeCompare` | go-qr, [skip2/go-qrcode], [boombuler/barcode] | Encoding time and allocations. |
+| `BenchmarkDecodeClean` | go-qr, [gozxing] | Decoding time and allocations on crisp rendered images. |
+| `TestDecodeAccuracy` | go-qr, gozxing | Decode rate on rendered images, clean and rotated with noise. |
+| `TestRobustness` | go-qr, gozxing | Decode rate through a simulated camera: tilt, module size, blur, lens distortion and a random phone mix. |
+| `TestBoofCV` | go-qr, gozxing | Decode results on the real photos of the BoofCV dataset. |
 
-## Corpus
+## Running
 
-`corpus.go` generates, via `go-qr` itself:
+Benchmark your checkout rather than the released library with a workspace
+at the repository root:
 
-- **Clean** — 5 inputs spanning the version range (short numeric → high-version
-  byte payload), rendered axis-aligned at `benchScale` px/module. This is the
-  case a specialized decoder should dominate.
-- **Degraded** — the clean set put through a seeded 7° rotation + Gaussian
-  sensor noise (stdlib only, deterministic). This is the robustness column where
-  the ZXing family is expected to lead.
+```shell
+go work init . ./tools
+cd tools
+
+go test -run='^$' -bench='EncodeCompare|DecodeClean' -benchmem ./bench/
+go test -run=TestDecodeAccuracy -v ./bench/
+go test -run=TestRobustness -v ./bench/ -sweep
+go test -run=TestBoofCV -timeout=60m ./bench/ -boofcv=/path/to/qrcodes/detection -boofcv-out=go.jsonl
+```
+
+Flags such as `-sweep` must follow the package path. Without them, the
+sweeps and the dataset test are skipped.
+
+**`TestRobustness`** renders symbols through a pinhole camera model
+(`distort.go`: tilt about any axis, rotation, pixels per module, Gaussian
+blur, noise and radial lens distortion) and tabulates decode rates per
+decoder and version. A decode counts only if the text matches.
+`DistortWithTruth` also returns where each module lands, for measuring
+localization error.
+
+**`TestBoofCV`** reads the
+[BoofCV QR Code dataset](https://boofcv.org/index.php?title=Performance:QrCode)
+(`qrcodes_v3.zip`, about 200 MB, downloaded separately; its license is
+unstated, so it is not vendored). It writes one JSON line per decoder and
+image with the texts read and the decode time. The dataset labels the
+codes' corners but not their contents, so results are scored by agreement
+between decoders.
 
 ## Adding a decoder
 
-The harness is pluggable: append a `func(image.Image) (string, error)` to the
-registry in `decode_bench_test.go` and every benchmark and accuracy case runs
-against it:
+Append a `func(image.Image) (string, error)` to the registry in
+`decode_bench_test.go`; every benchmark and accuracy test then runs it:
 
 ```go
 var decoders = []decoderImpl{
@@ -39,67 +57,6 @@ var decoders = []decoderImpl{
 }
 ```
 
-## Running
-
-```shell
-go work init . ./tools   # once, at the repository root, to bench the local library
-cd tools
-
-# Encoder and decoder throughput + allocations
-go test -run=^$ -bench='EncodeCompare|DecodeClean' -benchmem ./bench/
-
-# Robustness table (clean vs degraded success rate)
-go test -run=TestDecodeAccuracy -v ./bench/
-
-# Distortion sweeps: tilt, module size, blur, lens distortion, phone mix
-go test -run=TestRobustness -v ./bench/ -sweep
-
-# Real photos: the BoofCV QR Code dataset, downloaded separately
-go test -run=TestBoofCV -timeout=60m ./bench/ -boofcv=/path/to/qrcodes/detection -boofcv-out=go.jsonl
-```
-
-`TestBoofCV` decodes the
-[BoofCV dataset](https://boofcv.org/index.php?title=Performance:QrCode)
-(`qrcodes_v3.zip`, about 200 MB; its licence is unstated, so it is not
-vendored) with go-qr and gozxing and writes one JSON line per decoder and
-image with the texts read and the decode time. The dataset labels code
-corners, not contents, so results are scored by agreement between decoders;
-see [Performance](../../docs/performance.md#reading-photos).
-
-`TestRobustness` renders symbols through a simulated pinhole camera
-(`distort.go`: tilt about any axis, rotation, pixels per module, Gaussian
-blur, noise, radial lens distortion) and tabulates decode rates per decoder
-and version. `DistortWithTruth` also returns where each module lands, for
-measuring localization error.
-
-## Baseline (gozxing, 8 px/module, this machine — replace with your own)
-
-| Case | ns/op | B/op | allocs/op |
-| --- | ---: | ---: | ---: |
-| numeric_short | 778,341 | 291,712 | 53,914 |
-| url_medium | 1,567,514 | 582,134 | 107,701 |
-| byte_long (high version) | 18,785,784 | 6,747,575 | 1,272,821 |
-
-Accuracy: clean 5/5 (100%), degraded 4/5 (80%).
-
-### Reading the baseline
-
-The headline is the **allocation count**: 54k–1.3M allocations to decode a
-*single* QR code. That is the Java-port tax (BitMatrix objects, boxed results,
-interface dispatch) and it is the most reachable win for a native decoder. The
-`byte_long` case (18 ms, 6.7 MB) shows it scales super-linearly with version —
-batch decoding of large codes is where a native fast path would pay off most.
-
-## Acceptance targets for the native decoder
-
-Set before building so "did it work" is objective:
-
-- **Clean path:** ≥ 5× faster `ns/op` and ≤ 10% of gozxing's `allocs/op` on
-  every clean case; 5/5 accuracy.
-- **Degraded path:** no worse than `gozxing - 1` on the degraded success count.
-  We are not trying to beat ZXing on robustness — only to not regress the
-  verify use case.
-
-If the clean-path target is missed, the dependency-elimination argument still
-stands on its own; if the degraded target is badly missed, keep gozxing as an
-optional robustness fallback rather than ripping it out.
+[skip2/go-qrcode]: https://github.com/skip2/go-qrcode
+[boombuler/barcode]: https://github.com/boombuler/barcode
+[gozxing]: https://github.com/makiuchi-d/gozxing

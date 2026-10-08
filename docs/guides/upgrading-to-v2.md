@@ -63,5 +63,5 @@ res, err := qr.Decode(img) // res.Text
 | `BitBuffer`, `Ecc.FormatBits` | removed from the API |
 | CLI `-optimal`, `-border`, `-svg-optimized` | optimal by default (`-simple` opts out), `-quiet-zone`, `-svg` |
 
-The [changelog](../CHANGELOG.md#200---2026-10-07) lists everything that was
+The [changelog](../../CHANGELOG.md#200---2026-10-07) lists everything that was
 added and fixed in v2.

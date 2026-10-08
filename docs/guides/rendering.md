@@ -97,5 +97,5 @@ the same modules.
 ## Rendering cost
 
 Plain PNGs are the fastest raster output and SVG is cheap in every style.
-Styles, gradients and logos cost more; the [performance](../performance.md)
+Styles, gradients and logos cost more; the [performance](../explanation/performance.md)
 page has numbers. For many codes, see [Batch processing](batch.md).

@@ -88,7 +88,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Clean images take the unchanged fast path. Small images that need the
   robust path, which large photos make up for, are up to about 50% slower,
   whether or not they decode. See
-  [Performance](docs/performance.md#reading-photos).
+  [Performance](docs/explanation/performance.md#reading-photos).
 - `TestBoofCV` in `tools/bench` runs go-qr and gozxing over the BoofCV
   dataset, and `TestRobustness` sweeps tilt, module size, blur and lens
   distortion through a simulated camera.

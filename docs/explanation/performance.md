@@ -138,20 +138,31 @@ A version 3 code at scale 10:
 - `Verify` renders and decodes once, about the cost of `Image` plus
   `Decode`.
 
+### Decoding large images
+
+Decoding a photo-sized image that holds a small code. The luminance of an
+`*image.YCbCr`, which `image/jpeg` returns for color photos, or of an
+`*image.Gray` is usually read in place; other image types are converted
+first.
+
+| Image | Time | Memory |
+| --- | --- | --- |
+| 12 megapixels | 46 ms | 2.0 MB |
+| 12 megapixels, no code | 102 ms | 7.3 MB |
+| 48 megapixels | 185 ms | 7.6 MB |
+
+An image without a code costs more than one with a code, because every
+scale is searched.
+Decoding JPEG with `image/jpeg` usually takes longer than reading the code.
+
 ## Methodology
 
 Intel Core i7-14700KF, Go 1.25, Windows, best of five `go test -bench`
 runs on an otherwise idle machine. Absolute numbers vary between machines;
 ratios are more stable. The comparisons live in the
-[`tools/bench`](../tools/bench) module, which depends on the other libraries
-so that the main module does not:
-
-```shell
-go work init . ./tools   # benchmark the local checkout
-cd tools
-go test -run='^$' -bench='EncodeCompare|DecodeClean' -benchmem ./bench/
-go test -run=TestDecodeAccuracy -v ./bench/
-```
+[`tools/bench`](../../tools/bench) module, which depends on the other
+libraries so that the main module does not; its README lists the commands
+for the comparisons.
 
 Feature benchmarks are in the main module, for example
 `go test -run='^$' -bench='PNG|SVG|Styled|Colored' -benchmem .`.

@@ -48,6 +48,7 @@ releases.
 go test ./...                     # library
 (cd tools && go test ./...)       # CLI, verify and benchmark harness
 (cd demo && go test ./...)        # playground logic
+(cd mcp && go test ./...)         # MCP server (Go 1.25+)
 go vet ./...
 gofmt -l .                        # must print nothing
 go run honnef.co/go/tools/cmd/staticcheck@latest ./...
@@ -101,7 +102,7 @@ go test -run='^$' -bench=. -benchmem -count=10 . > new.txt
 ```
 
 Comparisons with other libraries are in [tools/bench](tools/bench); see
-[Performance](docs/performance.md). A change that makes the default path
+[Performance](docs/explanation/performance.md). A change that makes the default path
 noticeably slower needs a strong reason, or should be opt-in.
 
 ### Documentation
@@ -146,10 +147,10 @@ Maintainers release from `main`:
    in a `chore: release vX.Y.Z` pull request.
 2. After it merges, tag the merge commit `vX.Y.Z`, push the tag and create a
    GitHub release from the CHANGELOG section.
-3. To ship library changes in the CLI, bump the library version in
-   `tools/go.mod` in a separate pull request and then tag `tools/vX.Y.Z`.
-   Always release the library first: the tools module must build against a
-   published version.
+3. To ship library changes in the CLI and the MCP server, bump the library
+   version in `tools/go.mod` and `mcp/go.mod` in a separate pull request,
+   then tag `tools/vX.Y.Z` and `mcp/vX.Y.Z`. Always release the library
+   first: these modules must build against a published version.
 
 ## Code of conduct
 
