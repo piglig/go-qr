@@ -42,11 +42,11 @@ type finderPattern struct {
 // pixels; the symbol is located there, and its modules are read from the
 // full-resolution luminance l (lw×lh pixels).
 func robustDecode(bm []bool, w, h, scale int, l []uint8, lw, lh int, inverted bool, read func([][]bool) (*DecodeResult, error)) (*DecodeResult, error) {
-	grid := func(p mapper, dim int) [][]bool {
+	readGrid := func(p mapper, dim int) (*DecodeResult, error) {
 		if scale > 1 {
 			p = scaledMapper{p, float64(scale)}
 		}
-		return readModules(l, lw, lh, p, dim, inverted)
+		return read(readModules(l, lw, lh, p, dim, inverted))
 	}
 	dark := func(x, y int) bool {
 		if x < 0 || y < 0 || x >= w || y >= h {
@@ -98,7 +98,7 @@ search:
 		}
 	}
 	if model != nil {
-		return read(grid(model, dim))
+		return readGrid(model, dim)
 	}
 	if first == nil {
 		return nil, firstErr
@@ -107,7 +107,7 @@ search:
 	// styles: estimate the fourth point instead.
 	g := first
 	for _, p := range g.transforms(dark) {
-		res, err := read(grid(p, g.dim))
+		res, err := readGrid(p, g.dim)
 		if err == nil || errors.Is(err, ErrUnsupported) {
 			return res, err
 		}

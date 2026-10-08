@@ -107,62 +107,74 @@ func readModules(l []uint8, w, h int, p mapper, dim int, inverted bool) [][]bool
 	return thresholdModules(moduleLuma(l, w, h, p, dim), dim, inverted)
 }
 
-// rangePyramid holds the darkest and lightest values over 2^k×2^k blocks,
-// for k = 1, 2, ...
+// rangePyramid holds, for k = 1, 2, ..., the darkest and lightest values in
+// the window of 3×3 cells of 2^k×2^k blocks around each cell.
 type rangePyramid struct {
 	levels []rangeLevel
 }
 
 type rangeLevel struct {
-	lo, hi []int
+	lo, hi []int // over 3×3 cells around each cell
 	w, h   int
 }
 
 func newRangePyramid(bw, bh int, at func(i int) (lo, hi int)) *rangePyramid {
-	base := rangeLevel{make([]int, bw*bh), make([]int, bw*bh), bw, bh}
-	for i := range base.lo {
-		base.lo[i], base.hi[i] = at(i)
+	lo, hi := make([]int, bw*bh), make([]int, bw*bh)
+	for i := range lo {
+		lo[i], hi[i] = at(i)
 	}
 	p := &rangePyramid{}
-	cur := base
-	for cur.w > 1 || cur.h > 1 {
-		nw, nh := (cur.w+1)/2, (cur.h+1)/2
-		next := rangeLevel{make([]int, nw*nh), make([]int, nw*nh), nw, nh}
+	w, h := bw, bh
+	for w > 1 || h > 1 {
+		nw, nh := (w+1)/2, (h+1)/2
+		clo, chi := make([]int, nw*nh), make([]int, nw*nh)
 		for y := 0; y < nh; y++ {
 			for x := 0; x < nw; x++ {
-				lo, hi := 255, 0
+				l, u := 255, 0
 				for dy := 0; dy < 2; dy++ {
 					for dx := 0; dx < 2; dx++ {
-						if yy, xx := 2*y+dy, 2*x+dx; yy < cur.h && xx < cur.w {
-							lo, hi = min(lo, cur.lo[yy*cur.w+xx]), max(hi, cur.hi[yy*cur.w+xx])
+						if yy, xx := 2*y+dy, 2*x+dx; yy < h && xx < w {
+							l, u = min(l, lo[yy*w+xx]), max(u, hi[yy*w+xx])
 						}
 					}
 				}
-				next.lo[y*nw+x], next.hi[y*nw+x] = lo, hi
+				clo[y*nw+x], chi[y*nw+x] = l, u
 			}
 		}
-		p.levels = append(p.levels, next)
-		cur = next
+		// Window ranges over 3×3 cells, separably.
+		tlo, thi := make([]int, nw*nh), make([]int, nw*nh)
+		for y := 0; y < nh; y++ {
+			for x := 0; x < nw; x++ {
+				l, u := 255, 0
+				for xx := max(0, x-1); xx <= min(nw-1, x+1); xx++ {
+					l, u = min(l, clo[y*nw+xx]), max(u, chi[y*nw+xx])
+				}
+				tlo[y*nw+x], thi[y*nw+x] = l, u
+			}
+		}
+		wlo, whi := make([]int, nw*nh), make([]int, nw*nh)
+		for y := 0; y < nh; y++ {
+			for x := 0; x < nw; x++ {
+				l, u := 255, 0
+				for yy := max(0, y-1); yy <= min(nh-1, y+1); yy++ {
+					l, u = min(l, tlo[yy*nw+x]), max(u, thi[yy*nw+x])
+				}
+				wlo[y*nw+x], whi[y*nw+x] = l, u
+			}
+		}
+		p.levels = append(p.levels, rangeLevel{wlo, whi, nw, nh})
+		lo, hi, w, h = clo, chi, nw, nh
 	}
 	return p
 }
 
-// contrast returns the range of the smallest window of 3×3 cells, over the
-// pyramid levels, around block (bx, by) whose range exceeds minRange.
+// contrast returns the range of the smallest window, over the pyramid
+// levels, around block (bx, by) whose range exceeds minRange.
 func (p *rangePyramid) contrast(bx, by, minRange int) (int, int, bool) {
-	if p == nil {
-		return 0, 0, false
-	}
 	for k, lv := range p.levels {
-		cx, cy := bx>>(k+1), by>>(k+1)
-		lo, hi := 255, 0
-		for y := max(0, cy-1); y <= min(lv.h-1, cy+1); y++ {
-			for x := max(0, cx-1); x <= min(lv.w-1, cx+1); x++ {
-				lo, hi = min(lo, lv.lo[y*lv.w+x]), max(hi, lv.hi[y*lv.w+x])
-			}
-		}
-		if hi-lo > minRange {
-			return lo, hi, true
+		i := (by>>(k+1))*lv.w + bx>>(k+1)
+		if lv.hi[i]-lv.lo[i] > minRange {
+			return lv.lo[i], lv.hi[i], true
 		}
 	}
 	return 0, 0, false
