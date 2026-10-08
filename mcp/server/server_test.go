@@ -237,7 +237,7 @@ func TestDecodeStructuredSequence(t *testing.T) {
 	}
 }
 
-func TestDecodeDownscalesLargeImages(t *testing.T) {
+func TestDecodeLargeImage(t *testing.T) {
 	code, _ := qr.Encode("large image")
 	data, _ := code.PNG(qr.WithScale(150)) // 4350 px wide
 	cs := connect(t, Options{})

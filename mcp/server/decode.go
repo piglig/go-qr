@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"image"
-	"image/draw"
 	_ "image/gif"
 	_ "image/jpeg"
 	_ "image/png"
@@ -58,10 +57,6 @@ type Segment struct {
 	ECI   int    `json:"eci" jsonschema:"ECI character set number, or -1 for none"`
 }
 
-// maxDecodeSide bounds the larger image dimension before decoding; larger
-// images are downscaled, which is faster and usually more reliable.
-const maxDecodeSide = 2000
-
 func (f fileAccess) decode(_ context.Context, _ *mcp.CallToolRequest, in DecodeInput) (*mcp.CallToolResult, DecodeOutput, error) {
 	type source struct {
 		name string
@@ -110,7 +105,7 @@ func (f fileAccess) decode(_ context.Context, _ *mcp.CallToolRequest, in DecodeI
 		if err != nil {
 			return nil, DecodeOutput{}, fmt.Errorf("%s: not a PNG, JPEG or GIF image: %w", src.name, err)
 		}
-		if results[i], err = qr.Decode(downscale(img, maxDecodeSide)); err != nil {
+		if results[i], err = qr.Decode(img); err != nil {
 			return nil, DecodeOutput{}, fmt.Errorf("%s: %w%s", src.name, err, decodeHint(err))
 		}
 		out.Symbols = append(out.Symbols, symbol(src.name, results[i]))
@@ -158,34 +153,4 @@ func symbol(src string, r *qr.DecodeResult) Symbol {
 		s.Segments = append(s.Segments, Segment{Mode: seg.Mode.String(), Chars: seg.NumChars, ECI: seg.ECI})
 	}
 	return s
-}
-
-// downscale returns img reduced by an integer box filter so that its longer
-// side is at most maxSide pixels.
-func downscale(img image.Image, maxSide int) image.Image {
-	b := img.Bounds()
-	f := (max(b.Dx(), b.Dy()) + maxSide - 1) / maxSide
-	if f <= 1 {
-		return img
-	}
-	src := image.NewRGBA(b)
-	draw.Draw(src, b, img, b.Min, draw.Src)
-	dst := image.NewGray(image.Rect(0, 0, b.Dx()/f, b.Dy()/f))
-	for y := 0; y < dst.Rect.Dy(); y++ {
-		for x := 0; x < dst.Rect.Dx(); x++ {
-			var sum, n int
-			for dy := 0; dy < f; dy++ {
-				p := src.Pix[(y*f+dy)*src.Stride+x*f*4:]
-				for dx := 0; dx < f; dx++ {
-					q := p[dx*4:]
-					// Composite over white, then take luminance.
-					a := int(q[3])
-					sum += (299*int(q[0])+587*int(q[1])+114*int(q[2]))/1000 + 255 - a
-					n++
-				}
-			}
-			dst.Pix[y*dst.Stride+x] = uint8(sum / n)
-		}
-	}
-	return dst
 }
