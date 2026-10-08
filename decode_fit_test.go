@@ -1,6 +1,8 @@
 package qr
 
 import (
+	"image"
+	"image/color"
 	"math"
 	"math/rand"
 	"strings"
@@ -93,5 +95,70 @@ func TestDecodeStyledGeometry(t *testing.T) {
 				}
 			}
 		}
+	}
+}
+
+// warpBarrel renders src with radial barrel distortion about the image
+// center: the pixel at normalized radius r shows the source at r·(1−k·r²).
+func warpBarrel(src image.Image, k float64) *image.Gray {
+	b := src.Bounds()
+	w, h := b.Dx(), b.Dy()
+	out := image.NewGray(image.Rect(0, 0, w, h))
+	cx, cy, norm := float64(w)/2, float64(h)/2, float64(w)/2
+	for y := 0; y < h; y++ {
+		for x := 0; x < w; x++ {
+			rx, ry := (float64(x)+0.5-cx)/norm, (float64(y)+0.5-cy)/norm
+			f := 1 - k*(rx*rx+ry*ry)
+			sx, sy := int(math.Floor(cx+rx*f*norm)), int(math.Floor(cy+ry*f*norm))
+			c := color.Gray{Y: 255}
+			if sx >= 0 && sy >= 0 && sx < w && sy < h {
+				c = color.GrayModel.Convert(src.At(b.Min.X+sx, b.Min.Y+sy)).(color.Gray)
+			}
+			out.SetGray(x, y, c)
+		}
+	}
+	return out
+}
+
+// TestDecodeLensDistortion covers the polynomial correction: barrel
+// distortion bends a large symbol's grid enough at its corners that the
+// homography alone does not decode it.
+func TestDecodeLensDistortion(t *testing.T) {
+	text := strings.Repeat("lens distortion ", 18)
+	code := mustEncode(t, text, WithECC(ECCMedium))
+	if code.Version() < 10 {
+		t.Fatalf("version %d, want 10+", code.Version())
+	}
+	img := rotateGray(mustImage(t, code, WithScale(6)), 0.15)
+	distorted := warpBarrel(img, -0.035)
+
+	b := distorted.Bounds()
+	w, h := b.Dx(), b.Dy()
+	bm := binarizeHybrid(toLuma(distorted), w, h)
+	dark := func(x, y int) bool { return x >= 0 && y >= 0 && x < w && y < h && bm[y*w+x] }
+	triples, err := findFinders(bm, dark, w, h)
+	if err != nil {
+		t.Fatal(err)
+	}
+	g, err := newSymbolGeometry(dark, triples[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	model, dim, _, ok := g.fitSymbol(dark)
+	if !ok || dim != code.Size() {
+		t.Fatalf("fit ok=%v dim=%d, want %d", ok, dim, code.Size())
+	}
+	if model.scale == 0 {
+		t.Error("lens correction not applied")
+	}
+	if _, err := decodeGrid(sampleGrid(dark, model, dim)); err != nil {
+		t.Errorf("corrected grid: %v", err)
+	}
+	if _, err := decodeGrid(sampleGrid(dark, model.h, dim)); err == nil {
+		t.Error("the homography alone decodes: the test does not need the correction")
+	}
+	res, err := Decode(distorted)
+	if err != nil || res.Text != text {
+		t.Fatalf("Decode: %v", err)
 	}
 }
