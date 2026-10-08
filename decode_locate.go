@@ -38,27 +38,23 @@ type finderPattern struct {
 // module grids to read until one decodes. It returns the first error
 // otherwise.
 //
-// bm is a binarization of the image at 1/scale of its resolution, w×h
-// pixels; the symbol is located there, and its modules are read from the
-// full-resolution luminance l (lw×lh pixels).
-func robustDecode(bm []bool, w, h, scale int, l []uint8, lw, lh int, inverted bool, read func([][]bool) (*DecodeResult, error)) (*DecodeResult, error) {
+// tm thresholds the image at 1/scale of its resolution, inverted for light
+// symbols on dark; the symbol is located there, and its modules are read
+// from the full-resolution luminance l (lw×lh pixels).
+func robustDecode(tm *thresholdMap, inverted bool, scale int, l []uint8, lw, lh int, read func([][]bool) (*DecodeResult, error)) (*DecodeResult, error) {
 	readGrid := func(p mapper, dim int) (*DecodeResult, error) {
 		if scale > 1 {
 			p = scaledMapper{p, float64(scale)}
 		}
 		return read(readModules(l, lw, lh, p, dim, inverted))
 	}
-	dark := func(x, y int) bool {
-		if x < 0 || y < 0 || x >= w || y >= h {
-			return false
-		}
-		return bm[y*w+x]
-	}
+	dark := func(x, y int) bool { return tm.dark(x, y) != inverted && x >= 0 && y >= 0 && x < tm.w && y < tm.h }
+	w, h := tm.w, tm.h
 	step := 1
 	if scale == 1 {
 		step = finderRowStep(w * h)
 	}
-	triples, err := findFindersStep(bm, dark, w, h, step)
+	triples, err := findFindersStep(tm, inverted, dark, step)
 	if err != nil {
 		return nil, err
 	}
@@ -452,8 +448,8 @@ func (s scaledMapper) apply(u, v float64) (float64, float64) {
 // findFinders scans for finder patterns and returns up to maxFinderTriples
 // triples that best fit one symbol, best first. The row scan reads bm
 // directly; dark (bounds-checked) serves the cross checks.
-func findFinders(bm []bool, dark func(x, y int) bool, w, h int) ([][3]finderPattern, error) {
-	return findFindersStep(bm, dark, w, h, 1)
+func findFinders(tm *thresholdMap, inverted bool, dark func(x, y int) bool) ([][3]finderPattern, error) {
+	return findFindersStep(tm, inverted, dark, 1)
 }
 
 // finderRowStep returns how many rows apart the finder scan runs in an image
@@ -475,7 +471,9 @@ func finderRowStep(px int) int {
 
 // findFindersStep is findFinders scanning every step-th row; each hit then
 // counts for step rows in a candidate's support.
-func findFindersStep(bm []bool, dark func(x, y int) bool, w, h, step int) ([][3]finderPattern, error) {
+func findFindersStep(tm *thresholdMap, inverted bool, dark func(x, y int) bool, step int) ([][3]finderPattern, error) {
+	w, h := tm.w, tm.h
+	row := make([]bool, w)
 	var cands []finderPattern
 
 	add := func(cx, cy, module float64) {
@@ -496,7 +494,8 @@ func findFindersStep(bm []bool, dark func(x, y int) bool, w, h, step int) ([][3]
 	for y := step / 2; y < h; y += step {
 		s = [5]int{}
 		state := 0
-		for x, d := range bm[y*w : (y+1)*w] {
+		tm.row(y, row, inverted)
+		for x, d := range row {
 			if d {
 				if state&1 == 1 {
 					state++

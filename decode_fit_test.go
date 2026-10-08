@@ -135,9 +135,9 @@ func TestDecodeLensDistortion(t *testing.T) {
 	b := distorted.Bounds()
 	w, h := b.Dx(), b.Dy()
 	l := toLuma(distorted)
-	bm := binarizeHybrid(l, w, h)
-	dark := func(x, y int) bool { return x >= 0 && y >= 0 && x < w && y < h && bm[y*w+x] }
-	triples, err := findFinders(bm, dark, w, h)
+	tm := hybridThresholds(l, w, h)
+	dark := tm.dark
+	triples, err := findFinders(tm, false, dark)
 	if err != nil {
 		t.Fatal(err)
 	}

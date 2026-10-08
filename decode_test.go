@@ -449,9 +449,9 @@ func TestReadVersion(t *testing.T) {
 		code := mustEncode(t, strings.Repeat("v", n), WithECC(ECCLow))
 		img := rotateGray(mustImage(t, code, WithScale(4), WithQuietZone(10)), 0.1)
 		w, h := img.Bounds().Dx(), img.Bounds().Dy()
-		bm := binarizeHybrid(toLuma(img), w, h)
-		dark := func(x, y int) bool { return x >= 0 && y >= 0 && x < w && y < h && bm[y*w+x] }
-		finders, err := findFinders(bm, dark, w, h)
+		tm := hybridThresholds(toLuma(img), w, h)
+		finders, err := findFinders(tm, false, tm.dark)
+		dark := tm.dark
 		if err != nil {
 			t.Fatal(err)
 		}
