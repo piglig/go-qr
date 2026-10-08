@@ -6,8 +6,8 @@ github.com/google/jsonschema-go v0.4.3 h1:/DBOLZTfDow7pe2GmaJNhltueGTtDKICi8V8p+
 github.com/google/jsonschema-go v0.4.3/go.mod h1:r5quNTdLOYEz95Ru18zA0ydNbBuYoo9tgaYcxEYhJVE=
 github.com/modelcontextprotocol/go-sdk v1.8.0 h1:KIvahhYqwtbeniWVPs3TcXEA7b8jEtwfBpOTAI+Urx4=
 github.com/modelcontextprotocol/go-sdk v1.8.0/go.mod h1:dL7u98E/zjJTGzEq+j30jQ8K2k1mb6LeAH4inEcSGts=
-github.com/piglig/go-qr/v2 v2.3.0 h1:uIim1GndFwN7F0ig97dUjOA541ljTkN2Yx6p85dF99I=
-github.com/piglig/go-qr/v2 v2.3.0/go.mod h1:MmOJawPWUOpQbp7w9SIrYEGyK1usDHNTuEGqFdxPdNI=
+github.com/piglig/go-qr/v2 v2.4.0 h1:FEbLYurfAVFgwAUmYVdg7KpvlcpTN/35twLh9+puz6s=
+github.com/piglig/go-qr/v2 v2.4.0/go.mod h1:MmOJawPWUOpQbp7w9SIrYEGyK1usDHNTuEGqFdxPdNI=
 github.com/segmentio/asm v1.1.3 h1:WM03sfUOENvvKexOLp+pCqgb/WDjsi7EK8gIsICtzhc=
 github.com/segmentio/asm v1.1.3/go.mod h1:Ld3L4ZXGNcSLRg4JBsZ3//1+f/TjYl0Mzen/DQy1EJg=
 github.com/segmentio/encoding v0.5.4 h1:OW1VRern8Nw6ITAtwSZ7Idrl3MXCFwXHPgqESYfvNt0=

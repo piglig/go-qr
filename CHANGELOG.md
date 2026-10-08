@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- The `generator` CLI (tools/v1.1.3) and `go-qr-mcp` (mcp/v0.1.2) are built
+  on v2.4.0 and read photos as well as the library does.
+- `go-qr-mcp`'s `decode_qr` no longer downscales images over 2000 pixels
+  before decoding. The decoder now locates symbols at several scales
+  itself and reads modules at full resolution; on the BoofCV photos,
+  decoding at full resolution reads 18 more images and none fewer, for 6%
+  more time.
+
 ## [2.4.0] - 2026-10-08
 
 ### Added

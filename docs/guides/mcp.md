@@ -93,8 +93,8 @@ show them to the model. In short:
 
 Input: `paths` (one or more local PNG, JPEG or GIF files) or `image_base64`.
 
-Images larger than 2000 pixels on a side are downscaled before decoding, and
-files over 25 MB are refused. Several paths that form a
+Images are decoded at full resolution, so small codes in large photos keep
+their detail; files over 25 MB are refused. Several paths that form a
 [structured append](encoding.md) sequence are joined in order, whatever
 order they are given in.
 
