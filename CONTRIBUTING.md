@@ -196,7 +196,9 @@ a published version, which CI checks on every pull request.
 
 Contributions written with AI assistants are welcome, under the same rules.
 [AGENTS.md](AGENTS.md) states these rules for assistants; Claude Code reads
-it through `CLAUDE.md`, and most other assistants read it directly.
+it through `CLAUDE.md`, and most other assistants read it directly. For
+Claude Code, `.claude/` also holds a `/release` and a `/perf-check` skill,
+and a hook that blocks creating tags or releases and pushing to `main`.
 
 ## Code of conduct
 

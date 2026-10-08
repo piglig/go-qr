@@ -87,6 +87,17 @@ when a maintainer asks, and then only through the steps in
   library pin releases them. Do not add CHANGELOG entries for these bumps;
   their releases carry their own notes.
 
+## Claude Code
+
+The project settings in `.claude/` add:
+
+- `/release`, the release steps, for a maintainer to start;
+- `/perf-check`, the before-and-after measurement for hot-path and decoder
+  changes;
+- a hook that blocks creating tags or releases and pushing to `main`.
+
+Other assistants follow the same rules from this file.
+
 ## Data and licenses
 
 - Do not vendor test images or datasets whose license is unclear, such as
