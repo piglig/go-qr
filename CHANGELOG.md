@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.4.0] - 2026-10-08
+
 ### Added
 
 - `Decode` reads photos. On the 536 photos of the BoofCV QR Code dataset it
