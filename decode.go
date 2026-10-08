@@ -504,26 +504,38 @@ func (m *thresholdMap) dark(x, y int) bool {
 	return m.l[y*m.w+x] <= m.t[m.block(y, m.h, m.bh)*m.bw+m.block(x, m.w, m.bw)]
 }
 
-// row classifies row y into dst, which has the image's width.
-func (m *thresholdMap) row(y int, dst []bool, inverted bool) {
+// scanRow calls edge(x, d) for each pixel x of row y whose class d differs
+// from the pixel before it, starting from light before the row, and once
+// more at the end of the row with d light.
+func (m *thresholdMap) scanRow(y int, inverted bool, edge func(x int, d bool)) {
 	src := m.l[y*m.w : (y+1)*m.w]
 	t := m.t[m.block(y, m.h, m.bh)*m.bw:]
+	prev := false
 	if m.global {
 		for x, v := range src {
-			dst[x] = (v <= t[0]) != inverted
+			if d := (v <= t[0]) != inverted; d != prev {
+				edge(x, d)
+				prev = d
+			}
 		}
-		return
+	} else {
+		tail := m.w - thresholdBlock
+		for bx := 0; bx < m.bw; bx++ {
+			x0, x1 := bx*thresholdBlock, min((bx+1)*thresholdBlock, tail)
+			if bx == m.bw-1 {
+				x0, x1 = tail, m.w
+			}
+			tb := t[bx]
+			for x := x0; x < x1; x++ {
+				if d := (src[x] <= tb) != inverted; d != prev {
+					edge(x, d)
+					prev = d
+				}
+			}
+		}
 	}
-	tail := m.w - thresholdBlock
-	for bx := 0; bx < m.bw; bx++ {
-		x0, x1 := bx*thresholdBlock, min((bx+1)*thresholdBlock, tail)
-		if bx == m.bw-1 {
-			x0, x1 = tail, m.w
-		}
-		tb := t[bx]
-		for x := x0; x < x1; x++ {
-			dst[x] = (src[x] <= tb) != inverted
-		}
+	if prev {
+		edge(m.w, false)
 	}
 }
 

@@ -472,8 +472,7 @@ func finderRowStep(px int) int {
 // findFindersStep is findFinders scanning every step-th row; each hit then
 // counts for step rows in a candidate's support.
 func findFindersStep(tm *thresholdMap, inverted bool, dark func(x, y int) bool, step int) ([][3]finderPattern, error) {
-	w, h := tm.w, tm.h
-	row := make([]bool, w)
+	h := tm.h
 	var cands []finderPattern
 
 	add := func(cx, cy, module float64) {
@@ -490,44 +489,46 @@ func findFindersStep(tm *thresholdMap, inverted bool, dark func(x, y int) bool, 
 		cands = append(cands, finderPattern{x: cx, y: cy, moduleSize: module, count: step})
 	}
 
-	var s [5]int
-	for y := step / 2; y < h; y += step {
-		s = [5]int{}
-		state := 0
-		tm.row(y, row, inverted)
-		for x, d := range row {
-			if d {
-				if state&1 == 1 {
-					state++
-				}
-				s[state]++
-			} else {
-				if state&1 == 0 {
-					if state == 4 {
-						if module, ok := checkFinderRatio(s); ok {
-							cx := float64(x) - float64(s[4]) - float64(s[3]) - float64(s[2])/2
-							total := s[0] + s[1] + s[2] + s[3] + s[4]
-							// Confirm vertically, then horizontally through the
-							// refined center.
-							x0 := int(cx + 0.5)
-							if dy, mv, ok := crossCheck(dark, x0, y, 0, 1, s[2], total); ok {
-								cy := float64(y) + dy
-								if dx, mh, ok := crossCheck(dark, x0, int(cy+0.5), 1, 0, s[2], total); ok {
-									add(float64(x0)+dx, cy, (module+mv+mh)/3)
-								}
-							}
-						}
-						s[0], s[1], s[2], s[3], s[4] = s[2], s[3], s[4], 1, 0
-						state = 3
-					} else {
-						state++
-						s[state]++
-					}
-				} else {
-					s[state]++
-				}
+	// Each scanned row is read as runs of one class; whenever a dark run
+	// ends, the last five runs (dark, light, dark, light, dark) are tested
+	// for 1:1:3:1:1. x is the first light pixel after them.
+	check := func(s [5]int, x, y int) {
+		module, ok := checkFinderRatio(s)
+		if !ok {
+			return
+		}
+		cx := float64(x) - float64(s[4]) - float64(s[3]) - float64(s[2])/2
+		total := s[0] + s[1] + s[2] + s[3] + s[4]
+		// Confirm vertically, then horizontally through the refined
+		// center.
+		x0 := int(cx + 0.5)
+		if dy, mv, ok := crossCheck(dark, x0, y, 0, 1, s[2], total); ok {
+			cy := float64(y) + dy
+			if dx, mh, ok := crossCheck(dark, x0, int(cy+0.5), 1, 0, s[2], total); ok {
+				add(float64(x0)+dx, cy, (module+mv+mh)/3)
 			}
 		}
+	}
+	for y := step / 2; y < h; y += step {
+		var runs [5]int // the last five runs, oldest first
+		n := 0          // runs seen in this row, up to 5
+		prev, start := false, 0
+		tm.scanRow(y, inverted, func(x int, d bool) {
+			// A run of class prev ended at x; d starts the next one.
+			length := x - start
+			start = x
+			if length > 0 {
+				copy(runs[:], runs[1:])
+				runs[4] = length
+				n = min(n+1, 5)
+				// The run that ended is dark when the next one is light; a
+				// row starts light, so dark runs fill the odd slots.
+				if prev && !d && n == 5 {
+					check(runs, x, y)
+				}
+			}
+			prev = d
+		})
 	}
 
 	return selectFinders(cands)
