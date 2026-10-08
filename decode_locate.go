@@ -37,7 +37,17 @@ type finderPattern struct {
 // robustDecode locates symbols in a binarized image and passes candidate
 // module grids to read until one decodes. It returns the first error
 // otherwise.
-func robustDecode(bm []bool, w, h int, read func([][]bool) (*DecodeResult, error)) (*DecodeResult, error) {
+//
+// bm is a binarization of the image at 1/scale of its resolution, w×h
+// pixels; the symbol is located there, and its modules are read from the
+// full-resolution luminance l (lw×lh pixels).
+func robustDecode(bm []bool, w, h, scale int, l []uint8, lw, lh int, inverted bool, read func([][]bool) (*DecodeResult, error)) (*DecodeResult, error) {
+	grid := func(p mapper, dim int) [][]bool {
+		if scale > 1 {
+			p = scaledMapper{p, float64(scale)}
+		}
+		return readModules(l, lw, lh, p, dim, inverted)
+	}
 	dark := func(x, y int) bool {
 		if x < 0 || y < 0 || x >= w || y >= h {
 			return false
@@ -88,7 +98,7 @@ search:
 		}
 	}
 	if model != nil {
-		return read(sampleGrid(dark, model, dim))
+		return read(grid(model, dim))
 	}
 	if first == nil {
 		return nil, firstErr
@@ -97,7 +107,7 @@ search:
 	// styles: estimate the fourth point instead.
 	g := first
 	for _, p := range g.transforms(dark) {
-		res, err := read(sampleGrid(dark, p, g.dim))
+		res, err := read(grid(p, g.dim))
 		if err == nil || errors.Is(err, ErrUnsupported) {
 			return res, err
 		}
@@ -422,55 +432,17 @@ type mapper interface {
 	apply(u, v float64) (float64, float64)
 }
 
-// sampleGrid reads every module through p by majority vote over five points
-// in a cross around its center, which tolerates the edge noise a single
-// center sample is sensitive to.
-func sampleGrid(dark func(x, y int) bool, p mapper, dim int) [][]bool {
-	if m, ok := p.(*gridModel); ok && m.scale == 0 {
-		p = m.h // no lens correction: sample through the homography alone
-	}
-	if h, ok := p.(perspective); ok {
-		return samplePerspective(dark, h, dim)
-	}
-	modules := make([][]bool, dim)
-	grid := make([]bool, dim*dim)
-	cross := [5][2]float64{{0.5, 0.5}, {0.25, 0.5}, {0.75, 0.5}, {0.5, 0.25}, {0.5, 0.75}}
-	for r := 0; r < dim; r++ {
-		modules[r] = grid[r*dim : (r+1)*dim]
-		for c := 0; c < dim; c++ {
-			votes := 0
-			for _, o := range cross {
-				x, y := p.apply(float64(c)+o[0], float64(r)+o[1])
-				if dark(int(math.Floor(x)), int(math.Floor(y))) {
-					votes++
-				}
-			}
-			modules[r][c] = votes >= 3
-		}
-	}
-	return modules
+// scaledMapper maps through m, then scales image coordinates by f: from a
+// downsampled image, where pixel i covers [i·f, (i+1)·f) of the original,
+// to the original.
+type scaledMapper struct {
+	m mapper
+	f float64
 }
 
-// samplePerspective is sampleGrid for a plain homography, without the
-// interface call per point.
-func samplePerspective(dark func(x, y int) bool, p perspective, dim int) [][]bool {
-	modules := make([][]bool, dim)
-	grid := make([]bool, dim*dim)
-	cross := [5][2]float64{{0.5, 0.5}, {0.25, 0.5}, {0.75, 0.5}, {0.5, 0.25}, {0.5, 0.75}}
-	for r := 0; r < dim; r++ {
-		modules[r] = grid[r*dim : (r+1)*dim]
-		for c := 0; c < dim; c++ {
-			votes := 0
-			for _, o := range cross {
-				x, y := p.apply(float64(c)+o[0], float64(r)+o[1])
-				if dark(int(math.Floor(x)), int(math.Floor(y))) {
-					votes++
-				}
-			}
-			modules[r][c] = votes >= 3
-		}
-	}
-	return modules
+func (s scaledMapper) apply(u, v float64) (float64, float64) {
+	x, y := s.m.apply(u, v)
+	return x * s.f, y * s.f
 }
 
 // findFinders scans for finder patterns and returns up to maxFinderTriples

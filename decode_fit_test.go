@@ -134,7 +134,8 @@ func TestDecodeLensDistortion(t *testing.T) {
 
 	b := distorted.Bounds()
 	w, h := b.Dx(), b.Dy()
-	bm := binarizeHybrid(toLuma(distorted), w, h)
+	l := toLuma(distorted)
+	bm := binarizeHybrid(l, w, h)
 	dark := func(x, y int) bool { return x >= 0 && y >= 0 && x < w && y < h && bm[y*w+x] }
 	triples, err := findFinders(bm, dark, w, h)
 	if err != nil {
@@ -151,10 +152,10 @@ func TestDecodeLensDistortion(t *testing.T) {
 	if model.scale == 0 {
 		t.Error("lens correction not applied")
 	}
-	if _, err := decodeGrid(sampleGrid(dark, model, dim)); err != nil {
+	if _, err := decodeGrid(readModules(l, w, h, model, dim, false)); err != nil {
 		t.Errorf("corrected grid: %v", err)
 	}
-	if _, err := decodeGrid(sampleGrid(dark, model.h, dim)); err == nil {
+	if _, err := decodeGrid(readModules(l, w, h, model.h, dim, false)); err == nil {
 		t.Error("the homography alone decodes: the test does not need the correction")
 	}
 	res, err := Decode(distorted)

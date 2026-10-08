@@ -129,13 +129,49 @@ func searchImage(img image.Image, cfg decodeConfig, read func([][]bool) (*Decode
 		if inverted {
 			bm = invert(adaptive)
 		}
-		res, err := robustDecode(bm, w, h, read)
+		res, err := robustDecode(bm, w, h, 1, l, w, h, inverted, read)
+		if err == nil || errors.Is(err, ErrUnsupported) {
+			return res, err
+		}
+		note(err)
+	}
+	if cfg.fastPathOnly {
+		return nil, firstErr
+	}
+
+	// Locate at coarser scales. Texture finer than a module, such as a
+	// screen's pixel grid or halftone dots, breaks the finder patterns'
+	// runs at full resolution but averages out at a scale closer to the
+	// module size, as do very large modules that a local threshold splits.
+	// The modules are still read at full resolution.
+	small, sw, sh := l, w, h
+	for scale := 2; min(w, h)/scale >= minScaledSide; scale *= 2 {
+		small, sw, sh = halve(small, sw, sh)
+		bm := binarizeHybrid(small, sw, sh)
+		res, err := robustDecode(bm, sw, sh, scale, l, w, h, false, read)
 		if err == nil || errors.Is(err, ErrUnsupported) {
 			return res, err
 		}
 		note(err)
 	}
 	return nil, firstErr
+}
+
+// minScaledSide is the shortest side, in pixels, of the coarsest image the
+// symbol is located in.
+const minScaledSide = 150
+
+// halve returns l downsampled by two with a 2×2 box filter.
+func halve(l []uint8, w, h int) ([]uint8, int, int) {
+	nw, nh := w/2, h/2
+	out := make([]uint8, nw*nh)
+	for y := 0; y < nh; y++ {
+		r0, r1 := l[2*y*w:], l[(2*y+1)*w:]
+		for x := 0; x < nw; x++ {
+			out[y*nw+x] = uint8((int(r0[2*x]) + int(r0[2*x+1]) + int(r1[2*x]) + int(r1[2*x+1]) + 2) / 4)
+		}
+	}
+	return out, nw, nh
 }
 
 // decodeGrid decodes a sampled module grid, retrying it transposed (which is
@@ -387,7 +423,10 @@ func binarizeHybrid(l []uint8, w, h int) []bool {
 	bw, bh := (w+block-1)/block, (h+block-1)/block
 	origin := func(i, limit int) int { return min(i*block, limit-block) }
 
-	black := make([]int, bw*bh)
+	// Block statistics first; a pyramid of their ranges serves blocks that
+	// have no contrast of their own.
+	type stat struct{ lo, hi, avg int }
+	stats := make([]stat, bw*bh)
 	for by := 0; by < bh; by++ {
 		y0 := origin(by, h)
 		for bx := 0; bx < bw; bx++ {
@@ -399,15 +438,31 @@ func binarizeHybrid(l []uint8, w, h int) []bool {
 					lo, hi = min(lo, int(v)), max(hi, int(v))
 				}
 			}
-			avg := sum / (block * block)
-			if hi-lo <= minRange {
-				// Uniform block: assume it is light unless the neighbors'
-				// black point says otherwise.
-				avg = lo / 2
-				if by > 0 && bx > 0 {
-					nb := (black[(by-1)*bw+bx] + 2*black[by*bw+bx-1] + black[(by-1)*bw+bx-1]) / 4
-					if lo < nb {
-						avg = nb
+			stats[by*bw+bx] = stat{lo, hi, sum / (block * block)}
+		}
+	}
+	pyr := newRangePyramid(bw, bh, func(i int) (int, int) { return stats[i].lo, stats[i].hi })
+
+	black := make([]int, bw*bh)
+	for by := 0; by < bh; by++ {
+		for bx := 0; bx < bw; bx++ {
+			st := stats[by*bw+bx]
+			avg := st.avg
+			if st.hi-st.lo <= minRange {
+				// Uniform block. It may lie inside a module larger than the
+				// thresholding window: take the midpoint of the smallest
+				// surrounding window, in powers of two, that has contrast.
+				if lo, hi, ok := pyr.contrast(bx, by, minRange); ok {
+					avg = (lo + hi) / 2
+				} else {
+					// No contrast anywhere near: assume it is light unless the
+					// neighbors' black point says otherwise.
+					avg = st.lo / 2
+					if by > 0 && bx > 0 {
+						nb := (black[(by-1)*bw+bx] + 2*black[by*bw+bx-1] + black[(by-1)*bw+bx-1]) / 4
+						if st.lo < nb {
+							avg = nb
+						}
 					}
 				}
 			}
