@@ -9,15 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- `Decode` corrects perspective, so it reads photos taken at an angle. The
-  robust path samples the grid through a perspective transform anchored on
-  the bottom-right alignment pattern, falling back to the intersection of
-  the finder edges, or to the parallelogram of the finder centers when the
-  edges cannot be traced. In simulated phone photos it reads 82% of
-  symbols, up from 7% (gozxing: 42%); tilts up to 30° decode almost always.
-  Clean images take the unchanged fast path; the robust path is about 8%
-  slower, and up to 11% on images it cannot decode. See
-  [Performance](docs/performance.md).
+- `Decode` reads photos taken at an angle and through moderate lens
+  distortion. The robust path fits the module grid to the symbol's own
+  structure: the corners of the finders' nested squares, measured by
+  tracing their edges, give a homography by least squares; the timing
+  patterns choose the size and verify the finder assignment; the alignment
+  patterns refine the fit, and a cubic lens correction is kept when the
+  fixed patterns confirm it. One grid is decoded. In simulated phone photos
+  it reads 98% of symbols, up from 7% (gozxing: 42%); tilts up to 40°
+  always decode, and 72% at 50°. Clean images take the unchanged fast path;
+  the robust path is about 14% slower, and 8% on images it cannot decode.
+  See [Performance](docs/performance.md).
+- Round finder styles keep a perspective fallback anchored on the
+  alignment pattern or the finder edges.
 - `TestRobustness` in `tools/bench` sweeps tilt, module size, blur and lens
   distortion through a simulated camera and compares decoders.
 
@@ -27,6 +31,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   60°, because it measured module sizes along the image axes, and rejected
   the finders of rotated version 1 symbols. About half of randomly rotated
   photos failed to decode.
+- Strongly foreshortened finder patterns were rejected by the cross-check,
+  and finder triples were ranked by shape alone, so data that mimicked a
+  finder on a row or two could displace a real one. Candidates are now
+  also ranked by how many scan rows confirm them relative to their size.
 
 ### Changed
 

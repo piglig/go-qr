@@ -55,7 +55,7 @@ not accept rounded or circular finders.
 ## Decoding fails on a photo
 
 - **Taken at a steep angle.** The decoder corrects perspective up to about
-  40° of tilt. Beyond that, or for a large code near the edge of a
+  50° of tilt. Beyond that, or for a large code near the edge of a
   wide-angle photo, hold the camera more squarely to the code.
 - **Modules too small.** Each module needs about 2 to 3 pixels. Move closer
   or crop the image around the code instead of downscaling it.

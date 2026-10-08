@@ -72,14 +72,24 @@ image ──► luminance ──► binarize ──► locate ──► sample g
    a right isosceles triangle are chosen.
    Module sizes are measured along the symbol's edges, not the image axes,
    so rotation does not distort them. For version 7 and up, the version
-   information blocks near the finders give the exact size. The grid is
-   sampled through a perspective transform whose fourth point is the
-   bottom-right alignment pattern, searched for near where the outer edges
-   of the top-right and bottom-left finders intersect. If that does not
-   decode, the edge intersection itself is tried; when the edges cannot be
-   traced, the parallelogram completion of the finder centers takes its
-   place. Each module is a majority vote of five points in a cross.
-4. **Retries.** Both paths run on the image as is and inverted, and each
+   information blocks near the finders give the exact size.
+4. **Structural fit** (`decode_fit.go`). Rays from each finder's center
+   cross the edges of its three nested squares; lines fitted to the edges
+   give twelve corners per finder whose module coordinates are known, and
+   each finder's shape carries the local perspective. A homography is
+   fitted to the 36 corners by normalized least squares. The size is the
+   nearby version whose timing patterns read back best, confirmed by the
+   version information from version 7. Every alignment pattern is then
+   predicted, located in a small window and added to the fit; with enough
+   of them, a cubic polynomial correction for lens distortion is fitted
+   too, and kept only if the fixed patterns read back better with it. If
+   the timing patterns of the best triple do not read back, the other
+   finder assignments and triples are fitted and the best kept: the grid
+   is decoded once. Round finder styles, whose edges are not straight, fall
+   back to a perspective transform anchored on the alignment pattern or the
+   finder edges. Each module is a majority vote of five points in a
+   cross.
+5. **Retries.** Both paths run on the image as is and inverted, and each
    sampled grid is also decoded transposed, which is how a mirror image
    samples.
 5. **Matrix and bitstream** (`decode_matrix.go`, `decode_segments.go`). The

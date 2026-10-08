@@ -235,20 +235,28 @@ func (q *builder) drawFunctionPatterns() {
 // getAlignmentPatternPositions returns the alignment pattern center coordinates
 // for the QR Code version. For version 1 the result is empty.
 func (q *builder) getAlignmentPatternPositions() []int {
-	if q.version == 1 {
+	return alignmentPositions(q.version)
+}
+
+// alignmentPositions returns the row and column coordinates of the
+// alignment pattern centers of a version (ISO/IEC 18004 Annex E); patterns
+// sit at every combination except the three finder corners. Version 1 has
+// none.
+func alignmentPositions(version int) []int {
+	if version == 1 {
 		return []int{}
 	}
-	numAlign := q.version/7 + 2
+	numAlign := version/7 + 2
 	step := 0
-	if q.version == 32 {
+	if version == 32 {
 		step = 26
 	} else {
-		step = (q.version*4 + numAlign*2 + 1) / (numAlign*2 - 2) * 2
+		step = (version*4 + numAlign*2 + 1) / (numAlign*2 - 2) * 2
 	}
 
 	res := make([]int, numAlign)
 	res[0] = 6
-	for i, pos := len(res)-1, q.size-7; i >= 1; {
+	for i, pos := len(res)-1, 4*version+17-7; i >= 1; {
 		res[i] = pos
 		i--
 		pos -= step

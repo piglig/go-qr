@@ -30,18 +30,20 @@ only if the text matches; neither decoder returned a wrong text.
 
 | Distortion | go-qr | gozxing (`TRY_HARDER`) |
 | --- | --- | --- |
-| tilt 20° | **100%** | 56% |
-| tilt 30° | **94%** | 31% |
-| tilt 40° | **75%** | 0% |
-| 2 px per module | 72% | **75%** |
-| 1.5 px per module | 19% | **28%** |
+| tilt 30° | **100%** | 31% |
+| tilt 40° | **100%** | 0% |
+| tilt 50° | **72%** | 0% |
+| tilt 60° | **44%** | 0% |
+| 2 px per module | **78%** | 75% |
+| 1.5 px per module | **44%** | 28% |
 | blur σ 2 px | **100%** | 56% |
-| barrel distortion k₁ = −0.1 | **62%** | 56% |
-| phone mix | **82%** | 42% |
+| barrel distortion k₁ = −0.1 | **84%** | 56% |
+| barrel distortion k₁ = −0.15 | **66%** | 41% |
+| phone mix | **98%** | 42% |
 
-Large symbols under barrel distortion and modules under 2.5 pixels remain
-the weak spots: a single perspective transform cannot follow curved edges,
-and a module that narrow blurs into its neighbors.
+Large symbols under strong barrel distortion remain the weak spot: version
+12 decodes 38% of the time at k₁ = −0.1, where the cubic correction cannot
+follow the distortion to the symbol's far corner.
 
 ## Cost of features
 

@@ -30,7 +30,7 @@ func Distort(src *image.Gray, scale int, d Distortion, rng *rand.Rand) *image.Gr
 }
 
 // DistortWithTruth is Distort that also returns where module coordinates
-// (u, v) of the symbol land in the image, ignoring lens distortion. qz is
+// (u, v) of the symbol land in the image. qz is
 // the quiet zone of src in modules; with qz 0 the function maps
 // coordinates that include the quiet zone.
 func DistortWithTruth(src *image.Gray, scale, qz int, d Distortion, rng *rand.Rand) (*image.Gray, func(u, v float64) (float64, float64)) {
@@ -81,6 +81,17 @@ func DistortWithTruth(src *image.Gray, scale, qz int, d Distortion, rng *rand.Ra
 	}
 	truth := func(u, v float64) (float64, float64) {
 		x, y := apply3(h, u+float64(qz)-side/2, v+float64(qz)-side/2)
+		if d.K1 != 0 {
+			// The pixel at normalized radius r shows the ideal point at
+			// r·(1−k1·r²); find that pixel by fixed-point iteration.
+			px, py := (x-cx)/norm, (y-cy)/norm
+			qx, qy := px, py
+			for i := 0; i < 20; i++ {
+				f := 1 - d.K1*(qx*qx+qy*qy)
+				qx, qy = px/f, py/f
+			}
+			x, y = cx+qx*norm, cy+qy*norm
+		}
 		return x - ox, y - oy
 	}
 	return dst, truth

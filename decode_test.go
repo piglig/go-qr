@@ -455,7 +455,7 @@ func TestReadVersion(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		g, err := newSymbolGeometry(dark, finders)
+		g, err := newSymbolGeometry(dark, finders[0])
 		if err != nil {
 			t.Fatal(err)
 		}

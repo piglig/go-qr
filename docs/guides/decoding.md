@@ -34,21 +34,23 @@ or text in an encoding other than UTF-8.
 `Decode` first tries a fast path for crisp, axis-aligned images such as the
 ones this library renders. If that fails, it locates the three finder
 patterns with a locally adaptive threshold and samples the grid through a
-perspective transform, anchored on the bottom-right alignment pattern when
-the symbol has one. Each path is tried on the image as is and inverted, and
+model fitted to the symbol's own structure: the corners of the finders'
+nested squares, the alignment patterns and the timing patterns. That
+model follows perspective and moderate lens distortion. Each path is tried on the image as is and inverted, and
 every sampled symbol is also read mirrored.
 
 | Input | Supported |
 | --- | --- |
 | Rendered images at any scale; PNG, JPEG, GIF, paletted, transparent backgrounds | ✅ |
 | Rotation, noise, blur, low contrast, uneven lighting | ✅ |
-| Perspective (photos taken at an angle, up to about 40°) | ✅ *Since v2.4* |
+| Perspective (photos taken at an angle, up to about 50°) | ✅ *Since v2.4* |
 | Light-on-dark (inverted) and mirror images | ✅ |
 | Styled codes: dots, rounded modules, round finders, gradients | ✅ |
 | Version information of version 7+ symbols, with error correction | ✅ |
 | Numeric, alphanumeric, byte and Kanji segments | ✅ |
 | Structured append and GS1 (FNC1 in first position) | ✅ *Since v2.1* |
-| Lens distortion and curved surfaces | ⚠️ small symbols only; large ones need a flat, centered view |
+| Lens distortion | ✅ moderate; strong wide-angle distortion of large symbols ⚠️ |
+| Curved surfaces (bottles, cans) | ⚠️ small symbols only |
 | Several symbols in one image | ❌ only one is read |
 | Micro QR, rMQR, FNC1 in second position, Hanzi mode | ❌ `ErrUnsupported` |
 

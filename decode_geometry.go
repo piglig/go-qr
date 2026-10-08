@@ -130,6 +130,16 @@ func fitLine(pts [][2]float64) (line, bool) {
 	return line{mx, my, math.Cos(theta), math.Sin(theta)}, true
 }
 
+// rmsDistance returns the root-mean-square distance of pts from l.
+func (l line) rmsDistance(pts [][2]float64) float64 {
+	sum := 0.0
+	for _, p := range pts {
+		d := (p[0]-l.x)*l.dy - (p[1]-l.y)*l.dx
+		sum += d * d
+	}
+	return math.Sqrt(sum / float64(len(pts)))
+}
+
 // intersect returns the intersection of two lines, reporting false when they
 // are nearly parallel.
 func (l line) intersect(m line) (float64, float64, bool) {

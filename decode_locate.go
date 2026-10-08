@@ -9,23 +9,24 @@ import (
 
 // Robust localization path: handles rotated, tilted and noisy images that the
 // axis-aligned fast path cannot. It detects finder patterns with the classic
-// 1:1:3:1:1 run-ratio scan and cross-checks, picks the triples that look
-// like one symbol, and samples the module grid through a perspective
-// transform. The transform's fourth point, near the bottom-right corner, is
-// the hard part. At most two estimates are tried, most precise first:
+// 1:1:3:1:1 run-ratio scan and cross-checks, and picks the triples that look
+// like one symbol. The module grid is then located by the structural fit in
+// decode_fit.go, which measures the finders' nested squares and grows a
+// homography over the alignment patterns, and is verified by the timing
+// patterns before anything is decoded.
+//
+// When the finders' edges cannot be measured, as with round finder styles,
+// the grid is sampled through a perspective transform whose fourth point is
+// estimated instead, at most two ways, most precise first:
 //
 //  1. the bottom-right alignment pattern (version 2 and up), searched for
 //     around the position the next estimate predicts;
 //  2. the intersection of the outer edges of the top-right and bottom-left
-//     finders, which follows the perspective of the symbol, or, when those
-//     edges cannot be traced, the parallelogram completion of the three
-//     finder centers, which is exact without perspective.
+//     finders, or, when those edges cannot be traced, the parallelogram
+//     completion of the three finder centers, which is exact without
+//     perspective.
 //
-// This is the scheme of ZXing and zxing-cpp; quirc and ZBar differ mostly in
-// how they find the edges. Trying more candidates, such as the
-// parallelogram after a failed edge estimate or other finder triples,
-// rescued under 2% of symbols in the robustness sweeps, at the cost of more
-// work on images that do not decode.
+// This fallback is the scheme of ZXing and zxing-cpp.
 
 type finderPattern struct {
 	x, y       float64 // center in image space
@@ -43,15 +44,58 @@ func robustDecode(bm []bool, w, h int, read func([][]bool) (*DecodeResult, error
 		}
 		return bm[y*w+x]
 	}
-	finders, err := findFinders(bm, dark, w, h)
+	triples, err := findFinders(bm, dark, w, h)
 	if err != nil {
 		return nil, err
 	}
-	g, err := newSymbolGeometry(dark, finders)
-	if err != nil {
-		return nil, err
+
+	// Fit the best triple with the usual corner assignment. If its timing
+	// patterns do not read back well, the triple may be a false one or its
+	// top-left finder misjudged, which strong perspective causes: the other
+	// assignments and triples are fitted too, and one of them replaces the
+	// first only if its timing patterns read back well. Fitting costs a
+	// small fraction of a decode, and only one grid is decoded.
+	var (
+		model    *gridModel
+		dim      int
+		score    = -1.0
+		first    *symbolGeometry
+		firstErr error
+	)
+search:
+	for ti, t := range triples {
+		for k := 0; k < 3; k++ {
+			if ti > 0 && k > 0 {
+				break // other assignments only for the strongest triple
+			}
+			g, err := newSymbolGeometryCorner(dark, t, k)
+			if err != nil {
+				if firstErr == nil {
+					firstErr = err
+				}
+				continue
+			}
+			if first == nil {
+				first = g
+			}
+			m, d, s, ok := g.fitSymbol(dark)
+			if ok && (g == first || s >= goodTimingScore && s > score) {
+				model, dim, score = m, d, s
+			}
+			if score >= goodTimingScore {
+				break search
+			}
+		}
 	}
-	var firstErr error
+	if model != nil {
+		return read(sampleGrid(dark, model, dim))
+	}
+	if first == nil {
+		return nil, firstErr
+	}
+	// The finders' corners could not be measured, as with circular finder
+	// styles: estimate the fourth point instead.
+	g := first
 	for _, p := range g.transforms(dark) {
 		res, err := read(sampleGrid(dark, p, g.dim))
 		if err == nil || errors.Is(err, ErrUnsupported) {
@@ -76,8 +120,25 @@ type symbolGeometry struct {
 	dim                          int
 }
 
+// goodTimingScore is the timing pattern agreement at which a fit is accepted
+// without trying other finder assignments.
+const goodTimingScore = 0.9
+
 func newSymbolGeometry(dark func(x, y int) bool, t [3]finderPattern) (*symbolGeometry, error) {
+	return newSymbolGeometryCorner(dark, t, 0)
+}
+
+// newSymbolGeometryCorner locates a symbol from a finder triple. k selects
+// the top-left finder: 0 is the vertex of the right angle as orderFinders
+// judges it, 1 and 2 the other two candidates.
+func newSymbolGeometryCorner(dark func(x, y int) bool, t [3]finderPattern, k int) (*symbolGeometry, error) {
 	tl, tr, bl := orderFinders(t[:])
+	switch k {
+	case 1:
+		tl, tr, bl = handed(tr, tl, bl)
+	case 2:
+		tl, tr, bl = handed(bl, tl, tr)
+	}
 	g := &symbolGeometry{tl: tl, tr: tr, bl: bl}
 	top, left := dist(tl, tr), dist(tl, bl)
 	if top == 0 || left == 0 {
@@ -248,23 +309,22 @@ func traceFinderEdge(dark func(x, y int) bool, f finderPattern, nx, ny, nm, ex, 
 }
 
 // findAlignment searches for the alignment pattern centered at module
-// (c, c) near where guess maps it. It scores a template of the pattern's
-// center, light ring and dark ring, transformed by the local geometry of
-// guess, at positions in windows of growing size, and refines the best
-// match to the center of its dark module.
+// (c, c) near where guess maps it, in windows of 4, 8 and 16 modules.
 func findAlignment(dark func(x, y int) bool, guess perspective, c float64) (float64, float64, bool) {
 	ex, ey := guess.apply(c, c)
 	x1, y1 := guess.apply(c+1, c)
 	x2, y2 := guess.apply(c, c+1)
-	ux, uy := x1-ex, y1-ey // one module along u
-	vx, vy := x2-ex, y2-ey // one module along v
+	return searchAlignment(dark, ex, ey, x1-ex, y1-ey, x2-ex, y2-ey, []float64{4, 8, 16})
+}
 
-	type pt struct{ a, b float64 }
-	var light, darkRing []pt
-	for _, o := range [][2]float64{{1, 0}, {-1, 0}, {0, 1}, {0, -1}, {1, 1}, {1, -1}, {-1, 1}, {-1, -1}} {
-		light = append(light, pt{o[0], o[1]})
-		darkRing = append(darkRing, pt{2 * o[0], 2 * o[1]})
-	}
+// searchAlignment looks for an alignment pattern around (ex, ey), where one
+// module spans (ux, uy) and (vx, vy). It scores a template of the pattern's
+// center, light ring and dark ring, transformed by that local geometry, at
+// positions on rings of growing distance, and refines the match to the
+// center of its dark module. A perfect match ends the search; otherwise the
+// best match with at most one mismatch is taken once the rings reach one of
+// radii (in modules, ascending).
+func searchAlignment(dark func(x, y int) bool, ex, ey, ux, uy, vx, vy float64, radii []float64) (float64, float64, bool) {
 	at := func(x, y, a, b float64) bool {
 		return dark(int(math.Floor(x+a*ux+b*vx)), int(math.Floor(y+a*uy+b*vy)))
 	}
@@ -275,13 +335,13 @@ func findAlignment(dark func(x, y int) bool, guess perspective, c float64) (floa
 		if !at(x, y, 0, 0) {
 			miss++
 		}
-		for i := range light {
-			if at(x, y, light[i].a, light[i].b) {
+		for _, o := range alignmentRing {
+			if at(x, y, o[0], o[1]) { // light ring
 				if miss++; miss == 2 {
 					return 0
 				}
 			}
-			if !at(x, y, darkRing[i].a, darkRing[i].b) {
+			if !at(x, y, 2*o[0], 2*o[1]) { // dark ring
 				if miss++; miss == 2 {
 					return 0
 				}
@@ -290,11 +350,7 @@ func findAlignment(dark func(x, y int) bool, guess perspective, c float64) (floa
 		return 17 - miss
 	}
 
-	// Search outward ring by ring, in steps of a third of a module, so the
-	// usual case, a pattern close to the estimate, ends early. A perfect
-	// match ends the search; otherwise the best match with at most one
-	// mismatch is taken once the rings reach 4, 8 or 16 modules.
-	const steps = 3
+	const steps = 3 // positions per module
 	best, bx, by := 0, 0.0, 0.0
 	try := func(i, j int) {
 		a, b := float64(i)/steps, float64(j)/steps
@@ -303,7 +359,9 @@ func findAlignment(dark func(x, y int) bool, guess perspective, c float64) (floa
 			best, bx, by = s, x, y
 		}
 	}
-	for k := 0; k <= 16*steps; k++ {
+	ri := 0
+	last := int(radii[len(radii)-1] * steps)
+	for k := 0; k <= last; k++ {
 		// The ring of positions at Chebyshev distance k.
 		if k == 0 {
 			try(0, 0)
@@ -316,13 +374,21 @@ func findAlignment(dark func(x, y int) bool, guess perspective, c float64) (floa
 			try(-k, j)
 			try(k, j)
 		}
-		if best == 17 || best >= 16 && (k == 4*steps || k == 8*steps || k == 16*steps) {
+		checkpoint := k == last || k == int(radii[ri]*steps)
+		if checkpoint && ri < len(radii)-1 {
+			ri++
+		}
+		if best == 17 || best >= 16 && checkpoint {
 			x, y := refineAlignment(dark, bx, by, ux, uy, vx, vy)
 			return x, y, true
 		}
 	}
 	return 0, 0, false
 }
+
+// alignmentRing lists the offsets of the light ring of an alignment pattern
+// in modules; the dark ring is at twice them.
+var alignmentRing = [8][2]float64{{1, 0}, {-1, 0}, {0, 1}, {0, -1}, {1, 1}, {1, -1}, {-1, 1}, {-1, -1}}
 
 // refineAlignment moves (x, y) to the middle of the dark center module along
 // both module axes, twice.
@@ -351,10 +417,21 @@ func refineAlignment(dark func(x, y int) bool, x, y, ux, uy, vx, vy float64) (fl
 	return x, y
 }
 
+// mapper maps module coordinates to image coordinates.
+type mapper interface {
+	apply(u, v float64) (float64, float64)
+}
+
 // sampleGrid reads every module through p by majority vote over five points
 // in a cross around its center, which tolerates the edge noise a single
 // center sample is sensitive to.
-func sampleGrid(dark func(x, y int) bool, p perspective, dim int) [][]bool {
+func sampleGrid(dark func(x, y int) bool, p mapper, dim int) [][]bool {
+	if m, ok := p.(*gridModel); ok && m.scale == 0 {
+		p = m.h // no lens correction: sample through the homography alone
+	}
+	if h, ok := p.(perspective); ok {
+		return samplePerspective(dark, h, dim)
+	}
 	modules := make([][]bool, dim)
 	grid := make([]bool, dim*dim)
 	cross := [5][2]float64{{0.5, 0.5}, {0.25, 0.5}, {0.75, 0.5}, {0.5, 0.25}, {0.5, 0.75}}
@@ -374,10 +451,32 @@ func sampleGrid(dark func(x, y int) bool, p perspective, dim int) [][]bool {
 	return modules
 }
 
-// findFinders scans for finder patterns and returns the triple that best fits
-// one symbol. The row scan reads bm directly; dark (bounds-checked) serves
-// the cross checks.
-func findFinders(bm []bool, dark func(x, y int) bool, w, h int) ([3]finderPattern, error) {
+// samplePerspective is sampleGrid for a plain homography, without the
+// interface call per point.
+func samplePerspective(dark func(x, y int) bool, p perspective, dim int) [][]bool {
+	modules := make([][]bool, dim)
+	grid := make([]bool, dim*dim)
+	cross := [5][2]float64{{0.5, 0.5}, {0.25, 0.5}, {0.75, 0.5}, {0.5, 0.25}, {0.5, 0.75}}
+	for r := 0; r < dim; r++ {
+		modules[r] = grid[r*dim : (r+1)*dim]
+		for c := 0; c < dim; c++ {
+			votes := 0
+			for _, o := range cross {
+				x, y := p.apply(float64(c)+o[0], float64(r)+o[1])
+				if dark(int(math.Floor(x)), int(math.Floor(y))) {
+					votes++
+				}
+			}
+			modules[r][c] = votes >= 3
+		}
+	}
+	return modules
+}
+
+// findFinders scans for finder patterns and returns up to maxFinderTriples
+// triples that best fit one symbol, best first. The row scan reads bm
+// directly; dark (bounds-checked) serves the cross checks.
+func findFinders(bm []bool, dark func(x, y int) bool, w, h int) ([][3]finderPattern, error) {
 	var cands []finderPattern
 
 	add := func(cx, cy, module float64) {
@@ -436,34 +535,53 @@ func findFinders(bm []bool, dark func(x, y int) bool, w, h int) ([3]finderPatter
 	return selectFinders(cands)
 }
 
-// selectFinders picks the three candidates that look most like the finders
-// of one symbol: similar module sizes, placed at the corners of a roughly
-// right isosceles triangle at least 14 modules on a side. Data modules can
-// mimic the 1:1:3:1:1 pattern, and the strongest candidates alone are not
-// reliable in large symbols.
-func selectFinders(cands []finderPattern) ([3]finderPattern, error) {
+// maxFinderTriples bounds how many finder triples are fitted per image.
+const maxFinderTriples = 3
+
+// selectFinders returns up to maxFinderTriples candidate triples that look
+// most like the finders of one symbol, best first: similar module sizes,
+// placed at the corners of a roughly right isosceles triangle at least 14
+// modules on a side. Data modules can mimic the 1:1:3:1:1 pattern, and the
+// strongest candidates alone are not reliable in large symbols.
+func selectFinders(cands []finderPattern) ([][3]finderPattern, error) {
 	if len(cands) < 3 {
-		return [3]finderPattern{}, fmt.Errorf("%w: found %d finder patterns", ErrNotFound, len(cands))
+		return nil, fmt.Errorf("%w: found %d finder patterns", ErrNotFound, len(cands))
 	}
 	sort.Slice(cands, func(i, j int) bool { return cands[i].count > cands[j].count })
 	if len(cands) > maxFinderCandidates {
 		cands = cands[:maxFinderCandidates]
 	}
 
-	best, bestScore := [3]int{}, math.Inf(1)
+	type scored struct {
+		t     [3]finderPattern
+		score float64
+	}
+	var best []scored
 	for i := 0; i < len(cands); i++ {
 		for j := i + 1; j < len(cands); j++ {
 			for k := j + 1; k < len(cands); k++ {
-				if s := finderTripleScore(cands[i], cands[j], cands[k]); s < bestScore {
-					best, bestScore = [3]int{i, j, k}, s
+				s := finderTripleScore(cands[i], cands[j], cands[k])
+				if math.IsInf(s, 1) || len(best) == maxFinderTriples && s >= best[len(best)-1].score {
+					continue
+				}
+				n := sort.Search(len(best), func(x int) bool { return best[x].score > s })
+				best = append(best, scored{})
+				copy(best[n+1:], best[n:])
+				best[n] = scored{[3]finderPattern{cands[i], cands[j], cands[k]}, s}
+				if len(best) > maxFinderTriples {
+					best = best[:maxFinderTriples]
 				}
 			}
 		}
 	}
-	if math.IsInf(bestScore, 1) {
-		return [3]finderPattern{}, fmt.Errorf("%w: no three finder patterns form a symbol", ErrNotFound)
+	if len(best) == 0 {
+		return nil, fmt.Errorf("%w: no three finder patterns form a symbol", ErrNotFound)
 	}
-	return [3]finderPattern{cands[best[0]], cands[best[1]], cands[best[2]]}, nil
+	out := make([][3]finderPattern, len(best))
+	for i, b := range best {
+		out[i] = b.t
+	}
+	return out, nil
 }
 
 // maxFinderCandidates bounds the O(n³) triple search.
@@ -494,9 +612,15 @@ func finderTripleScore(a, b, c finderPattern) float64 {
 	if isosceles > 0.4 || right > 0.25 {
 		return math.Inf(1)
 	}
-	// Prefer candidates confirmed on many rows.
-	support := 1 / float64(min(a.count, b.count, c.count))
-	return isosceles + right + (hi-lo)/hi + 0.1*support
+	// A finder's center block is three modules tall, so the row scan hits a
+	// real finder on about three times its module size in rows; data that
+	// happens to read 1:1:3:1:1 on a row or two is penalized up to 1, more
+	// than any shape term, since perspective distorts shapes but not this.
+	support := 0.0
+	for _, f := range [3]finderPattern{a, b, c} {
+		support = math.Max(support, 1-math.Min(1, float64(f.count)/(1.5*f.moduleSize)))
+	}
+	return isosceles + right + (hi-lo)/hi + support
 }
 
 // checkFinderRatio reports whether the five run lengths match 1:1:3:1:1 and
@@ -526,47 +650,51 @@ func checkFinderRatio(s [5]int) (float64, bool) {
 
 // crossCheck confirms a candidate by measuring the 1:1:3:1:1 runs through
 // (cx, cy) along direction (dx, dy). It returns the refined center
-// coordinate along that axis and the module size of the runs. The total run
-// length must be within 40% of originalTotal, the length seen by the scan that
-// produced the candidate.
+// coordinate along that axis and the module size of the runs. maxCount is
+// the length of the center run seen by the scan that produced the
+// candidate, and originalTotal the length of all five. Perspective can
+// stretch or compress a finder along one axis to about a third of the
+// other, so the runs may be up to twice maxCount and the total within a
+// factor of three of originalTotal; the run ratios still have to match.
 func crossCheck(dark func(x, y int) bool, cx, cy, dx, dy, maxCount, originalTotal int) (float64, float64, bool) {
 	// dark reports false outside the image, so every loop ends: dark runs
-	// stop at the border and light runs are bounded by maxCount.
+	// stop at the border and light runs are bounded by ringMax.
 	var s [5]int
 	at := func(i int) bool { return dark(cx+i*dx, cy+i*dy) }
+	ringMax := 2 * maxCount
 
 	i := 0
-	for at(i) && s[2] <= 4*maxCount {
+	for at(i) && s[2] <= 4*ringMax {
 		s[2]++
 		i--
 	}
-	for ; !at(i) && s[1] <= maxCount; i-- {
+	for ; !at(i) && s[1] <= ringMax; i-- {
 		s[1]++
 	}
-	for ; at(i) && s[0] <= maxCount; i-- {
+	for ; at(i) && s[0] <= ringMax; i-- {
 		s[0]++
 	}
-	if s[0] == 0 || s[1] > maxCount || s[0] > maxCount {
+	if s[0] == 0 || s[1] > ringMax || s[0] > ringMax {
 		return 0, 0, false
 	}
 
 	i = 1
-	for at(i) && s[2] <= 4*maxCount {
+	for at(i) && s[2] <= 4*ringMax {
 		s[2]++
 		i++
 	}
-	for ; !at(i) && s[3] <= maxCount; i++ {
+	for ; !at(i) && s[3] <= ringMax; i++ {
 		s[3]++
 	}
-	for ; at(i) && s[4] <= maxCount; i++ {
+	for ; at(i) && s[4] <= ringMax; i++ {
 		s[4]++
 	}
-	if s[4] == 0 || s[3] > maxCount || s[4] > maxCount {
+	if s[4] == 0 || s[3] > ringMax || s[4] > ringMax {
 		return 0, 0, false
 	}
 
 	total := s[0] + s[1] + s[2] + s[3] + s[4]
-	if 5*abs(total-originalTotal) >= 2*originalTotal {
+	if 3*total < originalTotal || total > 3*originalTotal {
 		return 0, 0, false
 	}
 	module, ok := checkFinderRatio(s)
@@ -606,6 +734,15 @@ func orderFinders(p []finderPattern) (tl, tr, bl finderPattern) {
 		tr, bl = c, a
 	}
 	return tl, tr, bl
+}
+
+// handed returns tl with the other two ordered as top-right and bottom-left
+// by the sign of their cross product, as orderFinders does.
+func handed(tl, a, c finderPattern) (finderPattern, finderPattern, finderPattern) {
+	if (a.x-tl.x)*(c.y-tl.y)-(a.y-tl.y)*(c.x-tl.x) >= 0 {
+		return tl, a, c
+	}
+	return tl, c, a
 }
 
 func dist(a, b finderPattern) float64 {
