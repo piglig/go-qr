@@ -1,0 +1,159 @@
+name: Release
+
+# Releases are made from main by this workflow only; tags are protected.
+#
+# - The library is released when a merged commit adds a version heading to
+#   CHANGELOG.md that has no tag yet (scripts/release.sh opens that PR).
+# - tools and mcp are released with the next patch version when a merged
+#   commit changes the library version they pin (the Dependabot PR), or by
+#   hand with workflow_dispatch, for example for a new CLI flag.
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+    inputs:
+      module:
+        description: Module to release
+        type: choice
+        options: [ tools, mcp ]
+      bump:
+        description: Version part to increase
+        type: choice
+        options: [ patch, minor ]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  library:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Find an untagged version
+        id: version
+        run: |
+          v=$(grep -m1 -oE '^## \[[0-9]+\.[0-9]+\.[0-9]+\]' CHANGELOG.md | tr -d '#[] ')
+          if [ -z "$v" ] || git rev-parse -q --verify "refs/tags/v$v" >/dev/null; then
+            echo "No new version in CHANGELOG.md."; exit 0
+          fi
+          latest=$(git tag -l 'v*' | sort -V | tail -1)
+          if [ "$(printf '%s\nv%s\n' "$latest" "$v" | sort -V | tail -1)" != "v$v" ]; then
+            echo "::error::CHANGELOG.md version $v is not newer than $latest."; exit 1
+          fi
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-go@v5
+        if: steps.version.outputs.version
+        with:
+          go-version-file: go.mod
+
+      - name: Test
+        if: steps.version.outputs.version
+        run: go vet ./... && go test ./...
+
+      - name: Tag and publish
+        if: steps.version.outputs.version
+        env:
+          V: ${{ steps.version.outputs.version }}
+        run: |
+          awk -v h="## [$V]" 'index($0, h) == 1 {on=1; next} /^## \[/ {if (on) exit} on' CHANGELOG.md > notes.md
+          gh release create "v$V" --target "$GITHUB_SHA" --title "v$V" --notes-file notes.md --latest
+          # Ask the module proxy for the version so that it is available,
+          # and Dependabot sees it, right away.
+          GOPROXY=https://proxy.golang.org GOWORK=off go list -m "github.com/piglig/go-qr/v2@v$V" ||
+            echo "::warning::The module proxy does not list v$V yet."
+
+  modules:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        module: [ tools, mcp ]
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GOWORK: off
+      M: ${{ matrix.module }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Decide whether to release
+        id: version
+        env:
+          BEFORE: ${{ github.event.before }}
+          EVENT: ${{ github.event_name }}
+          INPUT_MODULE: ${{ inputs.module }}
+          BUMP: ${{ inputs.bump || 'patch' }}
+        run: |
+          pin() { grep -oE 'github.com/piglig/go-qr/v2 v[^ ]+' | cut -d' ' -f2; }
+          lib=$(pin < "$M/go.mod")
+          if [ "$EVENT" = workflow_dispatch ]; then
+            [ "$INPUT_MODULE" = "$M" ] || { echo "Not selected."; exit 0; }
+          else
+            if git cat-file -e "$BEFORE:$M/go.mod" 2>/dev/null; then
+              old=$(git show "$BEFORE:$M/go.mod" | pin)
+            else
+              old=$lib
+            fi
+            [ "$old" != "$lib" ] || { echo "Library pin unchanged ($lib)."; exit 0; }
+          fi
+          last=$(git tag -l "$M/v*" | sort -V | tail -1)
+          IFS=. read -r major minor patch <<< "${last#"$M"/v}"
+          if [ "$BUMP" = minor ]; then
+            next="$major.$((minor + 1)).0"
+          else
+            next="$major.$minor.$((patch + 1))"
+          fi
+          {
+            echo "version=$next"
+            echo "last=$last"
+            echo "lib=$lib"
+          } >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-go@v5
+        if: steps.version.outputs.version
+        with:
+          go-version: stable
+
+      - name: Test against the pinned library
+        if: steps.version.outputs.version
+        working-directory: ${{ matrix.module }}
+        run: go mod verify && go vet ./... && go test ./...
+
+      - name: Tag and publish
+        if: steps.version.outputs.version
+        env:
+          V: ${{ steps.version.outputs.version }}
+          LAST: ${{ steps.version.outputs.last }}
+          LIB: ${{ steps.version.outputs.lib }}
+        run: |
+          case "$M" in
+            tools) name='The `generator` CLI'; pkg=tools/generator ;;
+            mcp) name='`go-qr-mcp`'; pkg=mcp/cmd/go-qr-mcp ;;
+          esac
+          {
+            echo "$name, built on go-qr [$LIB](https://github.com/piglig/go-qr/releases/tag/$LIB)."
+            echo
+            echo "Changes since $LAST:"
+            echo
+            git log --format='- %s' "$LAST..HEAD" -- "$M"
+            echo
+            echo '```shell'
+            echo "go install github.com/piglig/go-qr/$pkg@v$V"
+            echo '```'
+          } > notes.md
+          gh release create "$M/v$V" --target "$GITHUB_SHA" --title "$M/v$V" --notes-file notes.md --latest=false
+          GOPROXY=https://proxy.golang.org go list -m "github.com/piglig/go-qr/$M@v$V" ||
+            echo "::warning::The module proxy does not list $M/v$V yet."
