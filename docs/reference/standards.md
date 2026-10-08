@@ -32,7 +32,9 @@ page lists what the encoder and decoder support, by section of the standard.
 | other | | `ErrUnsupported`; raw bytes are in `DecodeResult.Segments` |
 
 Without an ECI, the decoder reads byte segments as UTF-8 when they are valid
-UTF-8 and as ISO-8859-1 otherwise, which matches what common encoders write.
+UTF-8, as Shift_JIS when they read as Japanese, and as ISO-8859-1 otherwise,
+which matches what common encoders write; see
+[Decoding](../guides/decoding.md#text-encodings).
 
 ## Payload formats
 

@@ -60,7 +60,8 @@ decode in two thirds of the photos where zxing-cpp, which fits a local
 transform between each pair of alignment patterns, reads nearly all.
 
 The thresholds the decoder uses were tuned on this dataset, so these
-figures are likely somewhat optimistic for go-qr. To reproduce them:
+figures are optimistic for go-qr; the next table, on photos it was not
+tuned on, puts it just behind zxing-cpp. To reproduce them:
 
 ```shell
 go test -run=TestBoofCV -timeout=60m ./bench/ -boofcv=/path/to/qrcodes/detection
@@ -68,6 +69,27 @@ go test -run=TestBoofCV -timeout=60m ./bench/ -boofcv=/path/to/qrcodes/detection
 
 `TestBoofCV` writes one line per image; the other decoders were run from
 Python on the same grayscale images.
+
+### Photos the decoder was not tuned on
+
+The QR Code test photos of [ZXing](https://github.com/zxing/zxing/tree/master/core/src/test/resources/blackbox)
+(179 photos) and the further ones of [zxing-cpp](https://github.com/zxing-cpp/zxing-cpp/tree/master/test/samples)
+(21 photos with expected texts and not in ZXing's set) come with the
+expected text of each code, so a decode counts only if its text matches.
+These are those projects' own regression sets, which favors them; go-qr
+was never tuned on them.
+
+| | go-qr | zxing-cpp | WeChat | gozxing | ZBar | OpenCV |
+| --- | --- | --- | --- | --- | --- | --- |
+| ZXing photos | **166** | 165 | 155 | 155 | 154 | 91 |
+| zxing-cpp photos | 16 | **20** | 16 | 16 | 10 | 7 |
+| **all 200** | 91.0% | **92.5%** | 85.5% | 85.5% | 82.0% | 49.0% |
+
+No decoder misread a code's data. Three ZBar results and eight OpenCV ones
+interpret a text's character set differently, and zxing-cpp's Python
+binding writes two control characters as `<SOH>` and `<DLE>`; these count as
+misses above. Evaluating on these sets found go-qr reading undeclared
+Japanese Shift_JIS as ISO-8859-1, which v2.4.1 fixes.
 
 ### Simulated distortion
 

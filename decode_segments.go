@@ -49,7 +49,8 @@ type bitstream struct {
 //
 // Byte segments are interpreted by the ECI in effect: UTF-8 (26),
 // ISO-8859-1 (1, 3), Shift_JIS (20) or ASCII (27, 170). Without an ECI, a
-// segment that is valid UTF-8 is read as UTF-8 and anything else as
+// segment that is valid UTF-8 is read as UTF-8, one that reads as Japanese
+// Shift_JIS as Shift_JIS (see looksShiftJIS), and anything else as
 // ISO-8859-1, which matches what common encoders emit. In a GS1 symbol, '%'
 // in alphanumeric segments stands for the GS separator and "%%" for '%'.
 func parseBitstream(data []byte, ver int) (bitstream, error) {
@@ -256,8 +257,11 @@ func readKanji(r *bitReader, count int, text []byte) (sjis, _ []byte, err error)
 func appendCharset(text, b []byte, eci int) ([]byte, error) {
 	switch eci {
 	case noECI:
-		if utf8.Valid(b) {
+		switch {
+		case utf8.Valid(b):
 			return append(text, b...), nil
+		case looksShiftJIS(b):
+			return appendShiftJIS(text, b), nil
 		}
 		return appendLatin1(text, b), nil
 	case 26, 27, 170: // UTF-8; US-ASCII is a subset
@@ -268,6 +272,45 @@ func appendCharset(text, b []byte, eci int) ([]byte, error) {
 		return appendShiftJIS(text, b), nil
 	}
 	return nil, fmt.Errorf("%w: ECI %d character set", ErrUnsupported, eci)
+}
+
+// looksShiftJIS reports whether a byte segment without an ECI, which is not
+// UTF-8, is more likely Japanese Shift_JIS than ISO-8859-1. Japanese
+// encoders commonly write Shift_JIS without declaring it. The bytes must
+// form valid Shift_JIS, every double-byte character in the QR Kanji range,
+// and either contain a run of at least three half-width katakana or
+// double-byte characters, which Latin text does not produce, or contain
+// bytes 0x80 to 0x9F, which are control characters in ISO-8859-1 and do not
+// occur in text. (This follows the idea of ZXing's guessEncoding.)
+func looksShiftJIS(b []byte) bool {
+	var (
+		run, longest int  // current and longest run of katakana or double-byte characters
+		c1Control    bool // a byte in 0x80-0x9F
+	)
+	for i := 0; i < len(b); i++ {
+		c := b[i]
+		switch {
+		case c < 0x80:
+			run = 0
+			continue
+		case 0xA1 <= c && c <= 0xDF: // half-width katakana
+		case i+1 < len(b):
+			v, ok := shiftJISToKanji(c, b[i+1])
+			if !ok {
+				return false
+			}
+			if _, ok := kanjiRune(v); !ok {
+				return false
+			}
+			c1Control = c1Control || c <= 0x9F || b[i+1] >= 0x80 && b[i+1] <= 0x9F
+			i++
+		default:
+			return false // a lead byte at the end, or 0x80, 0xA0, 0xE0-0xFF alone
+		}
+		run++
+		longest = max(longest, run)
+	}
+	return longest >= 3 || c1Control
 }
 
 func appendLatin1(text, b []byte) []byte {
