@@ -32,26 +32,40 @@ or text in an encoding other than UTF-8.
 ## What the decoder reads
 
 `Decode` first tries a fast path for crisp, axis-aligned images such as the
-ones this library renders. If that fails, it locates the three finder
-patterns with a locally adaptive threshold and samples the grid through an
-affine transform. Each path is tried on the image as is and inverted, and
-every sampled symbol is also read mirrored.
+ones this library renders. If that fails, it locates the finder patterns
+with a locally adaptive threshold and fits a model of the module grid to
+the symbol's own structure: the corners of the finders' nested squares,
+the alignment patterns and the timing patterns. The model follows
+perspective and moderate lens distortion, and when a finder is unreadable
+the other two imply it. Modules are then read from the grayscale image,
+each against the modules around it. If nothing is found at full
+resolution, the symbol is located again in the image downscaled by 2, 4,
+and so on, which removes texture finer than the modules, such as a
+screen's pixel grid; the modules are still read at full resolution. Each
+path is tried on the image as is and inverted, and every sampled symbol is
+also read mirrored.
 
 | Input | Supported |
 | --- | --- |
 | Rendered images at any scale; PNG, JPEG, GIF, paletted, transparent backgrounds | ✅ |
-| Rotation, noise, low contrast, uneven lighting | ✅ |
+| Rotation, noise, blur, low contrast, uneven lighting | ✅ |
+| Perspective (photos taken at an angle, up to about 50°) | ✅ *Since v2.4* |
+| Photos of screens, very large modules, a finder covered by glare or damage | ✅ *Since v2.4* |
 | Light-on-dark (inverted) and mirror images | ✅ |
 | Styled codes: dots, rounded modules, round finders, gradients | ✅ |
 | Version information of version 7+ symbols, with error correction | ✅ |
 | Numeric, alphanumeric, byte and Kanji segments | ✅ |
 | Structured append and GS1 (FNC1 in first position) | ✅ *Since v2.1* |
-| Perspective distortion (photos taken at an angle) | ❌ |
+| Lens distortion | ✅ moderate; strong wide-angle distortion of large symbols ⚠️ |
+| Curved surfaces (bottles, cans) | ⚠️ small symbols only |
 | Several symbols in one image | ❌ only one is read |
 | Micro QR, rMQR, FNC1 in second position, Hanzi mode | ❌ `ErrUnsupported` |
 
-For photos, hold the camera square to the code. Perspective correction is
-not implemented yet.
+Modules should be at least 2 pixels wide. Large symbols (version 20 and up)
+in photos are the hardest case: lens distortion bends their grid more than
+the model follows. Move closer to the code rather than zooming out. See
+[Performance](../performance.md#reading-photos) for how the decoder
+compares with others on real photos.
 
 ### Text encodings
 

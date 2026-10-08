@@ -34,8 +34,10 @@
 - **Styled, and still readable.** Dot and rounded modules, round finders,
   colors, gradients and logos. `Verify` renders the result, decodes it and
   checks the contrast, so you know a design scans before you publish it.
-- **A decoder included.** Reads rotated, noisy, low-contrast, inverted and
-  mirrored images, so you can test what you generate.
+- **A decoder that reads photos.** Perspective, lens distortion, glare,
+  photos of screens and codes with a damaged finder pattern. On the BoofCV
+  benchmark photos it reads a code in 77% of them, where zxing-cpp reads
+  73% ([comparison](docs/performance.md#reading-photos)).
 - **Fast and dependency-free.** Only the standard library. Encoding is about
   3× faster than [skip2/go-qrcode] and decoding about 7× faster than
   [gozxing], with orders of magnitude fewer allocations

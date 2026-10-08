@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `Decode` reads photos. On the 536 photos of the BoofCV QR Code dataset it
+  reads a code in 77% of them, up from 21% (zxing-cpp 73%, OpenCV's WeChat
+  decoder 69%, ZBar 46%), and takes 30% less time doing so. The robust path
+  was rebuilt:
+  - The module grid is fitted to the symbol's own structure. The corners
+    of each finder's nested squares give a homography by least squares,
+    so perspective is measured rather than guessed; the timing patterns
+    choose the size and verify which finder is which; the alignment
+    patterns refine the fit, with a cubic lens correction kept when the
+    fixed patterns confirm it. One grid is decoded. Tilts up to 40°
+    decode, and most at 50°.
+  - When a finder is lost to glare, damage or the image edge, pairs of
+    well-confirmed finders imply the third.
+  - Modules are read from the grayscale image, each against the modules
+    around it, rather than from a binarized one, so module size and uneven
+    lighting no longer matter.
+  - If nothing is found at full resolution, the symbol is located again in
+    the image halved, quartered and so on, which removes texture finer than
+    the modules, such as a screen's pixel grid; modules are still read at
+    full resolution. Photos of screens and codes with very large modules
+    now decode.
+  - The local threshold handles modules larger than its window, and large
+    images are scanned for finders every second or third row.
+  Clean images take the unchanged fast path. Small images that need the
+  robust path, which large photos make up for, are up to about 50% slower,
+  whether or not they decode. See
+  [Performance](docs/performance.md#reading-photos).
+- `TestBoofCV` in `tools/bench` runs go-qr and gozxing over the BoofCV
+  dataset, and `TestRobustness` sweeps tilt, module size, blur and lens
+  distortion through a simulated camera.
+
 ### Changed
 
 - The `generator` CLI (tools/v1.1.1) and `go-qr-mcp` (mcp/v0.1.1) are built
@@ -16,6 +49,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The robust decode path misjudged the size of symbols rotated by 30° to
+  60°, because it measured module sizes along the image axes, and rejected
+  the finders of rotated version 1 symbols.
+- Finder triples were ranked by shape alone, so data that mimicked a finder
+  on a row or two could displace a real one; strongly foreshortened finders
+  were rejected outright.
 - The `generator` CLI no longer prints "payload: payload:" when the payload
   package rejects an EPC payment.
 

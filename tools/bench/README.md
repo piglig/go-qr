@@ -50,7 +50,27 @@ go test -run=^$ -bench='EncodeCompare|DecodeClean' -benchmem ./bench/
 
 # Robustness table (clean vs degraded success rate)
 go test -run=TestDecodeAccuracy -v ./bench/
+
+# Distortion sweeps: tilt, module size, blur, lens distortion, phone mix
+go test -run=TestRobustness -v ./bench/ -sweep
+
+# Real photos: the BoofCV QR Code dataset, downloaded separately
+go test -run=TestBoofCV -timeout=60m ./bench/ -boofcv=/path/to/qrcodes/detection -boofcv-out=go.jsonl
 ```
+
+`TestBoofCV` decodes the
+[BoofCV dataset](https://boofcv.org/index.php?title=Performance:QrCode)
+(`qrcodes_v3.zip`, about 200 MB; its licence is unstated, so it is not
+vendored) with go-qr and gozxing and writes one JSON line per decoder and
+image with the texts read and the decode time. The dataset labels code
+corners, not contents, so results are scored by agreement between decoders;
+see [Performance](../../docs/performance.md#reading-photos).
+
+`TestRobustness` renders symbols through a simulated pinhole camera
+(`distort.go`: tilt about any axis, rotation, pixels per module, Gaussian
+blur, noise, radial lens distortion) and tabulates decode rates per decoder
+and version. `DistortWithTruth` also returns where each module lands, for
+measuring localization error.
 
 ## Baseline (gozxing, 8 px/module, this machine — replace with your own)
 

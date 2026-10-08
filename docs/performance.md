@@ -17,13 +17,83 @@ Decoding crisp rendered images, compared with [gozxing], a Go port of ZXing:
 
 | Symbol | go-qr | gozxing |
 | --- | --- | --- |
-| numeric (v1) | **109 µs** · 17 allocs | 686 µs · 53,914 allocs (6.3×) |
-| URL (v4) | **206 µs** · 23 allocs | 1,399 µs · 107,701 allocs (6.8×) |
-| text (v29) | **2.3 ms** · 114 allocs | 16.9 ms · 1.27M allocs (7.4×) |
+| numeric (v1) | **113 µs** · 20 allocs | 684 µs · 53,914 allocs (6.1×) |
+| URL (v4) | **224 µs** · 26 allocs | 1,440 µs · 107,701 allocs (6.4×) |
+| text (v29) | **2.3 ms** · 117 allocs | 17.5 ms · 1.27M allocs (7.6×) |
 
-Both decoders read the whole clean corpus and 4 of 5 images in a degraded
-corpus (7° rotation plus Gaussian noise). In the image both miss, the
-rotation pushes the finder patterns out of the frame.
+### Reading photos
+
+The [BoofCV QR Code dataset](https://boofcv.org/index.php?title=Performance:QrCode)
+holds 536 photos with 1,232 codes in 16 categories, from nominal shots to
+glare, curved surfaces and photos of screens. The table gives the share of
+photos in which a decoder read at least one code. The dataset labels the
+codes' corners but not their contents, so a decode counts when its text
+matches what another decoder, or the same decoder in another photo of the
+same code, read; QR Codes' error correction makes misreads very rare, and
+none was found. go-qr returns one code per image, which costs it nothing
+here but in multi-code images it reads one code of many.
+
+| Category | go-qr | [zxing-cpp] 3.1 | WeChat (OpenCV 4.10) | ZBar | OpenCV | [gozxing] |
+| --- | --- | --- | --- | --- | --- | --- |
+| nominal | 90.8% | **96.9%** | 90.8% | 73.8% | 53.8% | 60.0% |
+| perspective | **71.4%** | 62.9% | 45.7% | 42.9% | 37.1% | 37.1% |
+| rotations | **100%** | **100%** | **100%** | 61.4% | 95.5% | 45.5% |
+| close | **100%** | **100%** | 65.0% | 12.5% | 70.0% | 5.0% |
+| monitor | **100%** | **100%** | 94.1% | 0% | **100%** | 0% |
+| blurred | **73.3%** | 71.1% | 68.9% | 44.4% | 31.1% | 26.7% |
+| curved | **72.0%** | 66.0% | 52.0% | 42.0% | 30.0% | 34.0% |
+| damaged | 43.2% | 24.3% | **45.9%** | 21.6% | 10.8% | 10.8% |
+| glare | 58.0% | 40.0% | **72.0%** | 38.0% | 14.0% | 22.0% |
+| shadows | 92.9% | 92.9% | **100%** | 78.6% | 57.1% | 71.4% |
+| brightness | 78.6% | **96.4%** | 78.6% | 64.3% | 28.6% | 71.4% |
+| bright spots | 53.1% | 40.6% | **59.4%** | 43.8% | 40.6% | 46.9% |
+| high version | 66.7% | **97.0%** | 21.2% | 21.2% | 6.1% | 6.1% |
+| noncompliant | 87.5% | 62.5% | **93.8%** | 62.5% | 6.2% | 18.8% |
+| pathological | 82.6% | 43.5% | **91.3%** | 65.2% | 4.3% | 34.8% |
+| lots | **100%** | **100%** | 0% | **100%** | **100%** | **100%** |
+| **all photos** | **77.1%** | 73.1% | 68.8% | 45.7% | 40.1% | 34.1% |
+| decode time, all photos | 8.7 s | **5.5 s** | 106 s | 61 s | 171 s | 34 s |
+
+WeChat uses a CNN detector and super-resolution; OpenCV's QRCodeDetector
+reads with quirc. Large symbols are go-qr's weak spot: version 20 and up
+decode in two thirds of the photos where zxing-cpp, which fits a local
+transform between each pair of alignment patterns, reads nearly all.
+
+The thresholds the decoder uses were tuned on this dataset, so these
+figures are likely somewhat optimistic for go-qr. To reproduce them:
+
+```shell
+go test -run=TestBoofCV -timeout=60m ./bench/ -boofcv=/path/to/qrcodes/detection
+```
+
+`TestBoofCV` writes one line per image; the other decoders were run from
+Python on the same grayscale images.
+
+### Simulated distortion
+
+`TestRobustness` in `tools/bench` photographs symbols of versions 1, 3, 7
+and 12 with a simulated pinhole camera, 32 images per point, with random
+rotation, slight blur and noise. Each row varies one parameter; "phone
+mix" randomizes all of them (tilt up to 35°, 3 to 8 pixels per module,
+blur, noise and mild barrel distortion), 256 images. A decode counts only
+if the text matches; neither decoder returned a wrong text.
+
+| Distortion | go-qr | gozxing (`TRY_HARDER`) |
+| --- | --- | --- |
+| tilt 30° | **100%** | 31% |
+| tilt 40° | **100%** | 0% |
+| tilt 50° | **72%** | 0% |
+| tilt 60° | **44%** | 0% |
+| 2 px per module | **91%** | 75% |
+| 1.5 px per module | **66%** | 28% |
+| blur σ 2 px | **100%** | 56% |
+| barrel distortion k₁ = −0.1 | **84%** | 56% |
+| barrel distortion k₁ = −0.15 | **66%** | 41% |
+| phone mix | **98%** | 42% |
+
+The simulated camera has no glare, texture or damage, which makes these
+sweeps kinder than real photos; the BoofCV figures above are the better
+guide.
 
 ## Cost of features
 
@@ -67,3 +137,4 @@ Feature benchmarks are in the main module, for example
 [skip2/go-qrcode]: https://github.com/skip2/go-qrcode
 [boombuler/barcode]: https://github.com/boombuler/barcode
 [gozxing]: https://github.com/makiuchi-d/gozxing
+[zxing-cpp]: https://github.com/zxing-cpp/zxing-cpp

@@ -444,21 +444,24 @@ func BenchmarkDecodeRotated(b *testing.B) {
 	}
 }
 
-func TestReadVersionNear(t *testing.T) {
+func TestReadVersion(t *testing.T) {
 	for _, n := range []int{150, 400, 1200} {
 		code := mustEncode(t, strings.Repeat("v", n), WithECC(ECCLow))
 		img := rotateGray(mustImage(t, code, WithScale(4), WithQuietZone(10)), 0.1)
 		w, h := img.Bounds().Dx(), img.Bounds().Dy()
-		bm := binarizeHybrid(toLuma(img), w, h)
-		dark := func(x, y int) bool { return x >= 0 && y >= 0 && x < w && y < h && bm[y*w+x] }
-		finders, err := findFinders(bm, dark, w, h)
+		tm := hybridThresholds(toLuma(img), w, h)
+		finders, err := findFinders(tm, false, tm.dark)
+		dark := tm.dark
 		if err != nil {
 			t.Fatal(err)
 		}
-		tl, tr, bl := orderFinders(finders)
-		v, ok := readVersionNear(dark, tl, tr, bl)
+		g, err := newSymbolGeometry(dark, finders[0])
+		if err != nil {
+			t.Fatal(err)
+		}
+		v, ok := g.readVersion(dark)
 		if !ok || v != code.Version() {
-			t.Errorf("version %d: readVersionNear = %d, %v", code.Version(), v, ok)
+			t.Errorf("version %d: readVersion = %d, %v", code.Version(), v, ok)
 		}
 	}
 }

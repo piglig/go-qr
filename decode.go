@@ -96,6 +96,13 @@ func searchImage(img image.Image, cfg decodeConfig, read func([][]bool) (*Decode
 	}
 
 	var firstErr error
+	// Keep the most specific failure: a symbol that was found but not
+	// readable says more than "not found".
+	note := func(err error) {
+		if firstErr == nil || errors.Is(firstErr, ErrNotFound) && !errors.Is(err, ErrNotFound) {
+			firstErr = err
+		}
+	}
 	try := func(grid [][]bool, err error) (*DecodeResult, error) {
 		if err == nil {
 			var res *DecodeResult
@@ -103,15 +110,11 @@ func searchImage(img image.Image, cfg decodeConfig, read func([][]bool) (*Decode
 				return res, nil
 			}
 		}
-		// Keep the most specific failure: a symbol that was found but not
-		// readable says more than "not found".
-		if firstErr == nil || errors.Is(firstErr, ErrNotFound) && !errors.Is(err, ErrNotFound) {
-			firstErr = err
-		}
+		note(err)
 		return nil, err
 	}
 
-	var adaptive []bool
+	var adaptive *thresholdMap
 	for _, inverted := range []bool{false, true} {
 		if res, err := try(fastSample(l, w, h, threshold, inverted)); err == nil || errors.Is(err, ErrUnsupported) {
 			return res, err
@@ -120,17 +123,50 @@ func searchImage(img image.Image, cfg decodeConfig, read func([][]bool) (*Decode
 			continue
 		}
 		if adaptive == nil {
-			adaptive = binarizeHybrid(l, w, h)
+			adaptive = hybridThresholds(l, w, h)
 		}
-		bm := adaptive
-		if inverted {
-			bm = invert(adaptive)
-		}
-		if res, err := try(robustSample(bm, w, h)); err == nil || errors.Is(err, ErrUnsupported) {
+		res, err := robustDecode(adaptive, inverted, 1, l, w, h, read)
+		if err == nil || errors.Is(err, ErrUnsupported) {
 			return res, err
 		}
+		note(err)
+	}
+	if cfg.fastPathOnly {
+		return nil, firstErr
+	}
+
+	// Locate at coarser scales. Texture finer than a module, such as a
+	// screen's pixel grid or halftone dots, breaks the finder patterns'
+	// runs at full resolution but averages out at a scale closer to the
+	// module size, as do very large modules that a local threshold splits.
+	// The modules are still read at full resolution.
+	small, sw, sh := l, w, h
+	for scale := 2; min(w, h)/scale >= minScaledSide; scale *= 2 {
+		small, sw, sh = halve(small, sw, sh)
+		res, err := robustDecode(hybridThresholds(small, sw, sh), false, scale, l, w, h, read)
+		if err == nil || errors.Is(err, ErrUnsupported) {
+			return res, err
+		}
+		note(err)
 	}
 	return nil, firstErr
+}
+
+// minScaledSide is the shortest side, in pixels, of the coarsest image the
+// symbol is located in.
+const minScaledSide = 150
+
+// halve returns l downsampled by two with a 2×2 box filter.
+func halve(l []uint8, w, h int) ([]uint8, int, int) {
+	nw, nh := w/2, h/2
+	out := make([]uint8, nw*nh)
+	for y := 0; y < nh; y++ {
+		r0, r1 := l[2*y*w:], l[(2*y+1)*w:]
+		for x := 0; x < nw; x++ {
+			out[y*nw+x] = uint8((int(r0[2*x]) + int(r0[2*x+1]) + int(r1[2*x]) + int(r1[2*x+1]) + 2) / 4)
+		}
+	}
+	return out, nw, nh
 }
 
 // decodeGrid decodes a sampled module grid, retrying it transposed (which is
@@ -173,14 +209,6 @@ func transpose(grid [][]bool) [][]bool {
 		for x := range out[y] {
 			out[y][x] = grid[x][y]
 		}
-	}
-	return out
-}
-
-func invert(bm []bool) []bool {
-	out := make([]bool, len(bm))
-	for i, v := range bm {
-		out[i] = !v
 	}
 	return out
 }
@@ -315,17 +343,6 @@ func lumaPremul(r, g, b, a uint32) uint8 {
 	return uint8((19595*r+38470*g+7471*b+1<<15)>>16 + 255 - a)
 }
 
-// binarizeGlobal thresholds the whole image at the level that best separates
-// its luminance histogram into two classes (Otsu's method).
-func binarizeGlobal(l []uint8, w, h int) []bool {
-	t, _, _ := otsuThreshold(l)
-	out := make([]bool, w*h)
-	for i, v := range l {
-		out[i] = v <= t
-	}
-	return out
-}
-
 // otsuThreshold returns the luminance t that maximizes the between-class
 // variance of the classes [0, t] and (t, 255], and the lowest and highest
 // luminance seen. The histogram is built from every other pixel, which is
@@ -366,23 +383,30 @@ func otsuThreshold(l []uint8) (t, lo, hi uint8) {
 	return uint8(bestT), lo, hi
 }
 
-// binarizeHybrid thresholds each 8x8 block against the average black point
-// of the surrounding 5x5 blocks, after ZXing's HybridBinarizer. Blocks with
-// little contrast take their black point from their neighbors, so large
-// uniform areas such as finder centers and quiet zones keep their class.
-// Small images fall back to the global threshold.
-func binarizeHybrid(l []uint8, w, h int) []bool {
+// hybridThresholds thresholds each 8x8 block against the average black
+// point of the surrounding 5x5 blocks, after ZXing's HybridBinarizer. A
+// block with little contrast, such as the inside of a large module, takes
+// the midpoint of the smallest surrounding window, in powers of two, that
+// has contrast, or failing that its neighbors' black point. Small images
+// take the global threshold. Pixels are classified as they are read, which
+// saves thresholding the many that the finder scan skips and nothing else
+// reads.
+func hybridThresholds(l []uint8, w, h int) *thresholdMap {
 	const (
-		block    = 8
+		block    = thresholdBlock
 		minRange = 24 // below this a block is considered uniform
 	)
 	if w < 5*block || h < 5*block {
-		return binarizeGlobal(l, w, h)
+		t, _, _ := otsuThreshold(l)
+		return &thresholdMap{l: l, w: w, h: h, bw: 1, bh: 1, t: []uint8{t}, global: true}
 	}
 	bw, bh := (w+block-1)/block, (h+block-1)/block
 	origin := func(i, limit int) int { return min(i*block, limit-block) }
 
-	black := make([]int, bw*bh)
+	// Block statistics first; a pyramid of their ranges serves blocks that
+	// have no contrast of their own.
+	type stat struct{ lo, hi, avg int }
+	stats := make([]stat, bw*bh)
 	for by := 0; by < bh; by++ {
 		y0 := origin(by, h)
 		for bx := 0; bx < bw; bx++ {
@@ -394,15 +418,31 @@ func binarizeHybrid(l []uint8, w, h int) []bool {
 					lo, hi = min(lo, int(v)), max(hi, int(v))
 				}
 			}
-			avg := sum / (block * block)
-			if hi-lo <= minRange {
-				// Uniform block: assume it is light unless the neighbors'
-				// black point says otherwise.
-				avg = lo / 2
-				if by > 0 && bx > 0 {
-					nb := (black[(by-1)*bw+bx] + 2*black[by*bw+bx-1] + black[(by-1)*bw+bx-1]) / 4
-					if lo < nb {
-						avg = nb
+			stats[by*bw+bx] = stat{lo, hi, sum / (block * block)}
+		}
+	}
+	pyr := newRangePyramid(bw, bh, func(i int) (int, int) { return stats[i].lo, stats[i].hi })
+
+	black := make([]int, bw*bh)
+	for by := 0; by < bh; by++ {
+		for bx := 0; bx < bw; bx++ {
+			st := stats[by*bw+bx]
+			avg := st.avg
+			if st.hi-st.lo <= minRange {
+				// Uniform block. It may lie inside a module larger than the
+				// thresholding window: take the midpoint of the smallest
+				// surrounding window, in powers of two, that has contrast.
+				if lo, hi, ok := pyr.contrast(bx, by, minRange); ok {
+					avg = (lo + hi) / 2
+				} else {
+					// No contrast anywhere near: assume it is light unless the
+					// neighbors' black point says otherwise.
+					avg = st.lo / 2
+					if by > 0 && bx > 0 {
+						nb := (black[(by-1)*bw+bx] + 2*black[by*bw+bx-1] + black[(by-1)*bw+bx-1]) / 4
+						if st.lo < nb {
+							avg = nb
+						}
 					}
 				}
 			}
@@ -410,28 +450,91 @@ func binarizeHybrid(l []uint8, w, h int) []bool {
 		}
 	}
 
-	out := make([]bool, w*h)
+	thr := make([]uint8, bw*bh)
 	clamp := func(v, n int) int { return max(2, min(v, n-3)) }
 	for by := 0; by < bh; by++ {
-		y0, cy := origin(by, h), clamp(by, bh)
+		cy := clamp(by, bh)
 		for bx := 0; bx < bw; bx++ {
-			x0, cx := origin(bx, w), clamp(bx, bw)
+			cx := clamp(bx, bw)
 			sum := 0
 			for dy := -2; dy <= 2; dy++ {
-				for dx := -2; dx <= 2; dx++ {
-					sum += black[(cy+dy)*bw+cx+dx]
+				for _, b := range black[(cy+dy)*bw+cx-2 : (cy+dy)*bw+cx+3] {
+					sum += b
 				}
 			}
-			t := uint8(sum / 25)
-			for y := y0; y < y0+block; y++ {
-				dst := out[y*w+x0 : y*w+x0+block]
-				for i, v := range l[y*w+x0 : y*w+x0+block] {
-					dst[i] = v <= t
+			thr[by*bw+bx] = uint8(sum / 25)
+		}
+	}
+	return &thresholdMap{l: l, w: w, h: h, bw: bw, bh: bh, t: thr}
+}
+
+// thresholdBlock is the side, in pixels, of the blocks a thresholdMap
+// holds one threshold for.
+const thresholdBlock = 8
+
+// thresholdMap classifies pixels as dark against a threshold per block of
+// thresholdBlock×thresholdBlock pixels, or one global threshold. The last
+// block of a row or column is aligned to the image edge, so it overlaps its
+// neighbor; pixels in the overlap take the last block's threshold.
+type thresholdMap struct {
+	l      []uint8
+	w, h   int
+	bw, bh int
+	t      []uint8
+	global bool
+}
+
+// block returns the block row or column of pixel coordinate v in an extent
+// of n pixels and nb blocks.
+func (m *thresholdMap) block(v, n, nb int) int {
+	if m.global {
+		return 0
+	}
+	if v >= n-thresholdBlock {
+		return nb - 1
+	}
+	return v / thresholdBlock
+}
+
+// dark reports whether pixel (x, y) is dark, and false outside the image.
+func (m *thresholdMap) dark(x, y int) bool {
+	if x < 0 || y < 0 || x >= m.w || y >= m.h {
+		return false
+	}
+	return m.l[y*m.w+x] <= m.t[m.block(y, m.h, m.bh)*m.bw+m.block(x, m.w, m.bw)]
+}
+
+// runs appends to dst the lengths of the runs of one class along row y,
+// alternating light and dark and starting with light (of length zero when
+// the row starts dark), and returns it.
+func (m *thresholdMap) runs(y int, inverted bool, dst []int) []int {
+	src := m.l[y*m.w : (y+1)*m.w]
+	t := m.t[m.block(y, m.h, m.bh)*m.bw:]
+	prev, start := false, 0
+	if m.global {
+		for x, v := range src {
+			if d := (v <= t[0]) != inverted; d != prev {
+				dst = append(dst, x-start)
+				prev, start = d, x
+			}
+		}
+	} else {
+		tail := m.w - thresholdBlock
+		for bx := 0; bx < m.bw; bx++ {
+			x0, x1 := bx*thresholdBlock, min((bx+1)*thresholdBlock, tail)
+			if bx == m.bw-1 {
+				x0, x1 = tail, m.w
+			}
+			tb := t[bx]
+			for x := x0; x < x1; x++ {
+				if d := (src[x] <= tb) != inverted; d != prev {
+					dst = append(dst, x-start)
+					prev, start = d, x
 				}
 			}
 		}
 	}
-	return out
+	return append(dst, m.w-start)
 }
 
 // JoinStructuredAppend reassembles the message of a structured append
@@ -479,17 +582,21 @@ func JoinStructuredAppend(parts ...*DecodeResult) (string, error) {
 // The finder spans 7 of at least 21 modules, so a run sequence wider than a
 // third of the symbol is not the finder, even if its ratios match: the top
 // row 7:5:9:5:7 (the finder edge, then data) fits 1:1:3:1:1 within the
-// ratio tolerance at about five times the real pitch.
+// ratio tolerance at about five times the real pitch. For the same reason
+// only the top third of the rows can cross the finder, and each row is
+// followed no further than a third of the width.
 func finderPitch(dark func(x, y int) bool, minX, minY, maxX, maxY int) (float64, bool) {
 	maxTotal := (maxX-minX+1)/3 + 1
+	maxY = min(maxY, minY+(maxY-minY+1)/3+1)
+	stopX := min(maxX, minX+maxTotal)
 	var totals []int
-	for y := minY; y <= minY+(maxY-minY)/2; y++ {
+	for y := minY; y <= maxY; y++ {
 		if !dark(minX, y) {
 			continue
 		}
 		var s [5]int
 		state, x := 0, minX
-		for ; x <= maxX && state < 5; x++ {
+		for ; x <= stopX && state < 5; x++ {
 			if dark(x, y) != (state%2 == 0) {
 				state++
 				if state == 5 {
@@ -498,7 +605,7 @@ func finderPitch(dark func(x, y int) bool, minX, minY, maxX, maxY int) (float64,
 			}
 			s[state]++
 		}
-		complete := state == 5 || (state == 4 && x > maxX)
+		complete := state == 5 || (state == 4 && x > stopX && stopX == maxX)
 		total := s[0] + s[1] + s[2] + s[3] + s[4]
 		if _, ok := checkFinderRatio(s); complete && ok && total <= maxTotal {
 			totals = append(totals, total)
