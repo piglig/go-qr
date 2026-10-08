@@ -129,13 +129,20 @@ go run .          # serves http://localhost:8080
 - Keep each pull request to one logical change; large features can be split
   into several.
 - Titles follow [Conventional Commits](https://www.conventionalcommits.org/),
-  which CI checks: `feat:`, `fix:`, `refactor:`, `docs:`, `style:`,
-  `test:` or `chore:`, with `!` for breaking changes, for example
-  `fix: keep GS1 separators unambiguous`.
+  which CI checks: `feat:`, `fix:`, `perf:`, `refactor:`, `docs:`,
+  `style:`, `test:`, `ci:` or `chore:`, with an optional scope and `!` for
+  breaking changes, for example `fix(decode): keep GS1 separators
+  unambiguous`.
+- `feat`, `fix` and `perf` pull requests must add an entry under
+  `[Unreleased]` in `CHANGELOG.md`; CI fails without one. A maintainer can
+  add the `skip-changelog` label for changes users do not notice.
 - Describe what changed and why, how you tested it, and any performance
   impact.
 - CI must pass: tests with `-race` on several Go versions, vet, gofmt,
-  staticcheck, govulncheck, fuzzing and coverage.
+  staticcheck, govulncheck, fuzzing and coverage, and `tools` and `mcp`
+  built against the library release they pin. A change there that needs
+  unreleased library code waits until the library is released and the pin
+  is bumped.
 
 Pull requests are squash-merged, so the title becomes the commit message.
 
@@ -151,6 +158,12 @@ Maintainers release from `main`:
    version in `tools/go.mod` and `mcp/go.mod` in a separate pull request,
    then tag `tools/vX.Y.Z` and `mcp/vX.Y.Z`. Always release the library
    first: these modules must build against a published version.
+
+## AI coding assistants
+
+Contributions written with AI assistants are welcome, under the same rules.
+[AGENTS.md](AGENTS.md) states these rules for assistants; Claude Code reads
+it through `CLAUDE.md`, and most other assistants read it directly.
 
 ## Code of conduct
 

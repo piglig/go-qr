@@ -1,0 +1,39 @@
+name: Pull request
+
+on:
+  pull_request:
+    branches: [ "main" ]
+    types: [ opened, synchronize, reopened, edited, labeled, unlabeled ]
+
+permissions:
+  contents: read
+
+jobs:
+  changelog:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # feat, fix and perf change what users get, so they need an entry under
+      # [Unreleased]. Other types, and PRs labeled skip-changelog, are exempt.
+      - name: CHANGELOG has an Unreleased entry
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+          SKIP: ${{ contains(github.event.pull_request.labels.*.name, 'skip-changelog') }}
+        run: |
+          if [ "$SKIP" = true ]; then
+            echo "Labeled skip-changelog."; exit 0
+          fi
+          if ! echo "$TITLE" | grep -qE '^(feat|fix|perf)(\([^)]*\))?!?:'; then
+            echo "Title type needs no changelog entry."; exit 0
+          fi
+          unreleased() { awk '/^## \[Unreleased\]/{on=1; next} /^## \[/{on=0} on'; }
+          before=$(git show "$BASE:CHANGELOG.md" | unreleased)
+          after=$(unreleased < CHANGELOG.md)
+          if [ "$before" = "$after" ]; then
+            echo "::error file=CHANGELOG.md::A $(echo "$TITLE" | cut -d: -f1) change needs an entry under [Unreleased] in CHANGELOG.md, or the skip-changelog label."
+            exit 1
+          fi
