@@ -54,7 +54,11 @@ func robustDecode(bm []bool, w, h, scale int, l []uint8, lw, lh int, inverted bo
 		}
 		return bm[y*w+x]
 	}
-	triples, err := findFinders(bm, dark, w, h)
+	step := 1
+	if scale == 1 {
+		step = finderRowStep(w * h)
+	}
+	triples, err := findFindersStep(bm, dark, w, h, step)
 	if err != nil {
 		return nil, err
 	}
@@ -449,6 +453,29 @@ func (s scaledMapper) apply(u, v float64) (float64, float64) {
 // triples that best fit one symbol, best first. The row scan reads bm
 // directly; dark (bounds-checked) serves the cross checks.
 func findFinders(bm []bool, dark func(x, y int) bool, w, h int) ([][3]finderPattern, error) {
+	return findFindersStep(bm, dark, w, h, 1)
+}
+
+// finderRowStep returns how many rows apart the finder scan runs in an image
+// of px pixels. A finder's center block is three modules tall, so every
+// third row still crosses it at 1.5 pixels per module, but foreshortening
+// and tiny modules leave few rows to spare. Scanning costs grow with the
+// image, so small images, which are cheap, are scanned on every row; large
+// photos, whose symbols are rarely that small, every second or third. The
+// coarser scales of the search are small and scanned on every row.
+func finderRowStep(px int) int {
+	switch {
+	case px >= 4_000_000:
+		return 3
+	case px >= 1_000_000:
+		return 2
+	}
+	return 1
+}
+
+// findFindersStep is findFinders scanning every step-th row; each hit then
+// counts for step rows in a candidate's support.
+func findFindersStep(bm []bool, dark func(x, y int) bool, w, h, step int) ([][3]finderPattern, error) {
 	var cands []finderPattern
 
 	add := func(cx, cy, module float64) {
@@ -458,15 +485,15 @@ func findFinders(bm []bool, dark func(x, y int) bool, w, h int) ([][3]finderPatt
 				cands[i].x = (cands[i].x*n + cx) / (n + 1)
 				cands[i].y = (cands[i].y*n + cy) / (n + 1)
 				cands[i].moduleSize = (cands[i].moduleSize*n + module) / (n + 1)
-				cands[i].count++
+				cands[i].count += step
 				return
 			}
 		}
-		cands = append(cands, finderPattern{x: cx, y: cy, moduleSize: module, count: 1})
+		cands = append(cands, finderPattern{x: cx, y: cy, moduleSize: module, count: step})
 	}
 
 	var s [5]int
-	for y := 0; y < h; y++ {
+	for y := step / 2; y < h; y += step {
 		s = [5]int{}
 		state := 0
 		for x, d := range bm[y*w : (y+1)*w] {
