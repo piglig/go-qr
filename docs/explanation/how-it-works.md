@@ -61,7 +61,8 @@ image ──► luminance ──► threshold ──► locate ──► fit gri
 
 1. **Luminance** (`decode.go`). Pixels are converted to 8-bit luminance,
    compositing transparency over white, with fast paths for the common image
-   types.
+   types. The luminance of gray images and the luma plane of JPEG's YCbCr
+   images are used in place.
 2. **Fast path.** For crisp, axis-aligned images, an Otsu threshold
    separates dark from light, the bounding box of dark pixels gives the
    symbol, and the runs across the top-left finder give the module pitch.
@@ -151,7 +152,7 @@ scanning after three candidates. Rarely, under 1% of symbols, data above the
 bottom-left finder is mistaken for a finder by such readers. Avoiding it
 would change the mask of almost half of all symbols and slow encoding 1.3 to
 2.4×, so the library keeps the standard's choice. See
-[Troubleshooting](../troubleshooting.md).
+[Troubleshooting](../guides/troubleshooting.md).
 
 **No dependencies.** Image formats, compression and color handling come from
 the standard library, so the module adds nothing to a user's dependency

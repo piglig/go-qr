@@ -37,11 +37,11 @@
 - **A decoder that reads photos.** Perspective, lens distortion, glare,
   photos of screens and codes with a damaged finder pattern. It reads about
   as many real photos as zxing-cpp and more than WeChat, ZBar and gozxing
-  ([comparison](docs/performance.md#reading-photos)).
+  ([comparison](docs/explanation/performance.md#reading-photos)).
 - **Fast and dependency-free.** Only the standard library. Encoding is about
   3× faster than [skip2/go-qrcode] and decoding about 7× faster than
   [gozxing], with orders of magnitude fewer allocations
-  ([benchmarks](docs/performance.md)).
+  ([benchmarks](docs/explanation/performance.md)).
 
 ## Install
 
@@ -49,7 +49,7 @@
 go get github.com/piglig/go-qr/v2
 ```
 
-Requires Go 1.23 or later. Upgrading from v1? See [Upgrading to v2](docs/upgrading-to-v2.md).
+Requires Go 1.23 or later. Upgrading from v1? See [Upgrading to v2](docs/guides/upgrading-to-v2.md).
 
 ## Quick start
 
@@ -93,9 +93,9 @@ styled, verified code in a few minutes.
 | | |
 | --- | --- |
 | **Tutorial** | [Getting started](docs/getting-started.md) |
-| **Guides** | [Encoding](docs/guides/encoding.md) · [Rendering](docs/guides/rendering.md) · [Styling](docs/guides/styling.md) · [Decoding](docs/guides/decoding.md) · [Payloads](docs/guides/payloads.md) · [Batch processing](docs/guides/batch.md) · [Command-line tool](docs/guides/cli.md) · [AI assistants (MCP)](docs/guides/mcp.md) |
-| **Reference** | [API on pkg.go.dev](https://pkg.go.dev/github.com/piglig/go-qr/v2) · [Errors](docs/reference/errors.md) · [Standards support](docs/reference/standards.md) |
-| **Background** | [How it works](docs/explanation/how-it-works.md) · [Performance](docs/performance.md) · [Troubleshooting](docs/troubleshooting.md) |
+| **Guides** | [Encoding](docs/guides/encoding.md) · [Rendering](docs/guides/rendering.md) · [Styling](docs/guides/styling.md) · [Decoding](docs/guides/decoding.md) · [Payloads](docs/guides/payloads.md) · [Batch processing](docs/guides/batch.md) · [Troubleshooting](docs/guides/troubleshooting.md) · [Command-line tool](docs/guides/cli.md) · [AI assistants (MCP)](docs/guides/mcp.md) |
+| **Reference** | [API on pkg.go.dev](https://pkg.go.dev/github.com/piglig/go-qr/v2) · [Errors](docs/reference/errors.md) · [Standards support](docs/reference/standards.md) · [Changelog](CHANGELOG.md) |
+| **Background** | [How it works](docs/explanation/how-it-works.md) · [Performance](docs/explanation/performance.md) |
 
 ## Command-line tool
 

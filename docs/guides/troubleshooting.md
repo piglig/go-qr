@@ -18,7 +18,7 @@ It reports the most common causes directly:
 - **Inverted colors.** Light modules on a dark background are rejected by
   many scanners. Swap the colors.
 - **Logo too large.** Use `qr.WithECC(qr.ECCHigh)` and a ratio around 0.2;
-  see [Logos](guides/rendering.md#logos).
+  see [Logos](rendering.md#logos).
 
 If `Verify` passes but a printed code does not scan:
 
@@ -48,7 +48,7 @@ for m := 0; m < 8; m++ {
 ```
 
 The library does not do this automatically because it would slow every
-encode by up to 2.4×; see [How it works](explanation/how-it-works.md#design-decisions).
+encode by up to 2.4×; see [How it works](../explanation/how-it-works.md#design-decisions).
 With gozxing, the `PURE_BARCODE` hint also reads these symbols, but it does
 not accept rounded or circular finders.
 
@@ -62,8 +62,9 @@ not accept rounded or circular finders.
 - **Large codes.** Version 20 and larger codes in photos decode less often
   than small ones; lens distortion bends their grid. Fill more of the frame
   with the code and keep it near the center.
-- **Very large images.** Downscale to about 1,000 pixels on the long side;
-  this is faster and often more reliable.
+- **Very large images.** No need to downscale: the decoder searches reduced
+  scales itself and reads modules at full resolution. A 12-megapixel photo
+  takes about 50 ms.
 - **Several codes.** Only one is read. Crop the image to the code you want.
 
 ## The text has wrong characters
@@ -79,6 +80,6 @@ not accept rounded or circular finders.
 
 The `generator` tool is released separately and pins a library release, so
 options added to the library after that release are not flags yet. Check
-`generator version` against the [CLI guide](guides/cli.md), use the library
+`generator version` against the [CLI guide](cli.md), use the library
 directly, or build the tool from a checkout with a workspace (see
-[CONTRIBUTING.md](../CONTRIBUTING.md)).
+[CONTRIBUTING.md](../../CONTRIBUTING.md)).

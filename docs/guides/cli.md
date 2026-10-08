@@ -8,8 +8,8 @@ go install github.com/piglig/go-qr/tools/generator@latest
 
 The tool lives in its own module, `github.com/piglig/go-qr/tools`, which is
 versioned separately (`tools/v1.x`) and pins a released version of the
-library. tools/v1.1.0 is built on library v2.2.0 and supports all of its
-options.
+library. `go version -m $(go env GOPATH)/bin/generator` shows which library
+version an installed binary was built with.
 
 ```
 generator <command> [flags] [args]
