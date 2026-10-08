@@ -1,0 +1,27 @@
+{
+  "name": "main",
+  "target": "branch",
+  "enforcement": "active",
+  "conditions": { "ref_name": { "include": ["~DEFAULT_BRANCH"], "exclude": [] } },
+  "rules": [
+    { "type": "deletion" },
+    { "type": "non_fast_forward" },
+    { "type": "pull_request", "parameters": {
+        "required_approving_review_count": 0, "dismiss_stale_reviews_on_push": false,
+        "require_code_owner_review": false, "require_last_push_approval": false,
+        "required_review_thread_resolution": false, "allowed_merge_methods": ["squash"] } },
+    { "type": "required_status_checks", "parameters": {
+        "strict_required_status_checks_policy": false,
+        "required_status_checks": [
+          { "context": "test (go oldstable)", "integration_id": 15368 },
+          { "context": "test (go stable)", "integration_id": 15368 },
+          { "context": "test (go.mod minimum)", "integration_id": 15368 },
+          { "context": "test (tools and mcp on the pinned library)", "integration_id": 15368 },
+          { "context": "vulncheck", "integration_id": 15368 },
+          { "context": "changelog", "integration_id": 15368 },
+          { "context": "regression", "integration_id": 15368 },
+          { "context": "claude-hook", "integration_id": 15368 },
+          { "context": "Semantic PR" } ] } }
+  ],
+  "bypass_actors": []
+}

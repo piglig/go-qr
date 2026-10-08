@@ -9,6 +9,13 @@ permissions:
   contents: read
 
 jobs:
+  claude-hook:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test the release guard hook
+        run: bash .claude/hooks/guard-release_test.sh
+
   changelog:
     runs-on: ubuntu-latest
     steps:
