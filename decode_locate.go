@@ -489,9 +489,9 @@ func findFindersStep(tm *thresholdMap, inverted bool, dark func(x, y int) bool, 
 		cands = append(cands, finderPattern{x: cx, y: cy, moduleSize: module, count: step})
 	}
 
-	// Each scanned row is read as runs of one class; whenever a dark run
-	// ends, the last five runs (dark, light, dark, light, dark) are tested
-	// for 1:1:3:1:1. x is the first light pixel after them.
+	// Each scanned row is read as runs of one class, and every five runs
+	// dark, light, dark, light, dark are tested for 1:1:3:1:1. x is the
+	// first light pixel after them.
 	check := func(s [5]int, x, y int) {
 		module, ok := checkFinderRatio(s)
 		if !ok {
@@ -509,26 +509,18 @@ func findFindersStep(tm *thresholdMap, inverted bool, dark func(x, y int) bool, 
 			}
 		}
 	}
+	var runs []int
 	for y := step / 2; y < h; y += step {
-		var runs [5]int // the last five runs, oldest first
-		n := 0          // runs seen in this row, up to 5
-		prev, start := false, 0
-		tm.scanRow(y, inverted, func(x int, d bool) {
-			// A run of class prev ended at x; d starts the next one.
-			length := x - start
-			start = x
-			if length > 0 {
-				copy(runs[:], runs[1:])
-				runs[4] = length
-				n = min(n+1, 5)
-				// The run that ended is dark when the next one is light; a
-				// row starts light, so dark runs fill the odd slots.
-				if prev && !d && n == 5 {
-					check(runs, x, y)
-				}
+		runs = tm.runs(y, inverted, runs[:0])
+		// runs alternate light, dark, ..., so dark runs have odd indices;
+		// each is tested with the four runs before it.
+		x := 0
+		for i, n := range runs {
+			x += n
+			if i >= 5 && i%2 == 1 {
+				check([5]int(runs[i-4:i+1]), x, y)
 			}
-			prev = d
-		})
+		}
 	}
 
 	return selectFinders(cands)

@@ -504,18 +504,18 @@ func (m *thresholdMap) dark(x, y int) bool {
 	return m.l[y*m.w+x] <= m.t[m.block(y, m.h, m.bh)*m.bw+m.block(x, m.w, m.bw)]
 }
 
-// scanRow calls edge(x, d) for each pixel x of row y whose class d differs
-// from the pixel before it, starting from light before the row, and once
-// more at the end of the row with d light.
-func (m *thresholdMap) scanRow(y int, inverted bool, edge func(x int, d bool)) {
+// runs appends to dst the lengths of the runs of one class along row y,
+// alternating light and dark and starting with light (of length zero when
+// the row starts dark), and returns it.
+func (m *thresholdMap) runs(y int, inverted bool, dst []int) []int {
 	src := m.l[y*m.w : (y+1)*m.w]
 	t := m.t[m.block(y, m.h, m.bh)*m.bw:]
-	prev := false
+	prev, start := false, 0
 	if m.global {
 		for x, v := range src {
 			if d := (v <= t[0]) != inverted; d != prev {
-				edge(x, d)
-				prev = d
+				dst = append(dst, x-start)
+				prev, start = d, x
 			}
 		}
 	} else {
@@ -528,15 +528,13 @@ func (m *thresholdMap) scanRow(y int, inverted bool, edge func(x int, d bool)) {
 			tb := t[bx]
 			for x := x0; x < x1; x++ {
 				if d := (src[x] <= tb) != inverted; d != prev {
-					edge(x, d)
-					prev = d
+					dst = append(dst, x-start)
+					prev, start = d, x
 				}
 			}
 		}
 	}
-	if prev {
-		edge(m.w, false)
-	}
+	return append(dst, m.w-start)
 }
 
 // JoinStructuredAppend reassembles the message of a structured append
