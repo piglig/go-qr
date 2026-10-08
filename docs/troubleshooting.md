@@ -57,8 +57,11 @@ not accept rounded or circular finders.
 - **Taken at a steep angle.** The decoder corrects perspective up to about
   50° of tilt. Beyond that, or for a large code near the edge of a
   wide-angle photo, hold the camera more squarely to the code.
-- **Modules too small.** Each module needs about 2 to 3 pixels. Move closer
-  or crop the image around the code instead of downscaling it.
+- **Modules too small.** Each module needs about 2 pixels. Move closer or
+  crop the image around the code instead of downscaling it.
+- **Large codes.** Version 20 and larger codes in photos decode less often
+  than small ones; lens distortion bends their grid. Fill more of the frame
+  with the code and keep it near the center.
 - **Very large images.** Downscale to about 1,000 pixels on the long side;
   this is faster and often more reliable.
 - **Several codes.** Only one is read. Crop the image to the code you want.

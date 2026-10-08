@@ -188,3 +188,41 @@ func TestDecodeMissingFinder(t *testing.T) {
 		}
 	}
 }
+
+// TestPerspectiveFallback covers the fallback for finders whose corners
+// cannot be measured: transforms anchored on the alignment pattern, the
+// finder edges or the parallelogram of the finder centers.
+func TestPerspectiveFallback(t *testing.T) {
+	for _, n := range []int{11, 120} {
+		text := strings.Repeat("f", n)
+		code := mustEncode(t, text)
+		img := mustImage(t, code, WithScale(8))
+		w := float64(img.Bounds().Dx())
+		q := [4][2]float64{{0.1 * w, 0.12 * w}, {0.9 * w, 0.05 * w}, {0.95 * w, 0.95 * w}, {0.05 * w, 0.88 * w}}
+		warped := warpPerspective(img, q, int(w), int(w))
+		b := warped.Bounds()
+		l := toLuma(warped)
+		tm := hybridThresholds(l, b.Dx(), b.Dy())
+		triples, err := findFinders(tm, false, tm.dark)
+		if err != nil {
+			t.Fatal(err)
+		}
+		g, err := newSymbolGeometry(tm.dark, triples[0])
+		if err != nil {
+			t.Fatal(err)
+		}
+		ps := g.transforms(tm.dark)
+		if code.Version() > 1 && len(ps) != 2 {
+			t.Errorf("version %d: %d transforms, want the alignment pattern and the edges", code.Version(), len(ps))
+		}
+		decoded := false
+		for _, p := range ps {
+			if res, err := decodeGrid(readModules(l, b.Dx(), b.Dy(), p, g.dim, false)); err == nil && res.Text == text {
+				decoded = true
+			}
+		}
+		if !decoded {
+			t.Errorf("version %d: no fallback transform decodes", code.Version())
+		}
+	}
+}

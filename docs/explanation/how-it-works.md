@@ -56,7 +56,7 @@ All renderers work from `Code.Module(x, y)` and the same `renderConfig`
 ## Decoding
 
 ```
-image ──► luminance ──► binarize ──► locate ──► sample grid ──► format/version ──► unmask ──► RS correct ──► segments
+image ──► luminance ──► threshold ──► locate ──► fit grid ──► read modules ──► format/version ──► unmask ──► RS correct ──► segments
 ```
 
 1. **Luminance** (`decode.go`). Pixels are converted to 8-bit luminance,
@@ -65,11 +65,16 @@ image ──► luminance ──► binarize ──► locate ──► sample g
 2. **Fast path.** For crisp, axis-aligned images, an Otsu threshold
    separates dark from light, the bounding box of dark pixels gives the
    symbol, and the runs across the top-left finder give the module pitch.
-3. **Robust path** (`decode_locate.go`). A ZXing-style hybrid binarizer
-   thresholds each 8×8 block against its neighborhood, which copes with
-   shadows and low contrast. Finder candidates are found by their 1:1:3:1:1
-   runs, confirmed vertically and horizontally, and the three that best form
-   a right isosceles triangle are chosen.
+3. **Robust path** (`decode_locate.go`). A ZXing-style hybrid threshold
+   per 8×8 block against its neighborhood copes with shadows and low
+   contrast; a block with no contrast of its own, such as the inside of a
+   large module, takes the midpoint of the smallest surrounding window, in
+   powers of two, that has contrast. Pixels are compared with their block's
+   threshold only when read. Finder candidates are found by their 1:1:3:1:1
+   runs along every row, or every second or third row of large photos,
+   confirmed vertically and horizontally; triples are ranked by how well
+   they form a right isosceles triangle and by how many rows confirm each
+   finder relative to its size.
    Module sizes are measured along the symbol's edges, not the image axes,
    so rotation does not distort them. For version 7 and up, the version
    information blocks near the finders give the exact size.
@@ -84,15 +89,28 @@ image ──► luminance ──► binarize ──► locate ──► sample g
    of them, a cubic polynomial correction for lens distortion is fitted
    too, and kept only if the fixed patterns read back better with it. If
    the timing patterns of the best triple do not read back, the other
-   finder assignments and triples are fitted and the best kept: the grid
-   is decoded once. Round finder styles, whose edges are not straight, fall
-   back to a perspective transform anchored on the alignment pattern or the
-   finder edges. Each module is a majority vote of five points in a
-   cross.
-5. **Retries.** Both paths run on the image as is and inverted, and each
+   finder assignments and triples are fitted and the best kept. If none
+   reads back well, pairs of well-confirmed finders imply the third, which
+   glare, damage or the image edge may hide: each hypothesis is fitted the
+   same way, with the inferred finder's center as a weighted guess, and
+   the best replaces the triples' fit only if it reads back clearly
+   better. The grid is decoded once. Round finder styles, whose edges are
+   not straight, fall back to a perspective transform anchored on the
+   alignment pattern or the finder edges.
+5. **Module reading** (`decode_gray.go`). Each module's luminance is the
+   mean of nine samples over its center, bilinear for modules of three
+   pixels or more, and it is dark when darker than the mean of a window of
+   modules around it. The window is measured in modules, not pixels, so it
+   suits any module size and follows uneven lighting.
+6. **Scales.** If the full-resolution search finds nothing, the image is
+   halved repeatedly down to 150 pixels and searched again. Texture finer
+   than a module, such as a screen's pixel grid or halftone dots, averages
+   out, and a module that a local threshold split becomes a few pixels.
+   Modules are read at full resolution.
+7. **Retries.** Both paths run on the image as is and inverted, and each
    sampled grid is also decoded transposed, which is how a mirror image
    samples.
-5. **Matrix and bitstream** (`decode_matrix.go`, `decode_segments.go`). The
+8. **Matrix and bitstream** (`decode_matrix.go`, `decode_segments.go`). The
    format information is BCH-corrected, the mask removed, codewords read in
    the placement order, blocks de-interleaved and Reed–Solomon corrected, and
    the segments parsed, applying ECI character sets, GS1 and structured

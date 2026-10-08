@@ -10,8 +10,10 @@ import "math"
 // blocks see only one class inside a large module, and the threshold
 // degenerates. Reading in module space removes the pixel scale altogether:
 //
-//  1. Each module's luminance is the mean of nine bilinear samples over its
-//     central 30%, which also averages out blur and sensor noise.
+//  1. Each module's luminance is the mean of nine samples over its central
+//     30%, which also averages out blur and sensor noise. The samples are
+//     bilinear, or the nearest pixel in modules under three pixels, where
+//     interpolation would blend in the neighbors.
 //  2. A module is dark when it is darker than the mean of the modules
 //     around it, within a window measured in modules. Data modules are
 //     close to half dark by design (masking balances them), so the window
