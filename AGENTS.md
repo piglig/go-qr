@@ -71,14 +71,16 @@ Update these in the same pull request as the code:
 
 ## Releases
 
-Never create tags or GitHub releases yourself, and never push to `main`.
-Releases follow the steps in [CONTRIBUTING.md](CONTRIBUTING.md#releases)
-and are started only when a maintainer asks.
+Never create tags or GitHub releases, and never push to `main`; tags are
+protected and only the release workflow creates them. Start a release only
+when a maintainer asks, and then only through the steps in
+[CONTRIBUTING.md](CONTRIBUTING.md#releases):
 
-- The library is released before `tools` and `mcp`: they must build
-  against a published library version, which CI checks.
-- After a library release, bump the pin in `tools/go.mod` and `mcp/go.mod`
-  so the CLI and the MCP server ship the change.
+- the library: `scripts/release.sh` to see the suggested version, then
+  `scripts/release.sh X.Y.Z` to open the release pull request;
+- `tools` and `mcp`: merging the Dependabot pull request that bumps their
+  library pin releases them. Do not add CHANGELOG entries for these bumps;
+  their releases carry their own notes.
 
 ## Data and licenses
 

@@ -148,16 +148,31 @@ Pull requests are squash-merged, so the title becomes the commit message.
 
 ## Releases
 
-Maintainers release from `main`:
+Releases are made from `main` by the
+[release workflow](.github/workflows/release.yml); version tags are
+protected, so nobody creates them by hand.
 
-1. Move the `[Unreleased]` CHANGELOG entries under a new version heading,
-   in a `chore: release vX.Y.Z` pull request.
-2. After it merges, tag the merge commit `vX.Y.Z`, push the tag and create a
-   GitHub release from the CHANGELOG section.
-3. To ship library changes in the CLI and the MCP server, bump the library
-   version in `tools/go.mod` and `mcp/go.mod` in a separate pull request,
-   then tag `tools/vX.Y.Z` and `mcp/vX.Y.Z`. Always release the library
-   first: these modules must build against a published version.
+**The library.** A maintainer runs `scripts/release.sh` on an up-to-date
+`main`. Without arguments it suggests the next version: a minor release
+when `[Unreleased]` has *Added*, *Changed*, *Deprecated* or *Removed*
+entries, a patch release otherwise. `scripts/release.sh X.Y.Z` then opens
+the `chore: release vX.Y.Z` pull request that moves the entries under the
+new version. It refuses a version that skips one, and *Since* markers in
+the docs that name a later release. When the pull request is merged, the
+workflow tests the merge commit, tags it `vX.Y.Z` and publishes the GitHub
+release from the CHANGELOG section.
+
+**The CLI and the MCP server.** `tools` and `mcp` pin a released library
+version. After a library release, Dependabot opens one pull request bumping
+both pins. When it is merged, the workflow tests each module against the
+new pin, tags the next patch versions `tools/vX.Y.Z` and `mcp/vX.Y.Z`, and
+publishes their releases, listing the changes to each module since its
+last release. To release changes to these modules without a library
+release, such as a new CLI flag, run the workflow by hand from the Actions
+tab, choosing the module and a patch or minor version.
+
+The library is always released first: `tools` and `mcp` must build against
+a published version, which CI checks on every pull request.
 
 ## AI coding assistants
 

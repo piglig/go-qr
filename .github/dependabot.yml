@@ -1,0 +1,29 @@
+version: 2
+updates:
+  # tools and mcp pin a released library. When the library is released,
+  # Dependabot opens one pull request bumping both pins; merging it releases
+  # new tools and mcp versions (release.yml).
+  - package-ecosystem: gomod
+    directories: [ "/tools", "/mcp" ]
+    schedule:
+      interval: daily
+    allow:
+      - dependency-name: github.com/piglig/go-qr/v2
+    groups:
+      go-qr:
+        patterns: [ "github.com/piglig/go-qr/v2" ]
+        group-by: dependency-name
+    commit-message:
+      prefix: chore
+      include: scope
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: [ "*" ]
+    commit-message:
+      prefix: chore
+      include: scope

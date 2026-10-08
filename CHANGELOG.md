@@ -7,13 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Changed
-
-- The `generator` CLI (tools/v1.1.4) and `go-qr-mcp` (mcp/v0.1.3) are built
-  on v2.5.0: they read undeclared Shift_JIS and Windows-1252 text with the
-  new character set model, and decode large photos with a tenth of the
-  memory.
-
 ## [2.5.0] - 2026-10-08
 
 ### Performance
