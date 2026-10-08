@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Performance
+
+- `Decode` uses the luminance of `*image.Gray` images and the luma plane of
+  `*image.YCbCr` images, which `image/jpeg` returns, in place instead of
+  copying it, and keeps its per-block statistics in bytes. Decoding a
+  12-megapixel photo allocates 2 MB instead of 25 MB, a 48-megapixel one
+  8 MB instead of 98 MB.
+- The finder scan rejects run sequences whose center is not the longest
+  before testing their ratios, which saves 10% on images without a code.
+
 ### Changed
 
 - Byte segments without an ECI that are not UTF-8 are read by a model of
