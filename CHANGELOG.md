@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.4.1] - 2026-10-08
+
 ### Fixed
 
 - `Decode` read byte segments in Shift_JIS without an ECI, which Japanese
