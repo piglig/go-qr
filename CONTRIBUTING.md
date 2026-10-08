@@ -91,19 +91,37 @@ go test -run='^$' -fuzz='^FuzzEncode$' -fuzztime=2m .
 Commit any failing input that the fuzzer writes under `testdata/fuzz/` as a
 regression test, together with the fix.
 
-### Performance
+### Performance and accuracy
 
-Changes to hot paths need before-and-after numbers. Benchmark both versions
-on the same machine, several runs each, for example with
-[benchstat](https://pkg.go.dev/golang.org/x/perf/cmd/benchstat):
+The regression check in CI runs on every pull request that changes Go code.
+It benchmarks the library at the pull request and at its base on the same
+runner, alternating the two, and runs the synthetic distortion sweeps of
+[tools/bench](tools/bench) for both. It fails when:
+
+- a benchmark allocates more, by more than 5% or 2 allocations, or is more
+  than 25% slower;
+- a sweep point decodes more than one image fewer, the sweeps decode fewer
+  images in total, or a sweep decodes any image wrongly that it did not
+  before.
+
+The comparison tables are in the job summary. A measured trade-off, such as
+a feature that costs some speed, can be accepted by a maintainer with the
+`accept-regression` label; explain it in the pull request.
+
+CI runners are noisy, so for hot paths also measure on your own machine:
+build the base in a separate `git worktree`, alternate several runs of each
+version, and compare them, for example with
+[benchstat](https://pkg.go.dev/golang.org/x/perf/cmd/benchstat) or
+`go run ./regress bench old.txt new.txt` in `tools`:
 
 ```shell
-go test -run='^$' -bench=. -benchmem -count=10 . > new.txt
+go test -run='^$' -bench=Decode -benchmem -count=10 . > new.txt
 ```
 
-Comparisons with other libraries are in [tools/bench](tools/bench); see
-[Performance](docs/explanation/performance.md). A change that makes the default path
-noticeably slower needs a strong reason, or should be opt-in.
+Decoder changes should also be checked on real photos, which CI cannot
+hold: see `TestBoofCV` in [tools/bench](tools/bench) and
+[Performance](docs/explanation/performance.md). A change that makes the
+default path noticeably slower needs a strong reason, or should be opt-in.
 
 ### Documentation
 

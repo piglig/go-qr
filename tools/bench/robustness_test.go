@@ -1,10 +1,12 @@
 package bench
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"image"
 	"math/rand"
+	"os"
 	"strings"
 	"testing"
 
@@ -13,7 +15,11 @@ import (
 	"github.com/piglig/go-qr/v2"
 )
 
-var sweep = flag.Bool("sweep", false, "run the decoder robustness sweeps")
+var (
+	sweep       = flag.Bool("sweep", false, "run the decoder robustness sweeps")
+	sweepNative = flag.Bool("sweep-native", false, "run the sweeps for go-qr only")
+	sweepOut    = flag.String("sweep-out", "", "write go-qr's decode counts per sweep point as JSON to this file")
+)
 
 // sweepSymbols spans versions with no alignment pattern (1), one (3), version
 // information (7) and several alignment patterns (14).
@@ -59,6 +65,12 @@ func TestRobustness(t *testing.T) {
 		decode func(image.Image) (string, error)
 	}
 	impls := []impl{{"go-qr", decodeNative}, {"gozxing", decodeGozxingHarder}}
+	if *sweepNative {
+		impls = impls[:1]
+	}
+	// counts holds go-qr's correct decodes per "axis=value" and its wrong
+	// decodes per "axis wrong", for comparing two versions.
+	counts := map[string]int{}
 
 	srcs := make([]*image.Gray, len(sweepSymbols))
 	versions := make([]int, len(sweepSymbols))
@@ -129,6 +141,10 @@ func TestRobustness(t *testing.T) {
 				}
 			}
 		}
+		for vi, v := range ax.values {
+			counts[fmt.Sprintf("%s=%g", ax.name, v)] = pass[0][vi]
+		}
+		counts[ax.name+" wrong"] = wrong[0]
 		for i, im := range impls {
 			fmt.Fprintf(&b, "\n  %-17s", im.name)
 			for vi := range ax.values {
@@ -145,6 +161,15 @@ func TestRobustness(t *testing.T) {
 			}
 		}
 		t.Log(b.String())
+	}
+	if *sweepOut != "" {
+		out, err := json.MarshalIndent(counts, "", "  ")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(*sweepOut, out, 0o644); err != nil {
+			t.Fatal(err)
+		}
 	}
 }
 

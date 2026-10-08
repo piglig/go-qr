@@ -8,6 +8,7 @@ part of the library or that need other dependencies:
 | [`generator`](generator) | The `generator` command-line tool. See the [CLI guide](../docs/guides/cli.md). |
 | [`verify`](verify) | Round-trip helpers that decode rendered PNGs, used by the CLI's `-verify`. |
 | [`bench`](bench) | Benchmarks and accuracy tests against other Go QR libraries. See [Performance](../docs/explanation/performance.md). |
+| [`regress`](regress) | Compares benchmark outputs and sweep counts of two versions for the regression check in CI. |
 
 ```shell
 go install github.com/piglig/go-qr/tools/generator@latest

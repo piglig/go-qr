@@ -28,7 +28,10 @@ go test -run=TestBoofCV -timeout=60m ./bench/ -boofcv=/path/to/qrcodes/detection
 ```
 
 Flags such as `-sweep` must follow the package path. Without them, the
-sweeps and the dataset test are skipped.
+sweeps and the dataset test are skipped. `-sweep-native` runs the sweeps for
+go-qr only, and `-sweep-out file.json` writes its decode counts per sweep
+point, which the regression check in CI compares between two versions with
+`go run ./regress sweep old.json new.json`.
 
 **`TestRobustness`** renders symbols through a pinhole camera model
 (`distort.go`: tilt about any axis, rotation, pixels per module, Gaussian

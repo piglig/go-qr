@@ -39,16 +39,21 @@ go run honnef.co/go/tools/cmd/staticcheck@latest ./...
 
 ## Performance and accuracy
 
+CI compares every pull request with its base: benchmark time and
+allocations, and the decode rates of the synthetic distortion sweeps (see
+[CONTRIBUTING.md](CONTRIBUTING.md#performance-and-accuracy)). Passing it is
+necessary, not sufficient:
+
 - A change to a hot path (encoding, rendering, `Decode`) needs before and
-  after numbers from the same machine: several interleaved runs of
-  `go test -run='^$' -bench=<name> -benchmem -count=10`, compared with
-  benchstat. Build the "before" side in a separate `git worktree`, not by
-  checking out files.
-- A decoder change must not lower the decode rates of
-  `go test -run=TestRobustness -v ./bench/ -sweep` (in `tools`, with the
-  workspace).
+  after numbers from the same machine in the pull request: several
+  alternating runs of `go test -run='^$' -bench=<name> -benchmem`, compared
+  with benchstat or `go run ./regress bench` in `tools`. Build the "before"
+  side in a separate `git worktree`, not by checking out files.
+- Run the sweeps for decoder changes locally, in `tools` with the
+  workspace: `go test -run=TestRobustness -v ./bench/ -sweep`.
 - If a feature makes the default path clearly slower, say so with numbers
-  and evaluate whether to drop it or make it opt-in. Do not hide it.
+  and evaluate whether to drop it or make it opt-in. Do not hide it, and
+  never add the `accept-regression` label yourself; a maintainer decides.
 - Report measured results only. If you did not run a benchmark, say so.
 
 ## Documentation and changelog
