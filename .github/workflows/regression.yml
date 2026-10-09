@@ -27,7 +27,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           path: new
           fetch-depth: 0
@@ -45,13 +45,13 @@ jobs:
             echo "go=true" >> "$GITHUB_OUTPUT"
           fi
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         if: steps.changed.outputs.go == 'true'
         with:
           ref: ${{ github.event.pull_request.base.sha }}
           path: old
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         if: steps.changed.outputs.go == 'true'
         with:
           go-version: stable
