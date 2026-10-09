@@ -13,6 +13,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the image, in the symbol's own orientation (top-left, top-right,
   bottom-right, bottom-left), through rotation, perspective and mirroring.
   `DecodeResult.Inverted` reports a light-on-dark symbol.
+- `DecodeAll` reads every QR Code in an image and returns them in reading
+  order, and `WithMaxSymbols` stops it after a number of symbols. The
+  results of a structured append sequence photographed together go
+  straight to `JoinStructuredAppend`. On the 536 photos of the BoofCV QR
+  Code dataset it reads 54% of the 1,232 codes, against 34% for `Decode`
+  (zxing-cpp 53%, WeChat 41%), and every code `Decode` reads; in the
+  category of photos with about 60 codes each it reads 23% of them
+  instead of 2%. It takes about twice as long as `Decode` on a photo of
+  one code, since it keeps searching.
 
 ## [2.5.1] - 2026-10-09
 

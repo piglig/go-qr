@@ -60,7 +60,7 @@ also read mirrored.
 | Structured append and GS1 (FNC1 in first position) | ✅ *Since v2.1* |
 | Lens distortion | ✅ moderate; strong wide-angle distortion of large symbols ⚠️ |
 | Curved surfaces (bottles, cans) | ⚠️ small symbols only |
-| Several symbols in one image | ❌ only one is read |
+| Several symbols in one image | ✅ with `DecodeAll` *Since v2.6* |
 | Micro QR, rMQR, FNC1 in second position, Hanzi mode | ❌ `ErrUnsupported` |
 
 Modules should be at least 2 pixels wide. Large symbols (version 20 and up)
@@ -95,11 +95,45 @@ plausibly both ways, such as "ﾒﾓ" and "ÒÓ"; use an ECI when that matters.
 Other ECIs return `ErrUnsupported`; the raw bytes are still in `Segments` if
 you need them.
 
+## Several symbols in one image
+
+*Since v2.6.* `DecodeAll` reads every symbol in the image, such as the labels
+in a photo of a shelf, and returns them in reading order: rows from top to
+bottom, each from left to right.
+
+```go
+results, err := qr.DecodeAll(img)
+if err != nil {
+	return err // nothing decoded: the error Decode would return
+}
+for _, res := range results {
+	fmt.Println(res.Text, res.Corners)
+}
+```
+
+Each symbol is returned once, and identical symbols at different places
+are all returned. The error is nil when at least one symbol decodes.
+`Corners` tell the symbols apart, and the results of a structured append
+sequence photographed together go straight to `JoinStructuredAppend`:
+
+```go
+results, err := qr.DecodeAll(img)
+if err != nil {
+	return err
+}
+text, err := qr.JoinStructuredAppend(results...)
+```
+
+`DecodeAll` keeps searching after the first symbol, through every scale
+and polarity, so it takes about twice as long as `Decode` on an image of
+one symbol. `qr.WithMaxSymbols(n)` stops it after `n` symbols.
+
 ## Options
 
 `WithFastPathOnly()` skips the robust path. Use it to check images you have
 just rendered yourself, where it is faster and an unexpected failure is a
-bug worth surfacing.
+bug worth surfacing. `WithMaxSymbols(n)` *Since v2.6* limits `DecodeAll` to
+`n` symbols; `Decode` ignores it.
 
 ## Errors
 

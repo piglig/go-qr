@@ -42,25 +42,61 @@ type finderPattern struct {
 // symbols on dark; the symbol is located there, and its modules are read
 // from the full-resolution luminance l (lw×lh pixels).
 func robustDecode(tm *thresholdMap, inverted bool, scale int, l []uint8, lw, lh int, read func([][]bool) (*DecodeResult, error)) (*DecodeResult, error) {
-	readGrid := func(p mapper, dim int) (*DecodeResult, error) {
-		if scale > 1 {
-			p = scaledMapper{p, float64(scale)}
-		}
-		res, err := read(readModules(l, lw, lh, p, dim, inverted))
-		locate(res, p.apply, dim, inverted)
-		return res, err
-	}
-	dark := func(x, y int) bool { return tm.dark(x, y) != inverted && x >= 0 && y >= 0 && x < tm.w && y < tm.h }
-	w, h := tm.w, tm.h
-	step := 1
-	if scale == 1 {
-		step = finderRowStep(w * h)
-	}
-	triples, cands, err := findFindersStep(tm, inverted, dark, step)
+	s := newSymbolSearch(tm, inverted, scale, l, lw, lh, read)
+	triples, cands, err := findFindersStep(tm, inverted, darkIn(tm, inverted), s.step())
 	if err != nil && len(cands) < 2 {
 		return nil, err
 	}
+	return s.decodeTriples(triples, cands, err, true)
+}
 
+// symbolSearch locates and reads symbols at one scale and polarity.
+type symbolSearch struct {
+	tm       *thresholdMap
+	inverted bool
+	scale    int
+	l        []uint8 // full-resolution luminance, lw×lh
+	lw, lh   int
+	read     func([][]bool) (*DecodeResult, error)
+}
+
+func newSymbolSearch(tm *thresholdMap, inverted bool, scale int, l []uint8, lw, lh int, read func([][]bool) (*DecodeResult, error)) *symbolSearch {
+	return &symbolSearch{tm: tm, inverted: inverted, scale: scale, l: l, lw: lw, lh: lh, read: read}
+}
+
+// darkIn returns whether each pixel of tm is dark for a symbol of the given
+// polarity; pixels outside tm are light. It is the innermost test of the
+// search, so it captures tm and inverted directly.
+func darkIn(tm *thresholdMap, inverted bool) func(x, y int) bool {
+	return func(x, y int) bool { return tm.dark(x, y) != inverted && x >= 0 && y >= 0 && x < tm.w && y < tm.h }
+}
+
+// step returns how many rows apart the finder scan runs.
+func (s *symbolSearch) step() int {
+	if s.scale == 1 {
+		return finderRowStep(s.tm.w * s.tm.h)
+	}
+	return 1
+}
+
+// readGrid reads and decodes the dim×dim grid that p locates in tm's
+// pixels, and records where it lies at full resolution.
+func (s *symbolSearch) readGrid(p mapper, dim int) (*DecodeResult, error) {
+	if s.scale > 1 {
+		p = scaledMapper{p, float64(s.scale)}
+	}
+	res, err := s.read(readModules(s.l, s.lw, s.lh, p, dim, s.inverted))
+	locate(res, p.apply, dim, s.inverted)
+	return res, err
+}
+
+// decodeTriples fits the finder triples, best first, and decodes the grid
+// of the best fit. cands, when not nil, are all finder candidates, from
+// which a lost finder may be inferred; firstErr is returned when nothing
+// could be fitted. When estimate is set and no fit could measure the
+// finders' corners, the grid is estimated from their centers instead.
+func (s *symbolSearch) decodeTriples(triples [][3]finderPattern, cands []finderPattern, firstErr error, estimate bool) (*DecodeResult, error) {
+	dark := darkIn(s.tm, s.inverted)
 	// Fit the best triple with the usual corner assignment. If its timing
 	// patterns do not read back well, the triple may be a false one or its
 	// top-left finder misjudged, which strong perspective causes: the other
@@ -68,11 +104,10 @@ func robustDecode(tm *thresholdMap, inverted bool, scale int, l []uint8, lw, lh 
 	// first only if its timing patterns read back well. Fitting costs a
 	// small fraction of a decode, and only one grid is decoded.
 	var (
-		model    *gridModel
-		dim      int
-		score    = -1.0
-		first    *symbolGeometry
-		firstErr = err // set when no triple was found
+		model *gridModel
+		dim   int
+		score = -1.0
+		first *symbolGeometry
 	)
 search:
 	for ti, t := range triples {
@@ -90,9 +125,9 @@ search:
 			if first == nil {
 				first = g
 			}
-			m, d, s, ok := g.fitSymbol(dark)
-			if ok && (g == first || s >= goodTimingScore && s > score) {
-				model, dim, score = m, d, s
+			m, d, sc, ok := g.fitSymbol(dark)
+			if ok && (g == first || sc >= goodTimingScore && sc > score) {
+				model, dim, score = m, d, sc
 			}
 			if score >= goodTimingScore {
 				break search
@@ -104,21 +139,24 @@ search:
 	// image edge. Pairs of well-supported finders imply the third, and the
 	// hypotheses are fitted and scored like real triples.
 	if score < goodTimingScore && len(cands) >= 2 {
-		if m, d, s, ok := completeSymbol(dark, cands); ok && s > score+completionMargin {
+		if m, d, sc, ok := completeSymbol(dark, cands); ok && sc > score+completionMargin {
 			model, dim = m, d
 		}
 	}
 	if model != nil {
-		return readGrid(model, dim)
+		return s.readGrid(model, dim)
 	}
-	if first == nil {
+	if first == nil || !estimate {
+		if firstErr == nil {
+			firstErr = fmt.Errorf("%w: finder corners not measured", ErrNotFound)
+		}
 		return nil, firstErr
 	}
 	// The finders' corners could not be measured, as with circular finder
 	// styles: estimate the fourth point instead.
 	g := first
 	for _, p := range g.transforms(dark) {
-		res, err := readGrid(p, g.dim)
+		res, err := s.readGrid(p, g.dim)
 		if err == nil || errors.Is(err, ErrUnsupported) {
 			return res, err
 		}
