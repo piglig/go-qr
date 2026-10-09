@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"image"
+	"math"
 	"sort"
 	"strings"
 )
@@ -37,6 +38,15 @@ type DecodeResult struct {
 	Mask     int
 	Mirrored bool // the symbol was read from a mirror image
 	Segments []DecodedSegment
+
+	// Corners are the outer corners of the symbol in the image, quiet zone
+	// excluded, in the symbol's own orientation: top-left, top-right,
+	// bottom-right and bottom-left. They follow the symbol through rotation,
+	// perspective and mirroring. Since v2.6.
+	Corners [4]image.Point
+	// Inverted reports a symbol of light modules on a dark background.
+	// Since v2.6.
+	Inverted bool
 
 	// StructuredAppend is set when the symbol is part of a sequence.
 	StructuredAppend *StructuredAppend
@@ -80,7 +90,33 @@ func Decode(img image.Image, opts ...DecodeOption) (*DecodeResult, error) {
 	for _, o := range opts {
 		o(&cfg)
 	}
-	return searchImage(img, cfg, decodeGrid)
+	res, err := searchImage(img, cfg, decodeGrid)
+	if res != nil {
+		for i := range res.Corners {
+			res.Corners[i] = res.Corners[i].Add(img.Bounds().Min)
+		}
+	}
+	return res, err
+}
+
+// locate records where res was read from: the luminance image positions of
+// the corners of the sampled module grid, which at maps from module space,
+// and its polarity. A mirrored symbol was read transposed, so its own
+// top-right corner is the grid's bottom-left.
+func locate(res *DecodeResult, at func(u, v float64) (float64, float64), dim int, inverted bool) {
+	if res == nil {
+		return
+	}
+	d := float64(dim)
+	corners := [4][2]float64{{0, 0}, {d, 0}, {d, d}, {0, d}}
+	if res.Mirrored {
+		corners[1], corners[3] = corners[3], corners[1]
+	}
+	for i, c := range corners {
+		x, y := at(c[0], c[1])
+		res.Corners[i] = image.Pt(int(math.Round(x)), int(math.Round(y)))
+	}
+	res.Inverted = inverted
 }
 
 // searchImage runs the fast and robust samplers over img, each on the image
@@ -105,10 +141,15 @@ func searchImage(img image.Image, cfg decodeConfig, read func([][]bool) (*Decode
 			firstErr = err
 		}
 	}
-	try := func(grid [][]bool, err error) (*DecodeResult, error) {
+	// try reads a grid from the fast path, which samples the box r.
+	try := func(grid [][]bool, r image.Rectangle, inverted bool, err error) (*DecodeResult, error) {
 		if err == nil {
 			var res *DecodeResult
 			if res, err = read(grid); err == nil {
+				d := float64(len(grid))
+				locate(res, func(u, v float64) (float64, float64) {
+					return float64(r.Min.X) + u/d*float64(r.Dx()), float64(r.Min.Y) + v/d*float64(r.Dy())
+				}, len(grid), inverted)
 				return res, nil
 			}
 		}
@@ -118,7 +159,8 @@ func searchImage(img image.Image, cfg decodeConfig, read func([][]bool) (*Decode
 
 	var adaptive *thresholdMap
 	for _, inverted := range []bool{false, true} {
-		if res, err := try(fastSample(l, w, h, threshold, inverted)); err == nil || errors.Is(err, ErrUnsupported) {
+		grid, box, err := fastSample(l, w, h, threshold, inverted)
+		if res, err := try(grid, box, inverted, err); err == nil || errors.Is(err, ErrUnsupported) {
 			return res, err
 		}
 		if cfg.fastPathOnly {
@@ -221,7 +263,7 @@ func transpose(grid [][]bool) [][]bool {
 // whose extent equals the symbol because finder patterns occupy three
 // corners, derives the module pitch from the top-left finder's 7-module edge
 // run, and samples each module center.
-func fastSample(l []uint8, w, h int, threshold uint8, inverted bool) ([][]bool, error) {
+func fastSample(l []uint8, w, h int, threshold uint8, inverted bool) ([][]bool, image.Rectangle, error) {
 	dark := func(x, y int) bool { return (l[y*w+x] <= threshold) != inverted }
 	// Scan each row inward from both ends, so mostly quiet zone is visited.
 	minX, minY, maxX, maxY := w, h, -1, -1
@@ -242,21 +284,21 @@ func fastSample(l []uint8, w, h int, threshold uint8, inverted bool) ([][]bool, 
 		minY, maxY = min(minY, y), y
 	}
 	if maxX < 0 {
-		return nil, fmt.Errorf("%w: no dark pixels", ErrNotFound)
+		return nil, image.Rectangle{}, fmt.Errorf("%w: no dark pixels", ErrNotFound)
 	}
 
 	pitch, ok := finderPitch(dark, minX, minY, maxX, maxY)
 	if !ok {
-		return nil, fmt.Errorf("%w: no finder pattern at top-left", ErrNotFound)
+		return nil, image.Rectangle{}, fmt.Errorf("%w: no finder pattern at top-left", ErrNotFound)
 	}
 
 	boxW, boxH := maxX-minX+1, maxY-minY+1
 	size := int(float64(boxW)/pitch + 0.5)
 	if size < 21 || size > 4*MaxVersion+17 || (size-17)%4 != 0 {
-		return nil, fmt.Errorf("%w: inferred size %d is not a QR size", ErrNotFound, size)
+		return nil, image.Rectangle{}, fmt.Errorf("%w: inferred size %d is not a QR size", ErrNotFound, size)
 	}
 	if vsize := int(float64(boxH)/pitch + 0.5); vsize != size {
-		return nil, fmt.Errorf("%w: non-square module grid (%d vs %d)", ErrNotFound, size, vsize)
+		return nil, image.Rectangle{}, fmt.Errorf("%w: non-square module grid (%d vs %d)", ErrNotFound, size, vsize)
 	}
 
 	px := float64(boxW) / float64(size)
@@ -270,7 +312,7 @@ func fastSample(l []uint8, w, h int, threshold uint8, inverted bool) ([][]bool, 
 			modules[row][col] = dark(minX+int((float64(col)+0.5)*px), cy)
 		}
 	}
-	return modules, nil
+	return modules, image.Rect(minX, minY, maxX+1, maxY+1), nil
 }
 
 // toLuma converts img to 8-bit luminance, compositing translucent pixels over

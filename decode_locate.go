@@ -46,7 +46,9 @@ func robustDecode(tm *thresholdMap, inverted bool, scale int, l []uint8, lw, lh 
 		if scale > 1 {
 			p = scaledMapper{p, float64(scale)}
 		}
-		return read(readModules(l, lw, lh, p, dim, inverted))
+		res, err := read(readModules(l, lw, lh, p, dim, inverted))
+		locate(res, p.apply, dim, inverted)
+		return res, err
 	}
 	dark := func(x, y int) bool { return tm.dark(x, y) != inverted && x >= 0 && y >= 0 && x < tm.w && y < tm.h }
 	w, h := tm.w, tm.h

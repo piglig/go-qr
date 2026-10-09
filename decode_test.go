@@ -102,7 +102,7 @@ func TestRSCorrectsErrors(t *testing.T) {
 	w, h := img.Bounds().Dx(), img.Bounds().Dy()
 	l := toLuma(img)
 	t0, _, _ := otsuThreshold(l)
-	modules, err := fastSample(l, w, h, t0, false)
+	modules, _, err := fastSample(l, w, h, t0, false)
 	if err != nil {
 		t.Fatal(err)
 	}

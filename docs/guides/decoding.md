@@ -22,6 +22,8 @@ fmt.Println(res.Text)
 | `Text` | The payload as UTF-8, with byte segments interpreted by their ECI (see below). |
 | `Version`, `ECC`, `Mask` | Symbol parameters. |
 | `Mirrored` | The symbol was read from a mirror image. |
+| `Corners` *Since v2.6* | The outer corners of the symbol in the image, quiet zone excluded, in the symbol's own orientation: top-left, top-right, bottom-right, bottom-left. They follow rotation, perspective and mirroring: `Corners[0]`, `[1]` and `[3]` are always the corners at the three finder patterns. |
+| `Inverted` *Since v2.6* | The symbol has light modules on a dark background. |
 | `Segments` | Each segment: `Mode`, `NumChars`, the `ECI` in effect (-1 for none), and the raw `Data` (digits, characters, bytes, or Shift_JIS for Kanji). |
 | `StructuredAppend` *Since v2.1* | Position in a sequence, when the symbol is one of several; see [joining](encoding.md#data-too-long-for-one-symbol). |
 | `GS1` *Since v2.1* | The symbol carries a GS1 element string. |
