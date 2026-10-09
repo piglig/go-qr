@@ -12,6 +12,7 @@ package payload
 import (
 	"fmt"
 	"net/url"
+	"strconv"
 	"strings"
 )
 
@@ -172,7 +173,9 @@ type Geo struct {
 }
 
 func (g Geo) String() string {
-	out := fmt.Sprintf("geo:%v,%v", g.Lat, g.Lon)
+	// RFC 5870 numbers have no exponent, which %v writes for small and
+	// large values.
+	out := "geo:" + strconv.FormatFloat(g.Lat, 'f', -1, 64) + "," + strconv.FormatFloat(g.Lon, 'f', -1, 64)
 	if g.Query != "" {
 		out += "?q=" + queryEscape(g.Query)
 	}

@@ -81,6 +81,7 @@ func TestTel(t *testing.T) {
 
 func TestGeo(t *testing.T) {
 	assertEqual(t, "geo:37.5,-122.3", Geo{Lat: 37.5, Lon: -122.3}.String())
+	assertEqual(t, "geo:0.00001,-0.0000001", Geo{Lat: 0.00001, Lon: -0.0000001}.String())
 	s := Geo{Lat: 0, Lon: 0, Query: "Null Island"}.String()
 	assertContains(t, s, "geo:0,0?q=Null%20Island")
 }
