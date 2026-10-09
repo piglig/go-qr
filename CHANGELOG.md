@@ -31,6 +31,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   symbol, while `Encode` and the option's documentation add it only for
   data that is not ASCII. `EncodeBytes` now leaves it out for ASCII data
   too, saving 12 bits.
+- An empty logo image passed to `WithLogo` failed `SVG` with an error that
+  wrapped no sentinel, while PNG output drew an empty pad without error. It
+  is now refused with `ErrInvalidArgument` by every rendering method. The
+  documentation names the errors that wrap no sentinel: those of the
+  `io.Writer` given to a `Write` method, and that of a batch job that
+  panicked.
 - `PNG`, `WritePNG` and `Image` allocated whatever the scale asked for, so
   `WithScale(50000)` tried to allocate gigabytes. Images over 16384 pixels
   on a side, quiet zone included, now fail with `ErrInvalidArgument`; SVG

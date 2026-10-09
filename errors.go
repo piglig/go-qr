@@ -3,7 +3,10 @@ package qr
 import "errors"
 
 // Sentinel errors. Every error returned by this package wraps one of them, so
-// callers can test for a category with errors.Is.
+// callers can test for a category with errors.Is, with two exceptions: the
+// Write methods return the error of their io.Writer, wrapped with %w, and a
+// BatchResult reports a job that panicked, a bug in this package, with an
+// error of its own.
 var (
 	// ErrInvalidArgument reports an invalid option or argument, such as a mask
 	// outside 0-7, an unknown error correction level or a zero scale.
