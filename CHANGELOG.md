@@ -14,9 +14,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   on a side, quiet zone included, now fail with `ErrInvalidArgument`; SVG
   output is unchanged. Coverage tiles of styled codes are no longer cached
   for scales over 64, where they reach tens of megabytes each.
-
-### Fixed
-
+- `WithLogo` overestimated the error correction capacity of the smallest
+  symbols: it ignored the misdecode protection codewords of ISO/IEC 18004
+  Table 9, which versions 1 to 3 at some levels hold back, so a block of a
+  1-L symbol was taken to correct 3 codewords instead of 2. A logo that
+  takes all the correction capacity of such a symbol, such as a 3-module
+  box on a 1-L code, now fails with `ErrLogoTooLarge` instead of producing
+  a code that standard readers may not decode.
 - `Decode` took time quadratic in the number of finder pattern candidates
   in an image, so an image tiled with finder patterns could hold it for
   seconds: 10 s for a 10-megapixel one. Candidates are now merged through
