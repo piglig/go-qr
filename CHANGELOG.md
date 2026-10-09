@@ -27,6 +27,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   requires, and colons within an OTP issuer or account as `%3A`, the first
   literal colon separating the two. A new fuzz target checks that `Parse`
   reads back every free-text field of the builders.
+- `EncodeBytes` with `WithUTF8ECI` added the UTF-8 ECI designator to every
+  symbol, while `Encode` and the option's documentation add it only for
+  data that is not ASCII. `EncodeBytes` now leaves it out for ASCII data
+  too, saving 12 bits.
 - `PNG`, `WritePNG` and `Image` allocated whatever the scale asked for, so
   `WithScale(50000)` tried to allocate gigabytes. Images over 16384 pixels
   on a side, quiet zone included, now fail with `ErrInvalidArgument`; SVG
