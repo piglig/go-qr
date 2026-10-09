@@ -64,11 +64,13 @@ func WithFastPathOnly() DecodeOption {
 // Decode finds a QR Code in img and decodes it.
 //
 // It first tries a fast path for crisp, axis-aligned images, then a robust
-// path that locates the finder patterns with a locally adaptive threshold,
-// which handles rotation, noise, uneven lighting and low contrast. Each path
-// is tried on the image as is and inverted (light modules on a dark
-// background), and each sampled symbol is also read mirrored. Perspective
-// distortion, Micro QR and multiple symbols per image are not supported.
+// path that locates the finder patterns with a locally adaptive threshold
+// and fits the module grid to the symbol's own structure, which handles
+// rotation, perspective, lens distortion, noise, uneven lighting and low
+// contrast; when a finder is lost, the other two imply it. Each path is
+// tried on the image as is and inverted (light modules on a dark
+// background), and each sampled symbol is also read mirrored. Micro QR,
+// rMQR and multiple symbols per image are not supported.
 //
 // The error wraps ErrNotFound when no symbol was located, ErrDecodeFailed
 // when a symbol was located but could not be read, and ErrUnsupported for
