@@ -185,25 +185,17 @@ func parseOTP(s string) (Payload, error) {
 	if sep < 0 {
 		sep, sepLen = strings.Index(strings.ToUpper(label), "%3A"), 3
 	}
-	unescape := func(s string) (string, error) {
-		v, err := url.PathUnescape(s)
-		if err != nil {
-			return "", malformed("otpauth", "label: %v", err)
-		}
-		return v, nil
+	// url.Parse has checked the escapes, and splitting at a colon or %3A
+	// cannot cut one, so unescaping the parts cannot fail.
+	unescape := func(s string) string {
+		v, _ := url.PathUnescape(s)
+		return v
 	}
 	if sep < 0 {
-		if o.Account, err = unescape(label); err != nil {
-			return nil, err
-		}
+		o.Account = unescape(label)
 	} else {
-		if o.Issuer, err = unescape(label[:sep]); err != nil {
-			return nil, err
-		}
-		if o.Account, err = unescape(label[sep+sepLen:]); err != nil {
-			return nil, err
-		}
-		o.Account = strings.TrimLeft(o.Account, " ")
+		o.Issuer = unescape(label[:sep])
+		o.Account = strings.TrimLeft(unescape(label[sep+sepLen:]), " ")
 	}
 
 	if o.Secret = q.Get("secret"); o.Secret == "" {
