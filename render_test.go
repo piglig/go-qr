@@ -130,6 +130,36 @@ func TestRenderOptionValidation(t *testing.T) {
 	}
 }
 
+// TestRasterSizeLimit expects PNG and Image to refuse images over
+// maxRasterSide pixels on a side, which would allocate gigabytes, while SVG,
+// whose scale is in user units, still renders.
+func TestRasterSizeLimit(t *testing.T) {
+	code := mustEncode(t, "x")
+	big := []RenderOption{WithScale(1000)} // 29000 pixels
+	if _, err := code.Image(big...); !errors.Is(err, ErrInvalidArgument) {
+		t.Errorf("Image error = %v, want ErrInvalidArgument", err)
+	}
+	for _, opts := range [][]RenderOption{big, append(big, WithModuleShape(ModuleDot)), append(big, WithGradient(color.Black, color.Black, 0))} {
+		if _, err := code.PNG(opts...); !errors.Is(err, ErrInvalidArgument) {
+			t.Errorf("PNG error = %v, want ErrInvalidArgument", err)
+		}
+	}
+	_, err := code.SVG(big...)
+	assertNoError(t, err)
+
+	// (21 + 2·54) · 127 = 16383 pixels, the largest side below the limit
+	// that a symbol of version 1 can have.
+	for _, tt := range []struct {
+		scale int
+		ok    bool
+	}{{127, true}, {128, false}} {
+		cfg, err := newRenderConfig([]RenderOption{WithQuietZone(54), WithScale(tt.scale)})
+		assertNoError(t, err)
+		_, err = cfg.rasterSide(code)
+		assertEqual(t, tt.ok, err == nil, "scale %d: %v", tt.scale, err)
+	}
+}
+
 func TestSVG(t *testing.T) {
 	code, err := Encode("svg output", WithECC(ECCLow))
 	assertNoError(t, err)

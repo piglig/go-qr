@@ -204,3 +204,18 @@ func BenchmarkStyledSVG(b *testing.B) {
 		}
 	}
 }
+
+// TestLargeScaleTilesNotCached renders a styled code at a scale whose tiles
+// are too large to keep and expects none of them in the cache.
+func TestLargeScaleTilesNotCached(t *testing.T) {
+	code := mustEncode(t, "x")
+	scale := maxCachedTileScale + 1
+	_, err := code.PNG(WithScale(scale), WithQuietZone(0), WithModuleShape(ModuleDot), WithFinderShape(FinderCircle))
+	assertNoError(t, err)
+	tileCache.Range(func(k, _ any) bool {
+		if k.(tileKey).scale == scale {
+			t.Errorf("tile %+v cached", k)
+		}
+		return true
+	})
+}
