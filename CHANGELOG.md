@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `Decode` took time quadratic in the number of finder pattern candidates
+  in an image, so an image tiled with finder patterns could hold it for
+  seconds: 10 s for a 10-megapixel one. Candidates are now merged through
+  a grid, and decoding time grows with the number of pixels on any image;
+  the same image takes 70 ms.
+
 ## [2.5.0] - 2026-10-08
 
 ### Performance

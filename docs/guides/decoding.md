@@ -111,6 +111,7 @@ bug worth surfacing.
 
 The decoder is fuzz-tested against arbitrary images and malformed
 bitstreams, and returns errors rather than panicking. Its cost grows with
-the number of pixels, about 50 ms for a 12-megapixel photo, and decoding
-the image file itself costs more. Check the dimensions of untrusted uploads
+the number of pixels on any image, about 50 ms for a 12-megapixel photo,
+including images crafted with many finder patterns (*since v2.5.1*), and
+decoding the image file itself costs more. Check the dimensions of untrusted uploads
 with `image.DecodeConfig` and reject oversized ones before decoding them.

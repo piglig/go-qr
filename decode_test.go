@@ -620,3 +620,38 @@ func BenchmarkDecodeNoCode(b *testing.B) {
 		}
 	}
 }
+
+// finderTiles is a w×h image tiled with finder patterns of module-pixel
+// modules, each followed by a one-module light gap: an image with as many
+// finder candidates as it can hold.
+func finderTiles(w, h, module int) *image.Gray {
+	img := image.NewGray(image.Rect(0, 0, w, h))
+	for i := range img.Pix {
+		img.Pix[i] = 255
+	}
+	pitch := 8 * module
+	for y := 0; y < h; y++ {
+		for x := 0; x < w; x++ {
+			u, v := x%pitch/module, y%pitch/module
+			if u == 7 || v == 7 {
+				continue
+			}
+			ring := max(abs(u-3), abs(v-3))
+			if ring != 2 {
+				img.Pix[y*img.Stride+x] = 0
+			}
+		}
+	}
+	return img
+}
+
+func BenchmarkDecodeFinderTiles(b *testing.B) {
+	img := finderTiles(1600, 1600, 3)
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if _, err := Decode(img); err == nil {
+			b.Fatal("decoded an image without a code")
+		}
+	}
+}
