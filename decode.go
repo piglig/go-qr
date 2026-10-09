@@ -58,10 +58,12 @@ type DecodeResult struct {
 }
 
 type decodeConfig struct {
-	fastPathOnly bool
+	fastPathOnly  bool
+	maxSymbols    int
+	maxSymbolsSet bool
 }
 
-// DecodeOption configures Decode.
+// DecodeOption configures Decode and DecodeAll.
 type DecodeOption func(*decodeConfig)
 
 // WithFastPathOnly restricts Decode to crisp, axis-aligned images such as the
@@ -79,8 +81,9 @@ func WithFastPathOnly() DecodeOption {
 // rotation, perspective, lens distortion, noise, uneven lighting and low
 // contrast; when a finder is lost, the other two imply it. Each path is
 // tried on the image as is and inverted (light modules on a dark
-// background), and each sampled symbol is also read mirrored. Micro QR,
-// rMQR and multiple symbols per image are not supported.
+// background), and each sampled symbol is also read mirrored. Micro QR and
+// rMQR are not supported. Decode reads one symbol; DecodeAll reads every
+// symbol in the image.
 //
 // The error wraps ErrNotFound when no symbol was located, ErrDecodeFailed
 // when a symbol was located but could not be read, and ErrUnsupported for

@@ -57,7 +57,7 @@ jobs:
 
       - name: Fuzz smoke test
         run: |
-          for target in FuzzEncode FuzzEncodeStructured FuzzRender FuzzDecodeRoundTrip FuzzDecodeNoPanic; do
+          for target in FuzzEncode FuzzEncodeStructured FuzzRender FuzzDecodeRoundTrip FuzzDecodeNoPanic FuzzDecodeAllRoundTrip FuzzDecodeAllNoPanic; do
             go test -run='^$' -fuzz="^$target\$" -fuzztime=15s .
           done
           go test -run='^$' -fuzz='^FuzzParse$' -fuzztime=15s ./payload

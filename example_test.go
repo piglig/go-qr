@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"image"
 	"image/color"
+	"image/draw"
 	"strings"
 
 	"github.com/piglig/go-qr/v2"
@@ -225,4 +227,25 @@ func ExampleDecodeResult_corners() {
 	}
 	fmt.Println(res.Corners, res.Inverted)
 	// Output: [(16,16) (100,16) (100,100) (16,100)] false
+}
+
+func ExampleDecodeAll() {
+	sheet := image.NewRGBA(image.Rect(0, 0, 400, 200))
+	draw.Draw(sheet, sheet.Bounds(), image.White, image.Point{}, draw.Src)
+	for i, text := range []string{"left", "right"} {
+		code, _ := qr.Encode(text)
+		img, _ := code.Image(qr.WithScale(5))
+		draw.Draw(sheet, img.Bounds().Add(image.Pt(i*200, 0)), img, image.Point{}, draw.Src)
+	}
+
+	results, err := qr.DecodeAll(sheet)
+	if err != nil {
+		panic(err)
+	}
+	for _, res := range results {
+		fmt.Println(res.Text, res.Corners[0])
+	}
+	// Output:
+	// left (20,20)
+	// right (220,20)
 }
