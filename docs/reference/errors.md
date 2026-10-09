@@ -4,6 +4,12 @@ Every error returned by the package wraps one of the sentinel values below.
 Test for a category with `errors.Is`; the message adds details such as the
 bit count that did not fit, and may change between releases.
 
+There are two exceptions. `WritePNG`, `WriteSVG` and `WriteText` return
+the error of the `io.Writer` they write to, wrapped with `%w`, so
+`errors.Is` finds that error instead. A `BatchResult` for a job that
+panicked holds an error of its own; a panic is a bug in this package and
+worth reporting.
+
 ```go
 code, err := qr.Encode(text, qr.WithECC(qr.ECCHigh))
 switch {
@@ -16,7 +22,7 @@ case err != nil:
 
 | Sentinel | Returned by | When |
 | --- | --- | --- |
-| `ErrInvalidArgument` | all | An invalid option or argument: an unknown ECC level, a mask outside 0–7, a zero scale, a negative quiet zone, a nil color or image, a logo ratio outside (0, 1), an unknown shape, a NaN gradient angle, an ECI number above 999999, an incomplete structured append sequence passed to `JoinStructuredAppend`. |
+| `ErrInvalidArgument` | all | An invalid option or argument: an unknown ECC level, a mask outside 0–7, a zero scale, a negative quiet zone, a nil color or image, an empty logo image, a logo ratio outside (0, 1), a PNG or `Image` over 16384 pixels on a side, an unknown shape, a NaN gradient angle, an ECI number above 999999, an incomplete structured append sequence passed to `JoinStructuredAppend`. |
 | `ErrInvalidVersion` | encoding | A version range outside 1–40, or with min above max. |
 | `ErrDataTooLong` | encoding | The data does not fit the largest allowed version at the requested error correction level, or more than 16 symbols would be needed by `EncodeStructured`. |
 | `ErrUnencodableChar` | segment constructors | A character the requested mode cannot hold, such as a lowercase letter in `AlphanumericSegment`. |

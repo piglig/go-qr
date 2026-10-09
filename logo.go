@@ -35,6 +35,8 @@ func (l *logoConfig) validateOptions() error {
 	switch {
 	case l.img == nil:
 		return fmt.Errorf("%w: nil logo image", ErrInvalidArgument)
+	case l.img.Bounds().Empty():
+		return fmt.Errorf("%w: empty logo image", ErrInvalidArgument)
 	case !(l.ratio > 0 && l.ratio < 1):
 		return fmt.Errorf("%w: logo ratio %v must be in (0, 1)", ErrInvalidArgument, l.ratio)
 	}
@@ -165,7 +167,7 @@ func drawScaled(dst *image.RGBA, r image.Rectangle, src image.Image) {
 func (l *logoConfig) writeSVG(sb *strings.Builder, qrSize int, c *renderConfig) error {
 	var buf bytes.Buffer
 	if err := png.Encode(&buf, l.img); err != nil {
-		return fmt.Errorf("qr: encode logo for SVG: %w", err)
+		return fmt.Errorf("%w: encode logo for SVG: %v", ErrInvalidArgument, err)
 	}
 	box, inner := l.rects(qrSize, c)
 	if !colorIsTransparent(c.bg) {

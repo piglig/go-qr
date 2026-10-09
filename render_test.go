@@ -111,6 +111,7 @@ func TestRenderOptionValidation(t *testing.T) {
 		{"logo ratio 0", []RenderOption{WithLogo(pixel, 0)}},
 		{"logo ratio 1", []RenderOption{WithLogo(pixel, 1)}},
 		{"logo ratio NaN", []RenderOption{WithLogo(pixel, math.NaN())}},
+		{"empty logo", []RenderOption{WithLogo(image.NewRGBA(image.Rectangle{}), 0.2)}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
