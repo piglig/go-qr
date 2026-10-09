@@ -56,7 +56,11 @@ func TestEmail(t *testing.T) {
 		s := Email{To: "a@b.c", Subject: "hi", Body: "hello world"}.String()
 		assertTrue(t, strings.HasPrefix(s, "mailto:a@b.c?"))
 		assertContains(t, s, "subject=hi")
-		assertContains(t, s, "body=hello+world")
+		assertContains(t, s, "body=hello%20world")
+	})
+	t.Run("spaces and plus signs", func(t *testing.T) {
+		s := Email{To: "a@b.c", Subject: "1 + 1"}.String()
+		assertEqual(t, "mailto:a@b.c?subject=1%20%2B%201", s)
 	})
 	t.Run("cc/bcc", func(t *testing.T) {
 		s := Email{To: "a@b.c", CC: []string{"c1@x", "c2@x"}, BCC: []string{"d@x"}}.String()
@@ -67,7 +71,8 @@ func TestEmail(t *testing.T) {
 
 func TestSMS(t *testing.T) {
 	assertEqual(t, "sms:+1234", SMS{Number: "+1234"}.String())
-	assertEqual(t, "sms:+1234?body=hi+there", SMS{Number: "+1234", Body: "hi there"}.String())
+	assertEqual(t, "sms:+1234?body=hi%20there", SMS{Number: "+1234", Body: "hi there"}.String())
+	assertEqual(t, "sms:+1234?body=1%2B1", SMS{Number: "+1234", Body: "1+1"}.String())
 }
 
 func TestTel(t *testing.T) {
@@ -77,7 +82,7 @@ func TestTel(t *testing.T) {
 func TestGeo(t *testing.T) {
 	assertEqual(t, "geo:37.5,-122.3", Geo{Lat: 37.5, Lon: -122.3}.String())
 	s := Geo{Lat: 0, Lon: 0, Query: "Null Island"}.String()
-	assertContains(t, s, "geo:0,0?q=Null+Island")
+	assertContains(t, s, "geo:0,0?q=Null%20Island")
 }
 
 func TestURL(t *testing.T) {

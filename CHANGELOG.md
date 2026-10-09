@@ -21,6 +21,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   takes all the correction capacity of such a symbol, such as a 3-module
   box on a 1-L code, now fails with `ErrLogoTooLarge` instead of producing
   a code that standard readers may not decode.
+- `payload.Email`, `payload.SMS` and `payload.Geo` encoded spaces as `+`,
+  which mail and messaging apps show as a literal plus sign: an SMS body
+  "hi there" read "hi+there". Spaces are now encoded as `%20`, as
+  `payload.OTP` already did.
 - `Decode` took time quadratic in the number of finder pattern candidates
   in an image, so an image tiled with finder patterns could hold it for
   seconds: 10 s for a 10-megapixel one. Candidates are now merged through
