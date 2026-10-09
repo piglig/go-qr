@@ -127,7 +127,7 @@ type Email struct {
 func (e Email) String() string {
 	var sb strings.Builder
 	sb.WriteString("mailto:")
-	sb.WriteString(e.To)
+	sb.WriteString(mailtoAddresses(e.To))
 	params := url.Values{}
 	if e.Subject != "" {
 		params.Set("subject", e.Subject)
@@ -206,4 +206,22 @@ func queryEscape(s string) string {
 // encodeQuery is url.Values.Encode with spaces as %20; see queryEscape.
 func encodeQuery(v url.Values) string {
 	return strings.ReplaceAll(v.Encode(), "+", "%20")
+}
+
+// mailtoAddresses percent-encodes the addresses of a mailto: URI (RFC 6068
+// section 2): %, which starts an escape, ? and #, which end the addresses,
+// spaces, control and non-ASCII bytes, which a URI cannot hold, and a
+// leading /, which would make the addresses a path. The characters of
+// addresses, commas between them included, stay as they are.
+func mailtoAddresses(s string) string {
+	var sb strings.Builder
+	for i := 0; i < len(s); i++ {
+		b := s[i]
+		if b == '%' || b == '?' || b == '#' || b <= ' ' || b >= 0x7f || i == 0 && b == '/' {
+			fmt.Fprintf(&sb, "%%%02X", b)
+		} else {
+			sb.WriteByte(b)
+		}
+	}
+	return sb.String()
 }

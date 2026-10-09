@@ -20,6 +20,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   became `https://a.test/?x=1\,2` and the link broke. The URL is now
   written as a uri value, as RFC 2426 specifies, with only line breaks and
   backslashes percent-encoded.
+- `payload.Parse` did not read back some payloads the builders write: an
+  `Email` whose address held `%`, `?` or `#`, which `String` wrote
+  unescaped, and an `OTP` whose `Issuer` held a colon, which split the
+  label in the wrong place. Addresses are now percent-encoded as RFC 6068
+  requires, and colons within an OTP issuer or account as `%3A`, the first
+  literal colon separating the two. A new fuzz target checks that `Parse`
+  reads back every free-text field of the builders.
 - `PNG`, `WritePNG` and `Image` allocated whatever the scale asked for, so
   `WithScale(50000)` tried to allocate gigabytes. Images over 16384 pixels
   on a side, quiet zone included, now fail with `ErrInvalidArgument`; SVG

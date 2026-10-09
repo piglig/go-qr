@@ -81,8 +81,9 @@ git diff testdata/golden
 
 Every encoder, renderer, decoder and parser entry point has a fuzz target
 (`FuzzEncode`, `FuzzEncodeStructured`, `FuzzRender`, `FuzzDecodeRoundTrip`,
-`FuzzDecodeNoPanic`, `payload.FuzzParse`). CI runs each for 15 seconds. When
-you touch one of these areas, run the relevant target for longer:
+`FuzzDecodeNoPanic`, `payload.FuzzParse`, `payload.FuzzStringParse`). CI
+runs each for 15 seconds. When you touch one of these areas, run the
+relevant target for longer:
 
 ```shell
 go test -run='^$' -fuzz='^FuzzEncode$' -fuzztime=2m .

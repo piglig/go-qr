@@ -222,3 +222,25 @@ func TestContactURL(t *testing.T) {
 		t.Errorf("Parse = %#v, %v; want %#v", got, err, c)
 	}
 }
+
+func TestOTPLabelColons(t *testing.T) {
+	o := OTP{Type: TOTP, Issuer: "A:B", Account: "c:d", Secret: "ABC"}
+	assertEqual(t, "otpauth://totp/A%3AB:c%3Ad?issuer=A%3AB&secret=ABC", o.String())
+	if got, err := Parse(o.String()); err != nil || !reflect.DeepEqual(got, Payload(o)) {
+		t.Errorf("Parse = %#v, %v; want %#v", got, err, o)
+	}
+	// Encoders that percent-encode the separator.
+	got, err := Parse("otpauth://totp/Example%3Aalice?secret=ABC")
+	want := OTP{Type: TOTP, Issuer: "Example", Account: "alice", Secret: "ABC"}
+	if err != nil || !reflect.DeepEqual(got, Payload(want)) {
+		t.Errorf("Parse = %#v, %v; want %#v", got, err, want)
+	}
+}
+
+func TestEmailAddressEscaping(t *testing.T) {
+	e := Email{To: "a%b@x.test,c?d@y.test", Subject: "s"}
+	assertEqual(t, "mailto:a%25b@x.test,c%3Fd@y.test?subject=s", e.String())
+	if got, err := Parse(e.String()); err != nil || !reflect.DeepEqual(got, Payload(e)) {
+		t.Errorf("Parse = %#v, %v; want %#v", got, err, e)
+	}
+}

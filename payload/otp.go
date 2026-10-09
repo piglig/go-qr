@@ -27,7 +27,9 @@ const (
 // such as Google Authenticator, 1Password or Authy.
 //
 // Zero values are omitted, so the app applies its defaults: TOTP, SHA1, six
-// digits and a 30-second period. Issuer and Account must not contain ':'.
+// digits and a 30-second period. The Key URI Format does not allow ':' in
+// Issuer or Account; one in Issuer is percent-encoded and read back, but
+// without an Issuer, Account must not contain one.
 //
 // Format reference: https://github.com/google/google-authenticator/wiki/Key-Uri-Format
 type OTP struct {
@@ -46,9 +48,9 @@ func (o OTP) String() string {
 	if typ == "" {
 		typ = TOTP
 	}
-	label := url.PathEscape(o.Account)
+	label := otpLabelPart(o.Account)
 	if o.Issuer != "" {
-		label = url.PathEscape(o.Issuer) + ":" + label
+		label = otpLabelPart(o.Issuer) + ":" + label
 	}
 
 	q := url.Values{}
@@ -69,6 +71,14 @@ func (o OTP) String() string {
 		q.Set("counter", strconv.FormatUint(o.Counter, 10))
 	}
 	return "otpauth://" + string(typ) + "/" + label + "?" + encodeQuery(q)
+}
+
+// otpLabelPart escapes an issuer or account name for the label of an
+// otpauth URI. The Key URI Format does not allow colons in either, so the
+// first literal colon of a label separates them; a colon within one is
+// percent-encoded, which url.PathEscape leaves as is.
+func otpLabelPart(s string) string {
+	return strings.ReplaceAll(url.PathEscape(s), ":", "%3A")
 }
 
 // normalizeSecret uppercases a base32 secret and drops spaces and padding,
