@@ -61,6 +61,7 @@ jobs:
             go test -run='^$' -fuzz="^$target\$" -fuzztime=15s .
           done
           go test -run='^$' -fuzz='^FuzzParse$' -fuzztime=15s ./payload
+          go test -run='^$' -fuzz='^FuzzStringParse$' -fuzztime=15s ./payload
 
       # Staticcheck releases trail Go's: v0.8.1 cannot read the export data
       # of Go 1.27.2. Run it on oldstable, which it always supports.

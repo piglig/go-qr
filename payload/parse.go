@@ -175,14 +175,37 @@ func parseOTP(s string) (Payload, error) {
 	if o.Type != TOTP && o.Type != HOTP {
 		return nil, malformed("otpauth", "unknown type %q", u.Host)
 	}
-	label := strings.TrimPrefix(u.Path, "/")
-	if issuer, account, ok := strings.Cut(label, ":"); ok {
-		o.Issuer, o.Account = issuer, strings.TrimLeft(account, " ")
+	// The first literal colon separates the issuer from the account, so
+	// colons percent-encoded within either stay in it. Encoders that
+	// percent-encode the separator too write no literal colon; their label
+	// is split at the first encoded one.
+	q := u.Query()
+	label := strings.TrimPrefix(u.EscapedPath(), "/")
+	sep, sepLen := strings.Index(label, ":"), 1
+	if sep < 0 {
+		sep, sepLen = strings.Index(strings.ToUpper(label), "%3A"), 3
+	}
+	unescape := func(s string) (string, error) {
+		v, err := url.PathUnescape(s)
+		if err != nil {
+			return "", malformed("otpauth", "label: %v", err)
+		}
+		return v, nil
+	}
+	if sep < 0 {
+		if o.Account, err = unescape(label); err != nil {
+			return nil, err
+		}
 	} else {
-		o.Account = label
+		if o.Issuer, err = unescape(label[:sep]); err != nil {
+			return nil, err
+		}
+		if o.Account, err = unescape(label[sep+sepLen:]); err != nil {
+			return nil, err
+		}
+		o.Account = strings.TrimLeft(o.Account, " ")
 	}
 
-	q := u.Query()
 	if o.Secret = q.Get("secret"); o.Secret == "" {
 		return nil, malformed("otpauth", "missing secret")
 	}

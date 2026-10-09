@@ -86,3 +86,9 @@ case payload.URL:
 
 `Parse` returns an error wrapping `payload.ErrUnrecognized` for plain text
 and `payload.ErrMalformed` for a known format with broken content.
+
+`Parse` reads back what the builders write (*since v2.5.1*, checked by
+fuzzing every free-text field), up to what the formats themselves
+normalize: vCard text stores a line break as LF, spaces after the colon of
+an OTP label are dropped, and an `OTP` without an `Issuer` cannot have a
+colon in its `Account`.
