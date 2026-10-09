@@ -212,3 +212,17 @@ func ExampleDecode() {
 	fmt.Println(res.Text, res.Version, res.ECC)
 	// Output: decode me 1 Q
 }
+
+// Corners locate the symbol in the image, for cropping or drawing an
+// outline, in the symbol's own orientation.
+func ExampleDecodeResult_corners() {
+	code, _ := qr.Encode("where am I")
+	img, _ := code.Image(qr.WithScale(4)) // 4 pixels per module, 4-module quiet zone
+
+	res, err := qr.Decode(img)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println(res.Corners, res.Inverted)
+	// Output: [(16,16) (100,16) (100,100) (16,100)] false
+}

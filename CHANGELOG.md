@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `DecodeResult.Corners` gives the outer corners of the decoded symbol in
+  the image, in the symbol's own orientation (top-left, top-right,
+  bottom-right, bottom-left), through rotation, perspective and mirroring.
+  `DecodeResult.Inverted` reports a light-on-dark symbol.
+
 ## [2.5.1] - 2026-10-09
 
 ### Fixed
