@@ -68,7 +68,7 @@ func (o OTP) String() string {
 	if typ == HOTP {
 		q.Set("counter", strconv.FormatUint(o.Counter, 10))
 	}
-	return "otpauth://" + string(typ) + "/" + label + "?" + strings.ReplaceAll(q.Encode(), "+", "%20")
+	return "otpauth://" + string(typ) + "/" + label + "?" + encodeQuery(q)
 }
 
 // normalizeSecret uppercases a base32 secret and drops spaces and padding,

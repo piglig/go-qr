@@ -134,7 +134,7 @@ func (e Email) String() string {
 	if len(e.BCC) > 0 {
 		params.Set("bcc", strings.Join(e.BCC, ","))
 	}
-	if encoded := params.Encode(); encoded != "" {
+	if encoded := encodeQuery(params); encoded != "" {
 		sb.WriteString("?")
 		sb.WriteString(encoded)
 	}
@@ -151,7 +151,7 @@ func (s SMS) String() string {
 	if s.Body == "" {
 		return "sms:" + s.Number
 	}
-	return "sms:" + s.Number + "?body=" + url.QueryEscape(s.Body)
+	return "sms:" + s.Number + "?body=" + queryEscape(s.Body)
 }
 
 // Tel is a tel: payload.
@@ -174,7 +174,7 @@ type Geo struct {
 func (g Geo) String() string {
 	out := fmt.Sprintf("geo:%v,%v", g.Lat, g.Lon)
 	if g.Query != "" {
-		out += "?q=" + url.QueryEscape(g.Query)
+		out += "?q=" + queryEscape(g.Query)
 	}
 	return out
 }
@@ -185,3 +185,16 @@ type URL struct {
 }
 
 func (u URL) String() string { return u.Href }
+
+// queryEscape escapes s for a URI query, spaces as %20. url.QueryEscape
+// writes them as +, which form decoding reads as a space but RFC 3986, and
+// with it mail and messaging apps reading mailto: and sms: URIs, as a
+// literal plus sign.
+func queryEscape(s string) string {
+	return strings.ReplaceAll(url.QueryEscape(s), "+", "%20")
+}
+
+// encodeQuery is url.Values.Encode with spaces as %20; see queryEscape.
+func encodeQuery(v url.Values) string {
+	return strings.ReplaceAll(v.Encode(), "+", "%20")
+}
