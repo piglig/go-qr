@@ -185,3 +185,23 @@ func TestLogoBoxParity(t *testing.T) {
 		}
 	}
 }
+
+// TestCorrectableErrors checks the error correction capacity per block
+// against ISO/IEC 18004 Table 9, whose smallest symbols correct fewer
+// errors than half their error correction codewords.
+func TestCorrectableErrors(t *testing.T) {
+	want := map[[2]int]int{
+		{1, int(ECCLow)}: 2, {1, int(ECCMedium)}: 4, {1, int(ECCQuartile)}: 6, {1, int(ECCHigh)}: 8,
+		{2, int(ECCLow)}: 4, {2, int(ECCMedium)}: 8, {2, int(ECCQuartile)}: 11, {2, int(ECCHigh)}: 14,
+		{3, int(ECCLow)}: 7, {3, int(ECCMedium)}: 13, {3, int(ECCQuartile)}: 9, {3, int(ECCHigh)}: 11,
+	}
+	for ver := MinVersion; ver <= MaxVersion; ver++ {
+		for _, ecc := range []ECC{ECCLow, ECCMedium, ECCQuartile, ECCHigh} {
+			n, ok := want[[2]int{ver, int(ecc)}]
+			if !ok {
+				n = int(eccCodeWordsPerBlock[ecc][ver]) / 2
+			}
+			assertEqual(t, n, correctableErrors(ver, ecc), "version %d %v", ver, ecc)
+		}
+	}
+}

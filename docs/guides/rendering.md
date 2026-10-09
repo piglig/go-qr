@@ -69,7 +69,9 @@ The modules under a logo are lost, and error correction has to restore them.
 Before drawing, the library counts which codewords the logo covers in each
 error correction block, and fails with `ErrLogoTooLarge` if any block would
 need more than 75% of its correction capacity. The remaining 25% is left for
-print defects, glare and blur.
+print defects, glare and blur. The capacity is that of ISO/IEC 18004, which
+for versions 1 to 3 holds back a few codewords to detect errors rather than
+correct them (*since v2.5.1*).
 
 In practice:
 

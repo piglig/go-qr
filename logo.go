@@ -103,12 +103,30 @@ func logoDamage(code *Code, box int) float64 {
 			}
 		}
 	}
-	capacity := float64(eccLen / 2)
+	capacity := float64(correctableErrors(ver, ecc))
 	worst := 0.0
 	for _, n := range perBlock {
 		worst = max(worst, float64(n)/capacity)
 	}
 	return worst
+}
+
+// correctableErrors returns how many codeword errors each block of a symbol
+// can correct: half its error correction codewords, less the
+// misdecode protection codewords p of ISO/IEC 18004 Table 9, which the
+// smallest symbols reserve for detecting errors rather than correcting
+// them. Readers that follow the standard correct no more.
+func correctableErrors(ver int, ecc ECC) int {
+	p := 0
+	switch {
+	case ver == 1 && ecc == ECCLow:
+		p = 3
+	case ver == 1 && ecc == ECCMedium, ver == 2 && ecc == ECCLow:
+		p = 2
+	case ver == 1, ver == 3 && ecc == ECCLow:
+		p = 1
+	}
+	return (int(eccCodeWordsPerBlock[ecc][ver]) - p) / 2
 }
 
 // rects returns the padded box and the inner logo area in output units.
