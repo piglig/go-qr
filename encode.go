@@ -189,7 +189,7 @@ func EncodeBytes(data []byte, opts ...EncodeOption) (*Code, error) {
 		return nil, err
 	}
 	segs := []Segment{BytesSegment(data)}
-	if c.utf8ECI {
+	if c.utf8ECI && !isASCII(string(data)) {
 		eci, _ := ECISegment(eciUTF8)
 		segs = append([]Segment{eci}, segs...)
 	}

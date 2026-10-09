@@ -111,6 +111,12 @@ func TestEncodeBytesUTF8ECI(t *testing.T) {
 	eci, _ := ECISegment(eciUTF8)
 	want, _ := EncodeSegments([]Segment{eci, BytesSegment([]byte{0xC3, 0xA9})}, WithECC(ECCLow), WithMask(2))
 	assertEqual(t, want, code)
+
+	// ASCII needs no ECI, as with Encode.
+	code, err = EncodeBytes([]byte("abc"), WithUTF8ECI(), WithECC(ECCLow), WithMask(2))
+	assertNoError(t, err)
+	want, _ = EncodeSegments([]Segment{BytesSegment([]byte("abc"))}, WithECC(ECCLow), WithMask(2))
+	assertEqual(t, want, code)
 }
 
 func TestEncodeSegmentsTooLongCount(t *testing.T) {
