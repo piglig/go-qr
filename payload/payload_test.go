@@ -37,7 +37,7 @@ func TestVCard(t *testing.T) {
 	s := v.String()
 	assertTrue(t, strings.HasPrefix(s, "MECARD:"))
 	assertTrue(t, strings.HasSuffix(s, ";;"))
-	assertContains(t, s, "N:Smith\\,John;")
+	assertContains(t, s, "N:Smith,John;")
 	assertContains(t, s, "TEL:+1234;")
 	assertContains(t, s, "EMAIL:a@b.c;")
 	assertContains(t, s, `URL:https\://x;`)
@@ -88,4 +88,14 @@ func TestGeo(t *testing.T) {
 
 func TestURL(t *testing.T) {
 	assertEqual(t, "https://example.com", URL{Href: "https://example.com"}.String())
+}
+
+func TestVCard_NameComma(t *testing.T) {
+	// Only the first comma separates surname and given name.
+	v := VCard{Name: "Smith,John,Jr"}
+	assertEqual(t, `MECARD:N:Smith,John\,Jr;;`, v.String())
+	p, err := Parse(v.String())
+	if err != nil || p != Payload(v) {
+		t.Errorf("Parse = %#v, %v; want %#v", p, err, v)
+	}
 }

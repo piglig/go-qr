@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `payload.Geo` wrote small and large coordinates with an exponent, such
   as `geo:1e-05,0`, which RFC 5870 does not allow.
   Coordinates are now always written in decimal.
+- `payload.VCard` escaped the comma that separates surname and given name
+  in `Name`, writing `N:Doe\,John`, which MECARD readers take as a single
+  name. The first comma is now written as is; later commas are still
+  escaped.
 - `PNG`, `WritePNG` and `Image` allocated whatever the scale asked for, so
   `WithScale(50000)` tried to allocate gigabytes. Images over 16384 pixels
   on a side, quiet zone included, now fail with `ErrInvalidArgument`; SVG
