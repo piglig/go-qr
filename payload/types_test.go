@@ -204,3 +204,21 @@ func FuzzParse(f *testing.F) {
 		}
 	})
 }
+
+// TestContactURL checks that the URL, a uri value, keeps its commas and
+// semicolons, and that line breaks and backslashes cannot break the line.
+func TestContactURL(t *testing.T) {
+	for _, tt := range []struct{ url, line string }{
+		{"https://a.test/?x=1,2;y=3", "URL:https://a.test/?x=1,2;y=3\r\n"},
+		{"https://a.test/\r\nNOTE:x", "URL:https://a.test/%0D%0ANOTE:x\r\n"},
+		{`https://a.test/\x`, "URL:https://a.test/%5Cx\r\n"},
+	} {
+		s := Contact{Name: "A", URL: tt.url}.String()
+		assertContains(t, s, tt.line)
+	}
+	c := Contact{Name: "A", URL: "https://a.test/?x=1,2;y=3"}
+	got, err := Parse(c.String())
+	if err != nil || !reflect.DeepEqual(got, Payload(c)) {
+		t.Errorf("Parse = %#v, %v; want %#v", got, err, c)
+	}
+}

@@ -23,6 +23,11 @@ type Contact struct {
 // vCardEscaper escapes text values per RFC 2426 §4.
 var vCardEscaper = strings.NewReplacer(`\`, `\\`, `;`, `\;`, `,`, `\,`, "\r\n", `\n`, "\n", `\n`)
 
+// vCardURIEscaper makes a URI safe as a vCard uri value, which is not
+// escaped like text: it percent-encodes line breaks, which would end the
+// content line, and backslashes, which readers may unescape.
+var vCardURIEscaper = strings.NewReplacer("\r", "%0D", "\n", "%0A", `\`, "%5C")
+
 func (c Contact) String() string {
 	name := c.Name
 	if name == "" {
@@ -58,7 +63,11 @@ func (c Contact) String() string {
 	for _, e := range c.Emails {
 		text("EMAIL", e)
 	}
-	text("URL", c.URL)
+	if c.URL != "" {
+		// URL is of type uri (RFC 2426 §3.6.8), whose commas and
+		// semicolons are part of the address.
+		line("URL", vCardURIEscaper.Replace(c.URL))
+	}
 	if c.Address != "" {
 		line("ADR", ";;"+vCardEscaper.Replace(c.Address)+";;;;")
 	}
