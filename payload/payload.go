@@ -81,7 +81,7 @@ func (w WiFi) String() string {
 //
 // Format reference: https://en.wikipedia.org/wiki/MeCard_(QR_code)
 type VCard struct {
-	Name    string // Surname,Given or free-form
+	Name    string // Surname,Given or free-form; the first comma separates the two
 	Phone   string
 	Email   string
 	URL     string
@@ -98,7 +98,13 @@ func (v VCard) String() string {
 			fmt.Fprintf(&sb, "%s:%s;", tag, escape(val))
 		}
 	}
-	write("N", v.Name)
+	// The first comma of a name separates the surname from the given name
+	// (an escaped one would be part of the name), so it is written as is.
+	if surname, given, ok := strings.Cut(v.Name, ","); ok {
+		fmt.Fprintf(&sb, "N:%s,%s;", escape(surname), escape(given))
+	} else {
+		write("N", v.Name)
+	}
 	write("TEL", v.Phone)
 	write("EMAIL", v.Email)
 	write("URL", v.URL)
