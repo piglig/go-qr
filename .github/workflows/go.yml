@@ -62,8 +62,10 @@ jobs:
           done
           go test -run='^$' -fuzz='^FuzzParse$' -fuzztime=15s ./payload
 
+      # Staticcheck releases trail Go's: v0.8.1 cannot read the export data
+      # of Go 1.27.2. Run it on oldstable, which it always supports.
       - name: Staticcheck
-        if: matrix.go == 'stable'
+        if: matrix.go == 'oldstable'
         uses: dominikh/staticcheck-action@v1
         with:
           version: "latest"
