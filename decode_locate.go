@@ -509,20 +509,20 @@ func finderRowStep(px int) int {
 // candidate found.
 func findFindersStep(tm *thresholdMap, inverted bool, dark func(x, y int) bool, step int) ([][3]finderPattern, []finderPattern, error) {
 	h := tm.h
-	var cands []finderPattern
+	idx := finderIndex{w: tm.w, h: tm.h}
 
 	add := func(cx, cy, module float64) {
-		for i := range cands {
-			if math.Abs(cands[i].x-cx) < module && math.Abs(cands[i].y-cy) < module {
-				n := float64(cands[i].count)
-				cands[i].x = (cands[i].x*n + cx) / (n + 1)
-				cands[i].y = (cands[i].y*n + cy) / (n + 1)
-				cands[i].moduleSize = (cands[i].moduleSize*n + module) / (n + 1)
-				cands[i].count += step
-				return
-			}
+		if i := idx.find(cx, cy, module); i >= 0 {
+			c := idx.cands[i]
+			n := float64(c.count)
+			c.x = (c.x*n + cx) / (n + 1)
+			c.y = (c.y*n + cy) / (n + 1)
+			c.moduleSize = (c.moduleSize*n + module) / (n + 1)
+			c.count += step
+			idx.set(i, c)
+			return
 		}
-		cands = append(cands, finderPattern{x: cx, y: cy, moduleSize: module, count: step})
+		idx.append(finderPattern{x: cx, y: cy, moduleSize: module, count: step})
 	}
 
 	// Each scanned row is read as runs of one class, and every five runs
@@ -559,8 +559,127 @@ func findFindersStep(tm *thresholdMap, inverted bool, dark func(x, y int) bool, 
 		}
 	}
 
+	cands := idx.cands
 	triples, err := selectFinders(append([]finderPattern(nil), cands...))
 	return triples, cands, err
+}
+
+// finderIndexMin is how many finder candidates are searched linearly before
+// finderIndex buckets them by position. Most images hold fewer.
+const finderIndexMin = 64
+
+// finderIndexCell is the side, in pixels, of a finderIndex bucket.
+const finderIndexCell = 16
+
+// finderIndex holds the finder candidates of a w×h image and finds the
+// first one within a module of a new hit. A linear search makes the scan
+// quadratic in the number of candidates, which an image tiled with finder
+// patterns drives into the hundreds of thousands, so past finderIndexMin
+// candidates are also bucketed in a grid of finderIndexCell-pixel cells.
+type finderIndex struct {
+	w, h   int
+	cands  []finderPattern
+	gw, gh int
+	head   []int32 // first candidate in each cell, or -1
+	next   []int32 // next candidate in the same cell, or -1
+}
+
+// find returns the index of the first candidate within module of (cx, cy)
+// on both axes, or -1.
+func (f *finderIndex) find(cx, cy, module float64) int {
+	near := func(i int) bool {
+		return math.Abs(f.cands[i].x-cx) < module && math.Abs(f.cands[i].y-cy) < module
+	}
+	if f.head == nil {
+		for i := range f.cands {
+			if near(i) {
+				return i
+			}
+		}
+		return -1
+	}
+	// Cells hold candidates in no particular order, so every cell the
+	// window touches is searched for the lowest index.
+	best := -1
+	x0, x1 := f.cell(cx-module, f.gw), f.cell(cx+module, f.gw)
+	y0, y1 := f.cell(cy-module, f.gh), f.cell(cy+module, f.gh)
+	for gy := y0; gy <= y1; gy++ {
+		for gx := x0; gx <= x1; gx++ {
+			for i := f.head[gy*f.gw+gx]; i >= 0; i = f.next[i] {
+				if (best < 0 || int(i) < best) && near(int(i)) {
+					best = int(i)
+				}
+			}
+		}
+	}
+	return best
+}
+
+// append adds a candidate, building the grid once there are enough.
+func (f *finderIndex) append(c finderPattern) {
+	f.cands = append(f.cands, c)
+	if f.head != nil {
+		f.link(len(f.cands) - 1)
+		return
+	}
+	if len(f.cands) <= finderIndexMin {
+		return
+	}
+	f.gw, f.gh = f.w/finderIndexCell+1, f.h/finderIndexCell+1
+	f.head = make([]int32, f.gw*f.gh)
+	for i := range f.head {
+		f.head[i] = -1
+	}
+	f.next = make([]int32, 0, 2*len(f.cands))
+	for i := range f.cands {
+		f.link(i)
+	}
+}
+
+// set replaces candidate i, moving it to the cell of its new position.
+func (f *finderIndex) set(i int, c finderPattern) {
+	if f.head == nil {
+		f.cands[i] = c
+		return
+	}
+	old := f.cellOf(i)
+	f.cands[i] = c
+	if f.cellOf(i) == old {
+		return
+	}
+	p := &f.head[old]
+	for *p != int32(i) {
+		p = &f.next[*p]
+	}
+	*p = f.next[i]
+	f.link(i)
+}
+
+// link puts candidate i at the head of its cell's list.
+func (f *finderIndex) link(i int) {
+	if i == len(f.next) {
+		f.next = append(f.next, -1)
+	}
+	k := f.cellOf(i)
+	f.next[i] = f.head[k]
+	f.head[k] = int32(i)
+}
+
+func (f *finderIndex) cellOf(i int) int {
+	return f.cell(f.cands[i].y, f.gh)*f.gw + f.cell(f.cands[i].x, f.gw)
+}
+
+// cell returns the cell of image coordinate v, clamped to [0, n). Clamping
+// both the cells of candidates and of search windows keeps every candidate
+// inside a window in a cell that the window covers.
+func (f *finderIndex) cell(v float64, n int) int {
+	if !(v > 0) {
+		return 0
+	}
+	if v >= float64(n*finderIndexCell) {
+		return n - 1
+	}
+	return min(int(v)/finderIndexCell, n-1)
 }
 
 // maxFinderTriples bounds how many finder triples are fitted per image.
