@@ -63,7 +63,9 @@ func newRenderConfig(opts []RenderOption) (renderConfig, error) {
 }
 
 // WithScale sets the side of one module: pixels for PNG and Image, user units
-// for SVG. The default is 10. Text output ignores it.
+// for SVG. The default is 10. Text output ignores it. PNG and Image fail
+// with ErrInvalidArgument when the image, quiet zone included, would be
+// more than 16384 pixels on a side.
 func WithScale(n int) RenderOption {
 	return func(c *renderConfig) { c.scale = n }
 }
@@ -102,6 +104,23 @@ func (c *renderConfig) sidePixels(code *Code) (int, error) {
 		return 0, fmt.Errorf("%w: image side %d exceeds the maximum", ErrInvalidArgument, side)
 	}
 	return int(side), nil
+}
+
+// maxRasterSide bounds the side of PNG and Image output, in pixels: an
+// RGBA image of this side takes 1 GiB. Without a bound, a scale taken from
+// a request could make a server allocate any amount of memory.
+const maxRasterSide = 16384
+
+// rasterSide is sidePixels for output whose pixels are allocated.
+func (c *renderConfig) rasterSide(code *Code) (int, error) {
+	side, err := c.sidePixels(code)
+	if err != nil {
+		return 0, err
+	}
+	if side > maxRasterSide {
+		return 0, fmt.Errorf("%w: image side %d pixels exceeds the maximum of %d", ErrInvalidArgument, side, maxRasterSide)
+	}
+	return side, nil
 }
 
 // checkLogo reports whether the configured logo, if any, fits the error

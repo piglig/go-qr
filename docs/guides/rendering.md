@@ -45,6 +45,11 @@ func handler(w http.ResponseWriter, r *http.Request) {
 
 Shapes, finder colors and gradients are covered in [Styling](styling.md).
 
+PNG and `Image` output is at most 16384 pixels on a side, quiet zone
+included; larger sizes fail with `ErrInvalidArgument` (*since v2.5.1*), so
+a scale taken from a request cannot make the server allocate gigabytes. SVG
+output, whose scale is in user units, has no such limit.
+
 Readers need strong contrast: keep the foreground dark and the background
 light. Light-on-dark codes are readable by this library's decoder and some
 apps, but many scanners reject them.

@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `PNG`, `WritePNG` and `Image` allocated whatever the scale asked for, so
+  `WithScale(50000)` tried to allocate gigabytes. Images over 16384 pixels
+  on a side, quiet zone included, now fail with `ErrInvalidArgument`; SVG
+  output is unchanged. Coverage tiles of styled codes are no longer cached
+  for scales over 64, where they reach tens of megabytes each.
+
+### Fixed
+
 - `Decode` took time quadratic in the number of finder pattern candidates
   in an image, so an image tiled with finder patterns could hold it for
   seconds: 10 s for a 10-megapixel one. Candidates are now merged through

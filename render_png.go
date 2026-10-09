@@ -19,7 +19,7 @@ func (c *Code) Image(opts ...RenderOption) (*image.RGBA, error) {
 }
 
 func (c *Code) renderRGBA(cfg *renderConfig) (*image.RGBA, error) {
-	side, err := cfg.sidePixels(c)
+	side, err := cfg.rasterSide(c)
 	if err != nil {
 		return nil, err
 	}
@@ -54,7 +54,7 @@ func (c *Code) WritePNG(w io.Writer, opts ...RenderOption) error {
 			return err
 		}
 	} else {
-		side, err := cfg.sidePixels(c)
+		side, err := cfg.rasterSide(c)
 		if err != nil {
 			return err
 		}

@@ -205,7 +205,16 @@ type tileKey struct {
 // so repeated renders skip the supersampling.
 var tileCache sync.Map // tileKey -> []uint8
 
+// maxCachedTileScale is the largest scale whose tiles are cached. Tiles
+// grow with the square of the scale, a finder's to 30 MB at the largest
+// scale an image allows, so caching every scale requested would hold
+// memory without bound; renders at larger scales are rare.
+const maxCachedTileScale = 64
+
 func cachedTile(k tileKey, px int, units float64, inside func(u, v float64) bool) []uint8 {
+	if k.scale > maxCachedTileScale {
+		return coverageTile(px, units, inside)
+	}
 	if t, ok := tileCache.Load(k); ok {
 		return t.([]uint8)
 	}
