@@ -40,7 +40,7 @@ type Field struct {
 
 // Report describes a QR Code's content.
 type Report struct {
-	Kind    string   `json:"kind" jsonschema:"content type: url, wifi, contact, event, otp, payment, email, sms, phone, geo, gs1 or text"`
+	Kind    string   `json:"kind" jsonschema:"content type: url, wifi, contact, event, otp, payment, email, sms, phone, geo, gs1, text, or multiple for several unrelated codes"`
 	Action  string   `json:"action" jsonschema:"what a phone typically does when scanning the code"`
 	Risk    Level    `json:"risk" jsonschema:"highest signal level: info, caution or danger"`
 	Fields  []Field  `json:"fields,omitempty" jsonschema:"values extracted from the content"`
@@ -299,4 +299,22 @@ func hasControl(s string) bool {
 		}
 	}
 	return false
+}
+
+// Combine reports on several unrelated codes read together, labeled by
+// where each came from. It lists every code's signals, most severe first,
+// so its risk is the highest of theirs.
+func Combine(labels []string, reports []Report) Report {
+	r := Report{
+		Kind:   "multiple",
+		Action: fmt.Sprintf("Holds %d codes. A phone scans one of them, whichever it finds first; each code's own report is with its symbol.", len(reports)),
+	}
+	r.signal(Info, "multiple-codes", fmt.Sprintf("%d codes were found. Make sure the one the user means to scan is the one they expect: a sticker over a genuine code is a common scam.", len(reports)))
+	for i, rep := range reports {
+		for _, s := range rep.Signals {
+			r.signal(s.Level, s.Code, fmt.Sprintf("Code %d (%s): %s", i+1, labels[i], s.Message))
+		}
+	}
+	r.finish()
+	return r
 }

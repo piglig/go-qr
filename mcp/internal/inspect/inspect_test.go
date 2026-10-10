@@ -143,3 +143,13 @@ func TestSignalsOrderedBySeverity(t *testing.T) {
 		t.Fatalf("risk %s", r.Risk)
 	}
 }
+
+func TestCombine(t *testing.T) {
+	r := Combine([]string{"a.png", "b.png"}, []Report{Text("hello", false), Text("tel:*#06#", false)})
+	if r.Kind != "multiple" || r.Risk != Danger || r.Signals[0].Code != "tel-ussd" || !strings.HasPrefix(r.Signals[0].Message, "Code 2 (b.png): ") {
+		t.Fatalf("%+v", r)
+	}
+	if last := r.Signals[len(r.Signals)-1]; last.Level != Info {
+		t.Fatalf("signals not ordered: %+v", r.Signals)
+	}
+}

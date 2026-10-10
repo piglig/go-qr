@@ -6,7 +6,7 @@ three tools backed by go-qr:
 
 | Tool | What it does |
 | --- | --- |
-| `decode_qr` | Decodes the QR Code in a local image exactly and explains what scanning it would do. |
+| `decode_qr` | Decodes every QR Code in a local image exactly and explains what scanning each would do. |
 | `generate_qr` | Creates a code from text or a structured payload, optionally styled, and verifies that it scans. |
 | `inspect_qr` | Explains QR Code content the assistant already has, with risk signals. |
 
@@ -94,13 +94,19 @@ show them to the model. In short:
 Input: `paths` (one or more local PNG, JPEG or GIF files) or `image_base64`.
 
 Images are decoded at full resolution, so small codes in large photos keep
-their detail; files over 25 MB are refused. Several paths that form a
-[structured append](encoding.md) sequence are joined in order, whatever
+their detail; files over 25 MB are refused. Every code in each image is
+read, in reading order. Codes that form a [structured append](encoding.md)
+sequence, in one image or across several, are joined in order, whatever
 order they are given in.
 
-Output: the decoded `text`; for each image its version, error correction
-level, mask, segments, GS1 and structured append details; and an
-`inspection` report as described below.
+Output: the decoded `text`; for each code its version, error correction
+level, mask, `corners` in the image, segments, GS1 and structured append
+details; and an `inspection` report as described below. When the codes are
+unrelated, as on a poster with a menu link and a Wi-Fi code, each code has
+its own `inspection`, and the top-level report, of kind `multiple`, lists
+every code's signals, prefixed with the code they belong to, so its risk
+is that of the riskiest code. It also notes that several codes were found:
+a sticker over a genuine code is a common scam.
 
 ### generate_qr
 
@@ -145,7 +151,8 @@ includes.
 ```
 
 `kind` is one of `url`, `wifi`, `contact`, `event`, `otp`, `payment`,
-`email`, `sms`, `phone`, `geo`, `gs1` or `text`. `risk` is the highest
+`email`, `sms`, `phone`, `geo`, `gs1`, `text`, or `multiple` for several
+unrelated codes from `decode_qr`. `risk` is the highest
 signal level: `info`, `caution` or `danger`. Signals are sorted by level and
 include, among others:
 
