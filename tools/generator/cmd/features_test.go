@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"image"
+	"image/draw"
 	"image/png"
 	"os"
 	"path/filepath"
@@ -304,5 +306,92 @@ func TestPayloadEPCRejectsBadIBAN(t *testing.T) {
 	err = run([]string{"encode", "-stdout", "png", "-payload", "otp", "-content", "issuer=x"}, &out, &errOut)
 	if err == nil || err.Error() != "payload: otp: secret is required" {
 		t.Errorf("error = %v, want CLI errors prefixed once", err)
+	}
+}
+
+// writeSheet writes a PNG of the codes side by side and returns its path.
+func writeSheet(t *testing.T, codes []*qr.Code) string {
+	t.Helper()
+	sheet := image.NewRGBA(image.Rect(0, 0, 220*len(codes), 220))
+	draw.Draw(sheet, sheet.Bounds(), image.White, image.Point{}, draw.Src)
+	for i, code := range codes {
+		img, err := code.Image(qr.WithScale(5))
+		if err != nil {
+			t.Fatal(err)
+		}
+		draw.Draw(sheet, img.Bounds().Add(image.Pt(i*220, 0)), img, image.Point{}, draw.Src)
+	}
+	path := filepath.Join(t.TempDir(), "sheet.png")
+	f, err := os.Create(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	if err := png.Encode(f, sheet); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+func TestDecodeAll(t *testing.T) {
+	var codes []*qr.Code
+	for _, text := range []string{"left", "middle", "right"} {
+		code, _ := qr.Encode(text)
+		codes = append(codes, code)
+	}
+	path := writeSheet(t, codes)
+
+	var out, errOut bytes.Buffer
+	if err := run([]string{"decode", "-all", path}, &out, &errOut); err != nil {
+		t.Fatal(err)
+	}
+	if out.String() != "left\nmiddle\nright\n" {
+		t.Fatalf("-all output %q", out.String())
+	}
+	// Without -all, one code is read.
+	out.Reset()
+	if err := run([]string{"decode", path}, &out, &errOut); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Count(out.String(), "\n") != 1 {
+		t.Fatalf("output %q", out.String())
+	}
+
+	out.Reset()
+	if err := run([]string{"decode", "-all", "-json", path}, &out, &errOut); err != nil {
+		t.Fatal(err)
+	}
+	var got struct {
+		Text    *string         `json:"text"`
+		Symbols []decodedSymbol `json:"symbols"`
+	}
+	if err := json.Unmarshal(out.Bytes(), &got); err != nil {
+		t.Fatalf("%v in %s", err, out.String())
+	}
+	if got.Text != nil || len(got.Symbols) != 3 {
+		t.Fatalf("got %+v", got)
+	}
+	// The middle symbol's top-left corner is 220 px from the left one's, past
+	// a 4-module quiet zone of 5 px modules.
+	if s := got.Symbols[1]; s.File != path || s.Text != "middle" || s.Corners[0] != [2]int{240, 20} {
+		t.Fatalf("symbol %+v", s)
+	}
+}
+
+// TestDecodeAllSequence joins a structured append sequence photographed in
+// one image.
+func TestDecodeAllSequence(t *testing.T) {
+	text := strings.Repeat("A message split over several symbols. ", 3)
+	codes, err := qr.EncodeStructured(text, qr.WithECC(qr.ECCLow), qr.WithVersionRange(1, 2))
+	if err != nil || len(codes) < 2 {
+		t.Fatalf("%d codes, %v", len(codes), err)
+	}
+	path := writeSheet(t, codes)
+	var out, errOut bytes.Buffer
+	if err := run([]string{"decode", "-all", path}, &out, &errOut); err != nil {
+		t.Fatal(err)
+	}
+	if out.String() != text+"\n" {
+		t.Fatalf("output %q", out.String())
 	}
 }

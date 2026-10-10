@@ -105,16 +105,19 @@ backslash. List values (phones, emails, CC and BCC) are separated with `;`.
 ## decode
 
 ```shell
-generator decode [-json] <image-file>...
+generator decode [-all] [-json] <image-file>...
 ```
 
-Reads PNG, JPEG or GIF images and prints their text. Images that form a
-structured append sequence are joined into one message, in any order;
-otherwise each text is printed on its own line.
+Reads PNG, JPEG or GIF images and prints their text. With `-all`, every
+code in each image is read, in reading order, as `qr.DecodeAll` does;
+otherwise one code per image. Symbols that form a structured append
+sequence are joined into one message, in any order; otherwise each text is
+printed on its own line.
 
 `-json` prints the text together with each symbol's version, error
-correction level, mask, segments, structured append position and detected
-payload type:
+correction level, mask, corners in the image (top-left, top-right,
+bottom-right, bottom-left), segments, structured append position and
+detected payload type:
 
 ```json
 {
@@ -126,6 +129,7 @@ payload type:
       "version": 3,
       "ecc": "H",
       "mask": 1,
+      "corners": [[40, 40], [330, 40], [330, 330], [40, 330]],
       "payload": "WiFi",
       "segments": [
         { "mode": "alphanumeric", "chars": 10, "eci": -1 },
@@ -164,4 +168,5 @@ generator decode part-*.png
 # Decoding
 generator decode hello.png
 generator decode -json wifi.png
+generator decode -all shelf.jpg                               # every code in the photo
 ```
