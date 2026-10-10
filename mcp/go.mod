@@ -4,7 +4,7 @@ go 1.25.0
 
 require (
 	github.com/modelcontextprotocol/go-sdk v1.8.0
-	github.com/piglig/go-qr/v2 v2.5.1
+	github.com/piglig/go-qr/v2 v2.6.0
 )
 
 require (
