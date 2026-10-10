@@ -185,9 +185,12 @@ release from the CHANGELOG section.
 **The CLI and the MCP server.** `tools` and `mcp` pin a released library
 version. After a library release, Dependabot opens one pull request bumping
 both pins. When it is merged, the workflow tests each module against the
-new pin, tags the next patch versions `tools/vX.Y.Z` and `mcp/vX.Y.Z`, and
+new pin, tags the next versions `tools/vX.Y.Z` and `mcp/vX.Y.Z`, and
 publishes their releases, listing the changes to each module since its
-last release. To release changes to these modules without a library
+last release. A pull request that changes a module's pin together with a
+feature of its own, titled `feat(tools): ...` or `feat(mcp): ...`, releases
+the next minor version of that module; other pin changes release the next
+patch version. To release changes to these modules without a library
 release, such as a new CLI flag, run the workflow by hand from the Actions
 tab, choosing the module and a patch or minor version.
 
