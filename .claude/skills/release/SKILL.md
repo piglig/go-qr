@@ -52,7 +52,8 @@ Dependabot checks daily and opens `chore(deps): bump github.com/piglig/go-qr/v2 
 for `/tools` and `/mcp`. When it appears, check that CI passes, including
 `test (tools and mcp on the pinned library)`, and merge it when the
 maintainer agrees. The workflow then releases the next patch versions of
-`tools` and `mcp`; confirm them as in step 4.
+`tools` and `mcp`, or the next minor version of a module whose pin changes
+in a `feat` pull request; confirm them as in step 4.
 
 To release `tools` or `mcp` without a library release, for example for a
 new CLI flag, the maintainer runs the release workflow by hand from the

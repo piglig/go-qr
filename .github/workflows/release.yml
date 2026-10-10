@@ -7,9 +7,10 @@ name: Release
 #
 # - The library is released when a merged commit adds a version heading to
 #   CHANGELOG.md that has no tag yet (scripts/release.sh opens that PR).
-# - tools and mcp are released with the next patch version when a merged
-#   commit changes the library version they pin (the Dependabot PR), or by
-#   hand with workflow_dispatch, for example for a new CLI flag.
+# - tools and mcp are released when a merged commit changes the library
+#   version they pin (the Dependabot PR), or by hand with workflow_dispatch,
+#   for example for a new CLI flag. The next minor version when a feat
+#   commit in the push touches the module, the next patch version otherwise.
 
 on:
   push:
@@ -115,6 +116,11 @@ jobs:
               old=$lib
             fi
             [ "$old" != "$lib" ] || { echo "Library pin unchanged ($lib)."; exit 0; }
+            # A feature of the module itself, merged with the pin change,
+            # makes a minor release.
+            if git log --format=%s "$BEFORE..HEAD" -- "$M" | grep -qE '^feat(\([^)]*\))?!?:'; then
+              BUMP=minor
+            fi
           fi
           last=$(git tag -l "$M/v*" | sort -V | tail -1)
           IFS=. read -r major minor patch <<< "${last#"$M"/v}"
