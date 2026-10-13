@@ -602,24 +602,34 @@ func (m *thresholdMap) runs(y int, inverted bool, dst []int) []int {
 // JoinStructuredAppend reassembles the message of a structured append
 // sequence from its decoded symbols, given in any order. Every symbol of the
 // sequence must be present exactly once, and all must agree on the length
-// and parity of the sequence; the error wraps ErrInvalidArgument otherwise.
+// and parity of the sequence; the error wraps ErrInvalidArgument otherwise,
+// and for a nil part.
 func JoinStructuredAppend(parts ...*DecodeResult) (string, error) {
 	if len(parts) == 0 {
 		return "", fmt.Errorf("%w: no symbols to join", ErrInvalidArgument)
 	}
-	first := parts[0].StructuredAppend
-	if first == nil {
+	var first *StructuredAppend
+	if parts[0] != nil {
+		first = parts[0].StructuredAppend
+	}
+	switch {
+	case first == nil:
 		return "", fmt.Errorf("%w: symbol 0 is not part of a structured append sequence", ErrInvalidArgument)
+	case first.Total < 1 || first.Total > maxStructuredAppend:
+		return "", fmt.Errorf("%w: sequence of %d symbols", ErrInvalidArgument, first.Total)
 	}
 	ordered := make([]*DecodeResult, first.Total)
 	for i, p := range parts {
+		if p == nil {
+			return "", fmt.Errorf("%w: symbol %d is nil", ErrInvalidArgument, i)
+		}
 		sa := p.StructuredAppend
 		switch {
 		case sa == nil:
 			return "", fmt.Errorf("%w: symbol %d is not part of a structured append sequence", ErrInvalidArgument, i)
 		case sa.Total != first.Total || sa.Parity != first.Parity:
 			return "", fmt.Errorf("%w: symbol %d belongs to a different sequence", ErrInvalidArgument, i)
-		case sa.Index >= sa.Total:
+		case sa.Index < 0 || sa.Index >= sa.Total:
 			return "", fmt.Errorf("%w: symbol %d has index %d of %d", ErrInvalidArgument, i, sa.Index, sa.Total)
 		case ordered[sa.Index] != nil:
 			return "", fmt.Errorf("%w: duplicate symbol %d of the sequence", ErrInvalidArgument, sa.Index)

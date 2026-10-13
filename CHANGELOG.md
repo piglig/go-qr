@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `JoinStructuredAppend` panicked on a nil symbol, and on a hand-built
+  `StructuredAppend` with a negative index or a total outside 1 to 16. It
+  now returns an error wrapping `ErrInvalidArgument`.
+
 ## [2.6.0] - 2026-10-10
 
 ### Added
