@@ -101,6 +101,11 @@ func TestEPC(t *testing.T) {
 		"huge amount":     {Name: "x", IBAN: "DE89370400440532013000", Amount: maxEPCAmount + 1},
 		"ref and text":    {Name: "x", IBAN: "DE89370400440532013000", Reference: "RF18", Text: "t"},
 		"long text":       {Name: "x", IBAN: "DE89370400440532013000", Text: strings.Repeat("t", 141)},
+		"newline in name": {Name: "x\ny", IBAN: "DE89370400440532013000"},
+		"CR in text":      {Name: "x", IBAN: "DE89370400440532013000", Text: "a\rb"},
+		"newline in info": {Name: "x", IBAN: "DE89370400440532013000", Info: "a\nb"},
+		"newline in BIC":  {Name: "x", IBAN: "DE89370400440532013000", BIC: "BPOT\nBEB"},
+		"newline in ref":  {Name: "x", IBAN: "DE89370400440532013000", Reference: "RF\n18"},
 	} {
 		if err := bad.Validate(); !errors.Is(err, ErrInvalidEPC) {
 			t.Errorf("%s: Validate = %v, want ErrInvalidEPC", name, err)

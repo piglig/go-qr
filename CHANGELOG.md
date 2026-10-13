@@ -13,6 +13,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `StructuredAppend` with a negative index or a total outside 1 to 16. It
   now returns an error wrapping `ErrInvalidArgument`.
 
+- `payload.EPC.Validate` accepted line breaks within fields, while the
+  payload separates its fields with line breaks: a name such as
+  "Red\nCross" shifted every later field, so a banking app read
+  "Cross" as the IBAN. Fields holding a line break now fail with
+  `ErrInvalidEPC`.
+
 ## [2.6.0] - 2026-10-10
 
 ### Added

@@ -30,8 +30,17 @@ var ErrInvalidEPC = errors.New("payload: invalid EPC payment")
 const maxEPCAmount = 99999999999
 
 // Validate checks the field lengths and constraints of the specification,
-// and the IBAN's ISO 13616 check digits.
+// and the IBAN's ISO 13616 check digits. Fields must not hold line breaks,
+// which separate the fields of the payload.
 func (e EPC) Validate() error {
+	for _, f := range [...]struct{ name, value string }{
+		{"name", e.Name}, {"IBAN", e.IBAN}, {"BIC", e.BIC}, {"purpose", e.Purpose},
+		{"reference", e.Reference}, {"text", e.Text}, {"info", e.Info},
+	} {
+		if strings.ContainsAny(f.value, "\r\n") {
+			return fmt.Errorf("%w: %s holds a line break", ErrInvalidEPC, f.name)
+		}
+	}
 	n := utf8.RuneCountInString
 	switch iban := normalizeIBAN(e.IBAN); {
 	case e.Name == "" || n(e.Name) > 70:
