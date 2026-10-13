@@ -3,7 +3,9 @@ package main
 import (
 	"bytes"
 	"encoding/base64"
+	"fmt"
 	"image"
+	"image/color"
 	"image/draw"
 	"image/png"
 	"strings"
@@ -115,5 +117,75 @@ func TestDecodeRGBA(t *testing.T) {
 	}
 	if blank := decodeRGBA(make([]byte, 4*40*40), 40, 40); blank.Error == "" {
 		t.Error("blank image decoded")
+	}
+}
+
+// TestEncodeLogoScaled checks that a large logo is scaled down to the size it
+// is drawn at before it is embedded in the SVG, and that the scaled logo is
+// reused while only the style changes.
+func TestEncodeLogoScaled(t *testing.T) {
+	logo := image.NewRGBA(image.Rect(0, 0, 1200, 900))
+	draw.Draw(logo, logo.Bounds(), image.NewUniform(color.RGBA{R: 200, A: 255}), image.Point{}, draw.Src)
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, logo); err != nil {
+		t.Fatal(err)
+	}
+	url := "data:image/png;base64," + base64.StdEncoding.EncodeToString(buf.Bytes())
+	req := EncodeRequest{Text: "https://example.com", ECC: "H", Scale: 10, QuietZone: 4, Logo: url, LogoRatio: 0.2}
+	resp := encode(req)
+	if resp.Error != "" || resp.Verify != "" {
+		t.Fatalf("error %q, verify %q", resp.Error, resp.Verify)
+	}
+
+	side := logoSide(resp.Size, req)
+	_, href, _ := strings.Cut(resp.SVG, `href="data:image/png;base64,`)
+	href, _, _ = strings.Cut(href, `"`)
+	raw, err := base64.StdEncoding.DecodeString(href)
+	if err != nil {
+		t.Fatal(err)
+	}
+	embedded, err := png.Decode(bytes.NewReader(raw))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if b := embedded.Bounds(); b.Dx() != side || b.Dy() != side {
+		t.Fatalf("embedded logo is %v, want %d×%d", b.Size(), side, side)
+	}
+	if r, _, _, _ := embedded.At(side/2, side/2).RGBA(); r>>8 != 200 {
+		t.Errorf("scaled logo red = %d, want 200", r>>8)
+	}
+	if !strings.Contains(resp.SVG, fmt.Sprintf(`width="%d"`, side)) {
+		t.Errorf("SVG does not draw the logo %d units wide", side)
+	}
+
+	cached := logoCache.img
+	req.ModuleShape, req.FinderShape = "dot", "circle"
+	if resp := encode(req); resp.Error != "" {
+		t.Fatal(resp.Error)
+	}
+	if logoCache.img != cached {
+		t.Error("changing the style decoded the logo again")
+	}
+}
+
+func TestShrink(t *testing.T) {
+	src := image.NewNRGBA(image.Rect(0, 0, 4, 2))
+	for x := 0; x < 4; x++ {
+		c := color.NRGBA{A: 255}
+		if x%2 == 0 {
+			c = color.NRGBA{R: 255, G: 255, B: 255, A: 255}
+		}
+		src.Set(x, 0, c)
+		src.Set(x, 1, c)
+	}
+	got := shrink(src, 2)
+	for _, p := range [][2]int{{0, 0}, {1, 1}} {
+		if c := got.RGBAAt(p[0], p[1]); c != (color.RGBA{R: 127, G: 127, B: 127, A: 255}) {
+			t.Errorf("pixel %v = %v, want the average gray", p, c)
+		}
+	}
+	// A dimension smaller than the target is stretched, not dropped.
+	if got := shrink(image.NewRGBA(image.Rect(0, 0, 10, 1)), 4); got.Bounds().Dx() != 4 || got.Bounds().Dy() != 4 {
+		t.Errorf("shrink of 10×1 to 4 = %v", got.Bounds())
 	}
 }

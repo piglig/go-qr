@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"image"
 	"image/color"
+	"image/draw"
 	_ "image/gif"
 	_ "image/jpeg"
 	_ "image/png"
@@ -116,7 +117,7 @@ func encodeErr(req EncodeRequest) (EncodeResponse, error) {
 		return EncodeResponse{}, err
 	}
 
-	opts, err := renderOptions(req)
+	opts, err := renderOptions(req, code.Size())
 	if err != nil {
 		return EncodeResponse{}, err
 	}
@@ -149,7 +150,7 @@ func encodeErr(req EncodeRequest) (EncodeResponse, error) {
 	return resp, nil
 }
 
-func renderOptions(req EncodeRequest) ([]qr.RenderOption, error) {
+func renderOptions(req EncodeRequest, qrSize int) ([]qr.RenderOption, error) {
 	var opts []qr.RenderOption
 	if req.Scale > 0 {
 		opts = append(opts, qr.WithScale(req.Scale))
@@ -196,7 +197,7 @@ func renderOptions(req EncodeRequest) ([]qr.RenderOption, error) {
 		opts = append(opts, qr.WithFinderColor(ring, center))
 	}
 	if req.Logo != "" {
-		logo, err := decodeDataURL(req.Logo)
+		logo, err := loadLogo(req.Logo, logoSide(qrSize, req))
 		if err != nil {
 			return nil, fmt.Errorf("logo: %w", err)
 		}
@@ -219,6 +220,77 @@ func parseHex(s string) (color.Color, error) {
 		return nil, fmt.Errorf("invalid color %q", s)
 	}
 	return color.NRGBA{R: uint8(v >> 24), G: uint8(v >> 16), B: uint8(v >> 8), A: uint8(v)}, nil
+}
+
+// logoCache keeps the last logo, decoded and scaled, so that changing the
+// style does not decode and scale the uploaded image again on every render.
+var logoCache struct {
+	url  string
+	side int
+	img  image.Image
+}
+
+// logoSide returns the side, in pixels, of the area qr.WithLogo draws the
+// logo into: the logo box without its one-module padding. It returns 0 when
+// the request leaves the scale to the library's default.
+func logoSide(qrSize int, req EncodeRequest) int {
+	if req.Scale < 1 {
+		return 0
+	}
+	n := int(float64(qrSize) * req.LogoRatio)
+	if n%2 != qrSize%2 {
+		n--
+	}
+	return max(n, 1) * req.Scale
+}
+
+// loadLogo decodes the data URL and, when side is not 0, scales the image
+// down to side×side pixels, the size it is drawn at. Embedded in the SVG, a logo at its uploaded size
+// would be re-encoded as PNG on every render.
+func loadLogo(url string, side int) (image.Image, error) {
+	if logoCache.url == url && logoCache.side == side {
+		return logoCache.img, nil
+	}
+	img, err := decodeDataURL(url)
+	if err != nil {
+		return nil, err
+	}
+	if b := img.Bounds(); side > 0 && (b.Dx() > side || b.Dy() > side) {
+		img = shrink(img, side)
+	}
+	logoCache.url, logoCache.side, logoCache.img = url, side, img
+	return img, nil
+}
+
+// shrink scales src down to side×side pixels by averaging the source pixels
+// under each output pixel.
+func shrink(src image.Image, side int) *image.RGBA {
+	b := src.Bounds()
+	in := image.NewRGBA(image.Rect(0, 0, b.Dx(), b.Dy()))
+	draw.Draw(in, in.Bounds(), src, b.Min, draw.Src)
+	out := image.NewRGBA(image.Rect(0, 0, side, side))
+	for y := range side {
+		y0, y1 := y*b.Dy()/side, max((y+1)*b.Dy()/side, y*b.Dy()/side+1)
+		for x := range side {
+			x0, x1 := x*b.Dx()/side, max((x+1)*b.Dx()/side, x*b.Dx()/side+1)
+			var sum [4]int
+			for sy := y0; sy < y1; sy++ {
+				row := in.Pix[sy*in.Stride+4*x0 : sy*in.Stride+4*x1]
+				for i := 0; i < len(row); i += 4 {
+					sum[0] += int(row[i])
+					sum[1] += int(row[i+1])
+					sum[2] += int(row[i+2])
+					sum[3] += int(row[i+3])
+				}
+			}
+			n := (y1 - y0) * (x1 - x0)
+			o := out.PixOffset(x, y)
+			for c := range sum {
+				out.Pix[o+c] = uint8(sum[c] / n)
+			}
+		}
+	}
+	return out
 }
 
 // decodeDataURL decodes a base64 data: URL holding a PNG, JPEG or GIF.

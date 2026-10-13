@@ -142,16 +142,28 @@ function download(name, href) {
 
 $("form").addEventListener("input", render);
 $("presets").addEventListener("click", (e) => e.target.dataset.preset && applyPreset(e.target.dataset.preset));
+// The largest logo the page draws: 35% of a version 40 symbol at scale 10.
+const MAX_LOGO_SIDE = 640;
+
+// The logo is shrunk once on upload: every render sends it to Go, which
+// would otherwise decode a full-size photo again on each change.
 $("logo").addEventListener("change", () => {
   const file = $("logo").files[0];
   if (!file) return;
-  const reader = new FileReader();
-  reader.onload = () => {
-    state.logo = reader.result;
+  const img = new Image();
+  img.onload = () => {
+    URL.revokeObjectURL(img.src);
+    const scale = Math.min(1, MAX_LOGO_SIDE / Math.max(img.naturalWidth, img.naturalHeight));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(img.naturalWidth * scale));
+    canvas.height = Math.max(1, Math.round(img.naturalHeight * scale));
+    canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
+    state.logo = canvas.toDataURL("image/png");
     if ($("ecc").value !== "H") $("ecc").value = "H";
     render();
   };
-  reader.readAsDataURL(file);
+  img.onerror = () => URL.revokeObjectURL(img.src);
+  img.src = URL.createObjectURL(file);
 });
 $("clearLogo").addEventListener("click", () => {
   state.logo = "";
