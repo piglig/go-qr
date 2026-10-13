@@ -95,6 +95,11 @@ type fileAccess struct {
 // maxImageBytes bounds the size of an image file the server reads.
 const maxImageBytes = 25 << 20
 
+// maxImagePixels bounds the pixels of an image the server decodes, which
+// takes several bytes each in memory: 100 megapixels is more than phone
+// cameras take.
+const maxImagePixels = 100_000_000
+
 func (f fileAccess) resolve(path string) (string, error) {
 	if path == "" {
 		return "", errors.New("empty path")

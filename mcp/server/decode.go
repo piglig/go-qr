@@ -104,6 +104,12 @@ func (f fileAccess) decode(_ context.Context, _ *mcp.CallToolRequest, in DecodeI
 	var out DecodeOutput
 	var results []*qr.DecodeResult
 	for _, src := range sources {
+		// A small file can declare a huge image; check its dimensions
+		// before allocating its pixels.
+		if cfg, _, err := image.DecodeConfig(bytes.NewReader(src.data)); err == nil && int64(cfg.Width)*int64(cfg.Height) > maxImagePixels {
+			return nil, DecodeOutput{}, fmt.Errorf("%s: image of %dx%d pixels is larger than %d megapixels",
+				src.name, cfg.Width, cfg.Height, maxImagePixels/1_000_000)
+		}
 		img, _, err := image.Decode(bytes.NewReader(src.data))
 		if err != nil {
 			return nil, DecodeOutput{}, fmt.Errorf("%s: not a PNG, JPEG or GIF image: %w", src.name, err)

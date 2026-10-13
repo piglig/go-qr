@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
+	"encoding/binary"
 	"encoding/json"
+	"hash/crc32"
 	"image"
 	"image/draw"
 	"image/png"
@@ -248,6 +250,24 @@ func TestDecodeLargeImage(t *testing.T) {
 	}
 	if dec.Text != "large image" {
 		t.Fatalf("got %q", dec.Text)
+	}
+}
+
+func TestDecodeRefusesHugeImages(t *testing.T) {
+	code, _ := qr.Encode("x")
+	data, _ := code.PNG()
+	// Declare 20000x20000 pixels in the IHDR chunk, and fix its CRC.
+	binary.BigEndian.PutUint32(data[16:], 20000)
+	binary.BigEndian.PutUint32(data[20:], 20000)
+	binary.BigEndian.PutUint32(data[29:], crc32.ChecksumIEEE(data[12:29]))
+	if cfg, err := png.DecodeConfig(bytes.NewReader(data)); err != nil || cfg.Width != 20000 {
+		t.Fatalf("patched PNG: %v %+v", err, cfg)
+	}
+
+	cs := connect(t, Options{})
+	res := call(t, cs, "decode_qr", map[string]any{"image_base64": base64.StdEncoding.EncodeToString(data)}, nil)
+	if !res.IsError || !strings.Contains(errorText(res), "megapixels") {
+		t.Errorf("huge image not refused: %s", errorText(res))
 	}
 }
 
