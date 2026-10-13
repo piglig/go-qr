@@ -65,7 +65,7 @@ claude mcp add go-qr -- go-qr-mcp
 
 | Flag | Meaning |
 | --- | --- |
-| `-root dir` | Only read and write files inside `dir`. Relative paths are resolved against it. Without it, the tools can access any file the user can. |
+| `-root dir` | Only read and write files inside `dir`. Relative paths are resolved against it, and symbolic links that lead outside it are refused. Without it, the tools can access any file the user can. |
 | `-http addr` | Serve MCP over streamable HTTP on `addr` (for example `localhost:8090`) instead of stdio. Bind to localhost: the server has no authentication. |
 | `-version` | Print the version and exit. |
 
