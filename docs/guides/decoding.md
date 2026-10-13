@@ -92,8 +92,7 @@ segments of a symbol are read in one character set, and a Kanji mode
 segment in the symbol counts for Shift_JIS. One or two characters can read
 plausibly both ways, such as "ﾒﾓ" and "ÒÓ"; use an ECI when that matters.
 
-Other ECIs return `ErrUnsupported`; the raw bytes are still in `Segments` if
-you need them.
+Other ECIs make `Decode` fail with `ErrUnsupported`, without a result.
 
 ## Several symbols in one image
 

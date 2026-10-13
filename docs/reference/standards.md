@@ -29,7 +29,7 @@ page lists what the encoder and decoder support, by section of the standard.
 | 20 | Shift_JIS | ✅ |
 | 26 | UTF-8 | ✅ |
 | 27, 170 | ASCII | ✅ |
-| other | | `ErrUnsupported`; raw bytes are in `DecodeResult.Segments` |
+| other | | `ErrUnsupported`, without a result |
 
 Without an ECI, the decoder reads byte segments as UTF-8 when they are valid
 UTF-8, and otherwise as Shift_JIS or Windows-1252 (a superset of ISO-8859-1
