@@ -83,6 +83,11 @@ jobs:
 
   modules:
     runs-on: ubuntu-latest
+    # id-token and attestations sign the build provenance of the binaries.
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
     strategy:
       fail-fast: false
       matrix:
@@ -145,6 +150,20 @@ jobs:
         working-directory: ${{ matrix.module }}
         run: go mod verify && go vet ./... && go test ./...
 
+      # Binaries are built and attested before the tag is pushed, so a
+      # failed build publishes nothing.
+      - name: Build binaries
+        if: steps.version.outputs.version
+        env:
+          V: ${{ steps.version.outputs.version }}
+        run: scripts/build-binaries.sh "$M" "$V" "$RUNNER_TEMP/dist"
+
+      - name: Attest build provenance
+        if: steps.version.outputs.version
+        uses: actions/attest-build-provenance@v4
+        with:
+          subject-path: ${{ runner.temp }}/dist/*
+
       - name: Tag and publish
         if: steps.version.outputs.version
         env:
@@ -166,9 +185,17 @@ jobs:
             echo '```shell'
             echo "go install github.com/piglig/go-qr/$pkg@v$V"
             echo '```'
+            echo
+            echo "Or download the binary for your platform below. To check that an"
+            echo "archive was built by this repository's release workflow:"
+            echo
+            echo '```shell'
+            echo "gh attestation verify <archive> --repo piglig/go-qr"
+            echo '```'
           } > notes.md
           git tag "$M/v$V" "$GITHUB_SHA"
           git push origin "refs/tags/$M/v$V"
-          gh release create "$M/v$V" --verify-tag --title "$M/v$V" --notes-file notes.md --latest=false
+          gh release create "$M/v$V" --verify-tag --title "$M/v$V" --notes-file notes.md --latest=false \
+            "$RUNNER_TEMP"/dist/*
           GOPROXY=https://proxy.golang.org go list -m "github.com/piglig/go-qr/$M@v$V" ||
             echo "::warning::The module proxy does not list $M/v$V yet."

@@ -27,6 +27,12 @@ go install github.com/piglig/go-qr/mcp/cmd/go-qr-mcp@latest
 This puts `go-qr-mcp` in `$(go env GOPATH)/bin`. Use the full path in the
 configurations below if that directory is not on the `PATH` of your client.
 
+Without Go, download the archive for your platform from the latest
+[`mcp/v*` release](https://github.com/piglig/go-qr/releases): Linux, macOS
+and Windows, on amd64 and arm64. *Since mcp/v0.1.6.* Each release lists
+SHA-256 checksums, and `gh attestation verify <archive> --repo piglig/go-qr`
+checks that an archive was built by the repository's release workflow.
+
 ## Configure your client
 
 Clients start the server themselves and talk to it over stdin and stdout.

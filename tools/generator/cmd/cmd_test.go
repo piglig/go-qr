@@ -229,6 +229,18 @@ func TestRun_Version(t *testing.T) {
 	}
 }
 
+func TestRun_VersionOfReleaseBuild(t *testing.T) {
+	defer func(v string) { buildVersion = v }(buildVersion)
+	buildVersion = "v1.2.3"
+	var out, errOut bytes.Buffer
+	if err := run([]string{"version"}, &out, &errOut); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if got := strings.TrimSpace(out.String()); got != "v1.2.3" {
+		t.Fatalf("version = %q, want v1.2.3", got)
+	}
+}
+
 func TestRun_EncodeNoContentShowsUsage(t *testing.T) {
 	var out, errOut bytes.Buffer
 	if err := run([]string{"encode"}, &out, &errOut); err == nil {

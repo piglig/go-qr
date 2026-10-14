@@ -19,6 +19,9 @@ go install github.com/piglig/go-qr/mcp/cmd/go-qr-mcp@latest   # Go 1.25+
 claude mcp add go-qr -- go-qr-mcp                             # Claude Code
 ```
 
+Without Go, download a prebuilt binary from the latest `mcp/v*`
+[release](https://github.com/piglig/go-qr/releases).
+
 For other clients:
 
 ```json
