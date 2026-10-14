@@ -109,6 +109,12 @@ func TestJoinStructuredAppendErrors(t *testing.T) {
 		"other total":      {part(0, 2, 7, "a"), part(1, 3, 7, "b")},
 		"mixed in plain":   {part(0, 2, 7, "a"), {Text: "b"}},
 		"index past total": {part(0, 2, 7, "a"), {Text: "b", StructuredAppend: &StructuredAppend{Index: 5, Total: 2, Parity: 7}}},
+		"nil first":        {nil, part(1, 2, 7, "b")},
+		"nil later":        {part(0, 2, 7, "a"), nil},
+		"negative index":   {part(0, 2, 7, "a"), part(-1, 2, 7, "b")},
+		"zero total":       {part(0, 0, 7, "a")},
+		"negative total":   {part(0, -1, 7, "a")},
+		"total past 16":    {part(0, 17, 7, "a")},
 	}
 	for name, parts := range tests {
 		if _, err := JoinStructuredAppend(parts...); !errors.Is(err, ErrInvalidArgument) {
