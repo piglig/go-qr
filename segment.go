@@ -105,12 +105,10 @@ func AlphanumericSegment(text string) (Segment, error) {
 	var bb bitBuffer
 	i := 0
 	for ; i+1 < len(text); i += 2 {
-		val := strings.IndexByte(alphanumericCharset, text[i])*45 +
-			strings.IndexByte(alphanumericCharset, text[i+1])
-		bb.appendBits(val, 11)
+		bb.appendBits(int(alphanumericValue[text[i]])*45+int(alphanumericValue[text[i+1]]), 11)
 	}
 	if i < len(text) {
-		bb.appendBits(strings.IndexByte(alphanumericCharset, text[i]), 6)
+		bb.appendBits(int(alphanumericValue[text[i]]), 6)
 	}
 	return Segment{mode: ModeAlphanumeric, numChars: len(text), data: bb}, nil
 }
@@ -223,7 +221,19 @@ func isAlphanumeric(s string) bool {
 
 func isNumericByte(c byte) bool { return '0' <= c && c <= '9' }
 
-func isAlphanumericByte(c byte) bool { return strings.IndexByte(alphanumericCharset, c) >= 0 }
+func isAlphanumericByte(c byte) bool { return alphanumericValue[c] >= 0 }
+
+// alphanumericValue is the alphanumeric mode value of each byte, the index
+// in alphanumericCharset, or -1.
+var alphanumericValue = func() (v [256]int8) {
+	for i := range v {
+		v[i] = -1
+	}
+	for i := 0; i < len(alphanumericCharset); i++ {
+		v[alphanumericCharset[i]] = int8(i)
+	}
+	return v
+}()
 
 // isASCII reports whether s contains only 7-bit characters.
 func isASCII(s string) bool {

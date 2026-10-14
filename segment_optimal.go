@@ -28,9 +28,24 @@ func optimalSegments(text string, c encodeConfig, extraBits int) ([]Segment, err
 		return nil, fmt.Errorf("%w: %d characters exceed the maximum of %d", ErrDataTooLong, len(runes), maxOptimalChars)
 	}
 
+	charBits := minCharBits(runes, c.gs1)
 	var segs []Segment
 	for ver := c.minVer; ; ver++ {
 		if ver == c.minVer || ver == 10 || ver == 27 {
+			// Skip versions with this character count width when even the
+			// cheapest mode for every character, in one segment, overflows
+			// the largest of them; they are never skipped up to maxVer, so
+			// errors come from the same segments as without the skip.
+			next := 41
+			if ver < 10 {
+				next = 10
+			} else if ver < 27 {
+				next = 27
+			}
+			if next <= c.maxVer && minSegmentBits(charBits, ver)+extraBits > numDataCodewords(next-1, c.ecc)*8 {
+				ver = next - 1
+				continue
+			}
 			segs = splitSegments(text, runes, charModes(runes, ver, c.gs1), c.gs1)
 		}
 		capacityBits := numDataCodewords(ver, c.ecc) * 8
@@ -47,6 +62,40 @@ func optimalSegments(text string, c encodeConfig, extraBits int) ([]Segment, err
 			return nil, err
 		}
 	}
+}
+
+// minCharBits returns a lower bound, in sixths of a bit, on the data bits of
+// runes in any segmentation: each character in its cheapest mode, as
+// charModes costs them.
+func minCharBits(runes []rune, gs1 bool) int {
+	total := 0
+	for i, r := range runes {
+		cost := utf8.RuneLen(r) * 8 * 6
+		switch {
+		case r < utf8.RuneSelf && isNumericByte(byte(r)):
+			cost = 20
+		case r < utf8.RuneSelf && isAlphanumericByte(byte(r)) && !(gs1 && r == '%'),
+			gs1 && r == gs1Separator && gs1AlnumSeparator(runes, i):
+			cost = 33
+		default:
+			if _, ok := kanjiValue(r); ok {
+				cost = min(cost, 78)
+			}
+		}
+		total += cost
+	}
+	return total
+}
+
+// minSegmentBits returns a lower bound on the bits of any segmentation of
+// characters whose data costs at least charBits sixths, at version ver: the
+// data and the cheapest segment header.
+func minSegmentBits(charBits, ver int) int {
+	head := 4 + ModeByte.charCountBits(ver)
+	for _, m := range optimalModes {
+		head = min(head, 4+m.charCountBits(ver))
+	}
+	return (charBits+5)/6 + head
 }
 
 // optimalModes are the modes considered by charModes, in DP column order.
@@ -92,14 +141,19 @@ func charModes(runes []rune, ver int, gs1 bool) []Mode {
 		}
 
 		// Switching from mode k to mode j after this character costs the
-		// partial bit rounded up plus the new segment header.
+		// partial bit rounded up plus the new segment header. The cheapest
+		// mode to switch from is the same for every j: the first with the
+		// least rounded cost. Staying in mode j wins ties.
+		src, srcCost := 0, (cur[0]+5)/6*6 // byte mode is always possible
+		for k := 1; k < n; k++ {
+			if c := (cur[k] + 5) / 6 * 6; step[k] != 0 && c < srcCost {
+				src, srcCost = k, c
+			}
+		}
 		for j := 0; j < n; j++ {
-			for k := 0; k < n; k++ {
-				cost := (cur[k]+5)/6*6 + head[j]
-				if step[k] != 0 && (step[j] == 0 || cost < cur[j]) {
-					cur[j] = cost
-					step[j] = optimalModes[k]
-				}
+			if cost := srcCost + head[j]; step[j] == 0 || cost < cur[j] {
+				cur[j] = cost
+				step[j] = optimalModes[src]
 			}
 		}
 		prev = cur
