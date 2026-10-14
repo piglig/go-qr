@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Performance
 
+- The optimal segmentation finds the cheapest mode to switch from once per
+  character instead of once for each of the four modes it switches to, and
+  looks up alphanumeric characters in a table. It no longer segments the
+  text for versions 1 to 9, or 10 to 26, when even its cheapest encoding
+  overflows them, which saved two of its three passes over long text. The
+  segments are the same. `Encode` is 37% faster for a version 40 code and
+  23% for version 20.
 - The codewords are placed row by row through a per-version map of the
   data bit each module carries, which also packs the rows for mask
   selection, instead of walking the zig-zag and packing the modules
