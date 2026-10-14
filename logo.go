@@ -93,13 +93,14 @@ func logoDamage(code *Code, box int) float64 {
 		}
 	}
 
-	codewordAt := getTemplate(ver).codewordAt
+	bitAt := getTemplate(ver).bitAt
 	lost := make([]bool, raw)
 	perBlock := make([]int, numBlocks)
 	start := (code.Size() - box) / 2
 	for y := start; y < start+box; y++ {
 		for x := start; x < start+box; x++ {
-			if cw := codewordAt[y][x]; cw >= 0 && !lost[cw] {
+			if bit := bitAt[y][x]; bit >= 0 && !lost[bit/8] {
+				cw := bit / 8
 				lost[cw] = true
 				perBlock[blockOf[cw]]++
 			}

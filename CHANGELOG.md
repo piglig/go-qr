@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Performance
 
+- The codewords are placed row by row through a per-version map of the
+  data bit each module carries, which also packs the rows for mask
+  selection, instead of walking the zig-zag and packing the modules
+  afterwards. `Encode` is 5 to 8% faster.
 - Mask selection scores the penalty rules on modules packed into 64-bit
   words, with a new bitwise method for the finder-like patterns, instead of
   visiting every module. Every symbol gets the same mask as before.
