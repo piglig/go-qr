@@ -49,6 +49,9 @@ func New(opts Options) (*mcp.Server, error) {
 		if info, err := os.Stat(root); err != nil || !info.IsDir() {
 			return nil, fmt.Errorf("root %q is not a directory", opts.Root)
 		}
+		if root, err = filepath.EvalSymlinks(root); err != nil {
+			return nil, err
+		}
 		fs.root = root
 	}
 	version := opts.Version
@@ -114,10 +117,39 @@ func (f fileAccess) resolve(path string) (string, error) {
 		return "", err
 	}
 	if f.root != "" {
-		rel, err := filepath.Rel(f.root, abs)
+		// Symbolic links are resolved first, so that a link within the
+		// root cannot lead outside it.
+		real, err := realPath(abs)
+		if err != nil {
+			return "", err
+		}
+		rel, err := filepath.Rel(f.root, real)
 		if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
 			return "", fmt.Errorf("%s is outside the allowed directory %s", path, f.root)
 		}
 	}
 	return abs, nil
+}
+
+// realPath returns path with every symbolic link resolved. A path that does
+// not exist yet, such as a file to create, resolves through its nearest
+// existing ancestor; a link to a missing target is an error, since creating
+// the file would follow it.
+func realPath(path string) (string, error) {
+	real, err := filepath.EvalSymlinks(path)
+	if err == nil || !errors.Is(err, os.ErrNotExist) {
+		return real, err
+	}
+	if _, lerr := os.Lstat(path); lerr == nil {
+		return "", fmt.Errorf("%s is a link to a missing file", path)
+	}
+	dir := filepath.Dir(path)
+	if dir == path {
+		return "", err
+	}
+	parent, err := realPath(dir)
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(parent, filepath.Base(path)), nil
 }

@@ -278,6 +278,63 @@ func TestRootConfinement(t *testing.T) {
 	}
 }
 
+func TestRootConfinementSymlinks(t *testing.T) {
+	root := t.TempDir()
+	outside := t.TempDir()
+	code, _ := qr.Encode("outside")
+	data, _ := code.PNG()
+	os.WriteFile(filepath.Join(outside, "out.png"), data, 0o644)
+	link := func(target, name string) {
+		t.Helper()
+		if err := os.Symlink(target, filepath.Join(root, name)); err != nil {
+			t.Skipf("cannot create symbolic links: %v", err)
+		}
+	}
+	link(outside, "dir")
+	link(filepath.Join(outside, "out.png"), "file.png")
+	link(filepath.Join(outside, "missing.png"), "dangling.png")
+
+	cs := connect(t, Options{Root: root})
+	for _, p := range []string{"dir/out.png", "file.png"} {
+		if res := call(t, cs, "decode_qr", map[string]any{"paths": []string{p}}, nil); !res.IsError {
+			t.Errorf("%s: read through a link outside root allowed", p)
+		}
+	}
+	for _, p := range []string{"dir/new.png", "dangling.png", "file.png"} {
+		res := call(t, cs, "generate_qr", map[string]any{"text": "x", "output_path": p, "overwrite": true}, nil)
+		if !res.IsError {
+			t.Errorf("%s: write through a link outside root allowed", p)
+		}
+	}
+	for _, name := range []string{"new.png", "missing.png"} {
+		if _, err := os.Lstat(filepath.Join(outside, name)); err == nil {
+			t.Errorf("%s was written outside root", name)
+		}
+	}
+}
+
+func TestRootThroughSymlink(t *testing.T) {
+	dir := t.TempDir()
+	root := filepath.Join(dir, "root")
+	os.Mkdir(filepath.Join(dir, "real"), 0o755)
+	if err := os.Symlink(filepath.Join(dir, "real"), root); err != nil {
+		t.Skipf("cannot create symbolic links: %v", err)
+	}
+	code, _ := qr.Encode("inside")
+	data, _ := code.PNG()
+	os.WriteFile(filepath.Join(root, "in.png"), data, 0o644)
+
+	cs := connect(t, Options{Root: root})
+	for _, p := range []string{"in.png", filepath.Join(root, "in.png")} {
+		if res := call(t, cs, "decode_qr", map[string]any{"paths": []string{p}}, nil); res.IsError {
+			t.Errorf("%s: %s", p, errorText(res))
+		}
+	}
+	if res := call(t, cs, "generate_qr", map[string]any{"text": "x", "output_path": "sub.png"}, nil); res.IsError {
+		t.Errorf("write inside root: %s", errorText(res))
+	}
+}
+
 func TestInspectTool(t *testing.T) {
 	cs := connect(t, Options{})
 	var r struct {
