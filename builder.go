@@ -19,6 +19,11 @@ type builder struct {
 	ecc        ECC
 	modules    [][]bool // dark/light state of every module
 	isFunction [][]bool // true where a module belongs to a function pattern
+
+	// packed holds four lines per row for mask selection: the modules by
+	// row, which drawCodewords packs, then by column, then the same for the
+	// masked scratch.
+	packed []moduleLine
 }
 
 // newBuilder allocates a blank builder for the given version and ECC level.
@@ -55,13 +60,10 @@ func (q *builder) toCode(mask int) *Code {
 func (q *builder) chooseBestMask() int {
 	minPenalty := math.MaxInt32
 	best := 0
-	// The rows and columns of the modules and of the masked scratch share
-	// one allocation.
-	n := q.size
-	lines := make([]moduleLine, 4*n)
+	n, lines := q.size, q.packed
 	modules := packedModules{size: n, rows: lines[:n:n], cols: lines[n : 2*n : 2*n]}
 	masked := packedModules{size: n, rows: lines[2*n : 3*n : 3*n], cols: lines[3*n:]}
-	modules.pack(q.modules)
+	modules.transposeRows()
 	// Version-invariant mask patterns, built once per version and reused across
 	// all encodes of that version (e.g. a batch of similar payloads).
 	tmpl := getTemplate(q.version)
@@ -140,32 +142,34 @@ func (q *builder) addEccAndInterLeave(data []byte) ([]byte, error) {
 }
 
 // drawCodewords fills the non-function modules with the given codeword bytes
-// following the QR Code zig-zag traversal.
+// in the zig-zag order of the standard. The version's template records the
+// data bit of each module, so the modules are filled row by row, and each
+// row is packed into q.packed for mask selection as it is filled.
 func (q *builder) drawCodewords(data []byte) error {
 	numRawDataModules := numRawDataModules(q.version) / 8
 	if len(data) != numRawDataModules {
 		return fmt.Errorf("%w: codeword length mismatch", ErrInvalidArgument)
 	}
 
-	i := 0
-	for right := q.size - 1; right >= 1; right -= 2 {
-		if right == 6 {
-			right = 5
-		}
-		for vert := 0; vert < q.size; vert++ {
-			for j := 0; j < 2; j++ {
-				x := right - j
-				upward := ((right + 1) & 2) == 0
-				y := vert
-				if upward {
-					y = q.size - 1 - vert
+	tmpl := getTemplate(q.version)
+	q.packed = make([]moduleLine, 4*q.size)
+	for y, row := range q.modules {
+		bitAt := tmpl.bitAt[y][:len(row)]
+		line := tmpl.functionRows[y]
+		for w := 0; w*64 < len(row); w++ {
+			acc := line[w]
+			for x := w * 64; x < min(len(row), w*64+64); x++ {
+				i := bitAt[x]
+				if i < 0 {
+					continue
 				}
-				if !q.isFunction[y][x] && i < len(data)*8 {
-					q.modules[y][x] = getBit(int(data[i>>3]), 7-(i&7))
-					i++
-				}
+				dark := data[i>>3]>>(7-i&7)&1 != 0
+				row[x] = dark
+				acc |= b2u(dark) << (x & 63)
 			}
+			line[w] = acc
 		}
+		q.packed[y] = line
 	}
 	return nil
 }

@@ -127,13 +127,13 @@ func TestCodewordMapMatchesPlacement(t *testing.T) {
 			return b.readCodewords()
 		}
 		orig := read(code.modules)
-		cwMap := getTemplate(ver).codewordAt
+		bitAt := getTemplate(ver).bitAt
 		for _, k := range []int{0, len(orig) / 2, len(orig) - 1} {
 			flipped := make([][]bool, code.size)
 			for y := range flipped {
 				flipped[y] = append([]bool(nil), code.modules[y]...)
 				for x := range flipped[y] {
-					if int(cwMap[y][x]) == k {
+					if bit := bitAt[y][x]; bit >= 0 && int(bit)/8 == k {
 						flipped[y][x] = !flipped[y][x]
 					}
 				}

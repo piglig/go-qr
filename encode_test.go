@@ -151,6 +151,7 @@ func BenchmarkEncode(b *testing.B) {
 		{"v1", "HELLO WORLD"},
 		{"v4", "https://github.com/piglig/go-qr?ref=bench&v=1"},
 		{"v20", strings.Repeat("The quick brown fox jumps over the lazy dog. ", 15)},
+		{"v40", strings.Repeat("The quick brown fox jumps over the lazy dog. ", 50)},
 	} {
 		b.Run(c.name, func(b *testing.B) {
 			b.ReportAllocs()

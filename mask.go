@@ -67,22 +67,6 @@ func newPackedModules(size int) packedModules {
 	return packedModules{size: size, rows: make([]moduleLine, size), cols: make([]moduleLine, size)}
 }
 
-// pack sets p to the modules of grid, which must have p's size.
-func (p *packedModules) pack(grid [][]bool) {
-	for y, row := range grid {
-		var line moduleLine
-		for i := 0; i*64 < len(row); i++ {
-			var w uint64
-			for k, dark := range row[i*64 : min(len(row), i*64+64)] {
-				w |= b2u(dark) << k
-			}
-			line[i] = w
-		}
-		p.rows[y] = line
-	}
-	p.transposeRows()
-}
-
 // transposeRows sets the columns from the rows, 64×64 blocks at a time.
 func (p *packedModules) transposeRows() {
 	n := p.size

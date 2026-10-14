@@ -15,10 +15,14 @@ type qrTemplate struct {
 	// function modules are never set (the mask never touches them).
 	maskPatterns [8]packedModules
 
-	// codewordAt[y][x] is the index, in placement order, of the raw codeword
-	// that module (x, y) belongs to, or -1 for function modules and
-	// remainder bits.
-	codewordAt [][]int16
+	// bitAt[y][x] is the index, in placement order, of the data bit that
+	// module (x, y) carries, or -1 for function modules and remainder bits;
+	// the bit belongs to raw codeword bitAt[y][x]/8.
+	bitAt [][]int16
+
+	// functionRows has the function patterns packed by row, with the format
+	// bits of mask 0 at level L; the other modules are light.
+	functionRows []moduleLine
 }
 
 // templateCache maps version -> *qrTemplate. Templates are immutable once built,
@@ -50,16 +54,25 @@ func getTemplate(version int) *qrTemplate {
 		t.maskPatterns[m] = p
 	}
 
-	t.codewordAt = codewordMap(b)
+	t.bitAt = bitMap(b)
+	t.functionRows = make([]moduleLine, size)
+	for y := 0; y < size; y++ {
+		for x := 0; x < size; x++ {
+			if b.modules[y][x] {
+				t.functionRows[y][x>>6] |= 1 << (x & 63)
+			}
+		}
+	}
 
 	actual, _ := templateCache.LoadOrStore(version, t)
 	return actual.(*qrTemplate)
 }
 
-// codewordMap walks the codeword placement zig-zag of drawCodewords over the
-// builder's function-pattern map and records which codeword each module
-// carries.
-func codewordMap(b *builder) [][]int16 {
+// bitMap walks the codeword placement of ISO/IEC 18004 §7.7.3 over the
+// builder's function-pattern map, recording which data bit each module
+// carries: two-module-wide columns from the right, alternately upward and
+// downward, skipping the vertical timing pattern.
+func bitMap(b *builder) [][]int16 {
 	size := b.size
 	n := numRawDataModules(b.version) / 8 * 8
 	out := make([][]int16, size)
@@ -83,7 +96,7 @@ func codewordMap(b *builder) [][]int16 {
 			}
 			for j := 0; j < 2; j++ {
 				if x := right - j; !b.isFunction[y][x] && i < n {
-					out[y][x] = int16(i / 8)
+					out[y][x] = int16(i)
 					i++
 				}
 			}
