@@ -129,20 +129,23 @@ guide.
 
 ## Cost of features
 
-A version 3 code at scale 10:
+A version 4 code at scale 10, as in the `PNG`, `StyledPNG`, `ColoredPNG`,
+`SVG` and `StyledSVG` benchmarks:
 
 | Output | Time | Relative |
 | --- | --- | --- |
-| `PNG()` | 0.58 ms | 1× |
-| `PNG()` with shapes | 1.6 ms | 2.7× |
-| `PNG()` with a gradient or finder colors | ~6 ms | ~10× |
+| `PNG()` | 0.14 ms | 1× |
+| `PNG()` with shapes | 1.6 ms | 11× |
+| `PNG()` with a gradient or finder colors | ~5 ms | ~38× |
 | `SVG()` | 34 µs | |
 | `SVG()` with shapes | 180 µs | |
 
 - Optimal segmentation costs 1–2% over `WithSimpleSegmentation` for typical
   text.
 - PNG time is dominated by compression and grows with the pixel count;
-  lower `WithScale` for screens.
+  lower `WithScale` for screens. Plain two-color PNGs are written straight
+  from the modules at one bit per pixel; shapes need 8-bit gray levels for
+  their antialiased edges.
 - Gradients and finder colors need full-color PNGs, whose compression is the
   main cost. SVG is the fast choice for styled output.
 - `Verify` renders and decodes once, about the cost of `Image` plus

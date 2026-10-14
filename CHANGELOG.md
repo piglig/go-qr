@@ -9,8 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Performance
 
+- Plain PNG output, without shapes, colors beyond the two or a logo, is
+  written straight from the modules instead of through `image/png`, which
+  read the image one pixel at a time, and reuses its compressor between
+  calls. The bytes are the same. `PNG` of a version 4 code at scale 10
+  takes 0.15 ms instead of 0.71 ms and allocates 37 KB instead of 1 MB.
 - PNG output with `WithGradient` computes the gradient's axis once per
-  image instead of once per pixel, which makes a styled version 3 code
+  image instead of once per pixel, which makes a styled version 4 code
   with a gradient 14% faster to render (6.3 ms to 5.4 ms).
 
 ### Fixed
