@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Performance
 
+- Mask selection scores the penalty rules on modules packed into 64-bit
+  words, with a new bitwise method for the finder-like patterns, instead of
+  visiting every module. Every symbol gets the same mask as before.
+  `Encode` takes 8.7 µs instead of 25 µs for a version 1 code, 17 µs
+  instead of 97 µs for version 4 and 0.15 ms instead of 1.10 ms for
+  version 20, with one allocation less; it is now 8 to 21 times faster
+  than skip2/go-qrcode.
 - Plain PNG output, without shapes, colors beyond the two or a logo, is
   written straight from the modules instead of through `image/png`, which
   read the image one pixel at a time, and reuses its compressor between

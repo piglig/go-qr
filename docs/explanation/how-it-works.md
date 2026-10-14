@@ -28,8 +28,15 @@ text ──► segments ──► bitstream ──► codewords + ECC ──► 
    patterns and format and version information are drawn, then the codewords
    are placed in the two-column zig-zag defined by the standard.
 5. **Masking** (`mask.go`, `template.go`). All eight masks are scored with
-   the ISO penalty rules and the lowest wins. The per-version mask patterns
-   are computed once and cached, which makes mask selection mostly XOR.
+   the ISO penalty rules and the lowest wins. The modules are packed into
+   64-bit words, as rows and, transposed, as columns, and the per-version
+   mask patterns are cached packed, so applying a mask is an XOR of words.
+   The rules are scored a word at a time: runs of five and 2×2 blocks are
+   shifts, ANDs and bit counts, and so is the 1:1:3:1:1 finder-like
+   pattern, since the area outside the symbol, which counts as light,
+   is the zeros shifted in. Scaled versions of the pattern (2:2:6:2:2 and
+   up) need a dark run of six or more after two light modules; the few
+   such runs are checked one by one.
 
 The result, `Code`, is immutable. Building it uses a separate `builder`, so
 no scratch state is retained.

@@ -55,19 +55,25 @@ func (q *builder) toCode(mask int) *Code {
 func (q *builder) chooseBestMask() int {
 	minPenalty := math.MaxInt32
 	best := 0
-	// Reusable masked-grid scratch; rows alias one backing allocation.
-	scratch := make([][]bool, q.size)
-	scratchBacking := make([]bool, q.size*q.size)
-	for r := 0; r < q.size; r++ {
-		scratch[r] = scratchBacking[r*q.size : (r+1)*q.size]
-	}
+	// The rows and columns of the modules and of the masked scratch share
+	// one allocation.
+	n := q.size
+	lines := make([]moduleLine, 4*n)
+	modules := packedModules{size: n, rows: lines[:n:n], cols: lines[n : 2*n : 2*n]}
+	masked := packedModules{size: n, rows: lines[2*n : 3*n : 3*n], cols: lines[3*n:]}
+	modules.pack(q.modules)
 	// Version-invariant mask patterns, built once per version and reused across
 	// all encodes of that version (e.g. a batch of similar payloads).
 	tmpl := getTemplate(q.version)
 	for i := 0; i < 8; i++ {
 		q.drawFormatBits(i)
-		q.writeMaskedGrid(scratch, tmpl.maskPatterns[i])
-		penalty := q.getPenaltyScore(scratch, minPenalty)
+		// The format bits all lie in row 8 and column 8.
+		for k := 0; k < q.size; k++ {
+			modules.set(k, 8, q.modules[8][k])
+			modules.set(8, k, q.modules[k][8])
+		}
+		masked.xor(&modules, &tmpl.maskPatterns[i])
+		penalty := masked.penalty(minPenalty)
 		if penalty < minPenalty {
 			best = i
 			minPenalty = penalty
