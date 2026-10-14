@@ -11,10 +11,9 @@ import "sync"
 // per-module maskInvert evaluation, which profiling showed dominates encoding of
 // small/medium symbols.
 type qrTemplate struct {
-	// maskPatterns[m][y][x] reports whether mask m flips module (x, y); function
-	// modules are always false (the mask never touches them). Each grid's rows
-	// alias one backing allocation.
-	maskPatterns [8][][]bool
+	// maskPatterns[m] has the modules mask m flips, as rows and columns;
+	// function modules are never set (the mask never touches them).
+	maskPatterns [8]packedModules
 
 	// codewordAt[y][x] is the index, in placement order, of the raw codeword
 	// that module (x, y) belongs to, or -1 for function modules and
@@ -40,16 +39,15 @@ func getTemplate(version int) *qrTemplate {
 
 	t := &qrTemplate{}
 	for m := 0; m < 8; m++ {
-		grid := make([][]bool, size)
-		backing := make([]bool, size*size)
+		p := newPackedModules(size)
 		for y := 0; y < size; y++ {
-			grid[y] = backing[y*size : (y+1)*size]
-			fn := b.isFunction[y]
 			for x := 0; x < size; x++ {
-				grid[y][x] = maskInvert(m, x, y) && !fn[x]
+				if maskInvert(m, x, y) && !b.isFunction[y][x] {
+					p.set(x, y, true)
+				}
 			}
 		}
-		t.maskPatterns[m] = grid
+		t.maskPatterns[m] = p
 	}
 
 	t.codewordAt = codewordMap(b)

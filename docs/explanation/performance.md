@@ -8,10 +8,10 @@ it to `Bitmap()`, which the benchmark calls.
 
 | Payload | go-qr | [skip2/go-qrcode] | [boombuler/barcode] |
 | --- | --- | --- | --- |
-| numeric, 8 chars (v1) | **25 µs** · 17 allocs | 74 µs · 934 allocs (2.9×) | 407 µs · 172 allocs (16×) |
-| alphanumeric, 14 chars (v1) | **26 µs** · 19 allocs | 76 µs · 936 allocs (3.0×) | 414 µs · 181 allocs (16×) |
-| URL, 45 chars (v4) | **101 µs** · 23 allocs | 278 µs · 3,450 allocs (2.8×) | 1,425 µs · 578 allocs (14×) |
-| text, 672 chars (v20) | **1.07 ms** · 129 allocs | 3.35 ms · 49,099 allocs (3.1×) | 16.3 ms · 5,891 allocs (15×) |
+| numeric, 8 chars (v1) | **8.1 µs** · 16 allocs | 70 µs · 934 allocs (8.6×) | 397 µs · 172 allocs (49×) |
+| alphanumeric, 14 chars (v1) | **8.6 µs** · 18 allocs | 72 µs · 936 allocs (8.4×) | 408 µs · 181 allocs (47×) |
+| URL, 45 chars (v4) | **16 µs** · 22 allocs | 265 µs · 3,450 allocs (16×) | 1,387 µs · 578 allocs (86×) |
+| text, 672 chars (v20) | **0.15 ms** · 128 allocs | 3.19 ms · 49,099 allocs (21×) | 16.3 ms · 5,891 allocs (109×) |
 
 Decoding crisp rendered images, compared with [gozxing], a Go port of ZXing:
 
@@ -171,11 +171,12 @@ Decoding JPEG with `image/jpeg` usually takes longer than reading the code.
 ## Methodology
 
 Intel Core i7-14700KF, Go 1.25, Windows, best of five `go test -bench`
-runs on an otherwise idle machine. Absolute numbers vary between machines;
-ratios are more stable. The comparisons live in the
-[`tools/bench`](../../tools/bench) module, which depends on the other
-libraries so that the main module does not; its README lists the commands
-for the comparisons.
+runs on an otherwise idle machine, pinned to the performance cores: on
+its efficiency cores the same benchmarks run up to twice as slow.
+Absolute numbers vary between machines; ratios are more stable. The
+comparisons live in the [`tools/bench`](../../tools/bench) module, which
+depends on the other libraries so that the main module does not; its
+README lists the commands for the comparisons.
 
 Feature benchmarks are in the main module, for example
 `go test -run='^$' -bench='PNG|SVG|Styled|Colored' -benchmem .`.

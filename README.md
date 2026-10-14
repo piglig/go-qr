@@ -38,8 +38,8 @@
   photos of screens and codes with a damaged finder pattern. It reads about
   as many real photos as zxing-cpp and more than WeChat, ZBar and gozxing
   ([comparison](docs/explanation/performance.md#reading-photos)).
-- **Fast and dependency-free.** Only the standard library. Encoding is about
-  3× faster than [skip2/go-qrcode] and decoding about 7× faster than
+- **Fast and dependency-free.** Only the standard library. Encoding is 8 to
+  21× faster than [skip2/go-qrcode] and decoding about 7× faster than
   [gozxing], with orders of magnitude fewer allocations
   ([benchmarks](docs/explanation/performance.md)).
 
