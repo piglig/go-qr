@@ -50,12 +50,24 @@ func (g *gradientConfig) axis(side float64) (x0, y0, dx, dy float64) {
 	return side/2 - cos*half, side/2 - sin*half, 2 * cos * half, 2 * sin * half
 }
 
-// at returns the gradient color at pixel (x, y) of a side×side image.
-func (g *gradientConfig) at(x, y, side int, from, to color.RGBA) color.RGBA {
+// field returns the gradient over a side×side image, with its axis computed
+// once rather than per pixel.
+func (g *gradientConfig) field(side int) gradientField {
 	x0, y0, dx, dy := g.axis(float64(side))
-	t := ((float64(x)+0.5-x0)*dx + (float64(y)+0.5-y0)*dy) / (dx*dx + dy*dy)
+	return gradientField{x0, y0, dx, dy, dx*dx + dy*dy, rgba(g.from), rgba(g.to)}
+}
+
+// gradientField is a gradient laid over an image.
+type gradientField struct {
+	x0, y0, dx, dy, norm float64
+	from, to             color.RGBA
+}
+
+// at returns the gradient color at pixel (x, y).
+func (f *gradientField) at(x, y int) color.RGBA {
+	t := ((float64(x)+0.5-f.x0)*f.dx + (float64(y)+0.5-f.y0)*f.dy) / f.norm
 	t = math.Max(0, math.Min(1, t))
-	return lerpRGBA(from, to, uint32(t*255+0.5))
+	return lerpRGBA(f.from, f.to, uint32(t*255+0.5))
 }
 
 // id returns an element id that differs between gradients, so several SVGs
@@ -138,13 +150,13 @@ func paintColored(code *Code, c *renderConfig, side int) *image.RGBA {
 		img.Pix[i], img.Pix[i+1], img.Pix[i+2], img.Pix[i+3] = bg.R, bg.G, bg.B, bg.A
 	}
 	fg := rgba(c.fg)
-	var from, to color.RGBA
+	var grad gradientField
 	if c.gradient != nil {
-		from, to = rgba(c.gradient.from), rgba(c.gradient.to)
+		grad = c.gradient.field(side)
 	}
 	dataColor := func(x, y int) color.RGBA {
 		if c.gradient != nil {
-			return c.gradient.at(x, y, side, from, to)
+			return grad.at(x, y)
 		}
 		return fg
 	}

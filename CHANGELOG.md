@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Performance
+
+- PNG output with `WithGradient` computes the gradient's axis once per
+  image instead of once per pixel, which makes a styled version 3 code
+  with a gradient 14% faster to render (6.3 ms to 5.4 ms).
+
 ### Fixed
 
 - `JoinStructuredAppend` panicked on a nil symbol, and on a hand-built
