@@ -172,18 +172,3 @@ func paintRGBA(code *Code, c *renderConfig, side int) *image.RGBA {
 	}
 	return img
 }
-
-// paintPaletted renders code into a two-color paletted image, which the PNG
-// encoder stores at one bit per pixel.
-func paintPaletted(code *Code, c *renderConfig, side int) *image.Paletted {
-	img := image.NewPaletted(image.Rect(0, 0, side, side), color.Palette{c.bg, c.fg})
-	for my := -c.quietZone; my < code.Size()+c.quietZone; my++ {
-		y0 := (my + c.quietZone) * c.scale
-		line := img.Pix[y0*img.Stride : y0*img.Stride+side]
-		moduleRow(line, code, c, my, 1, 0)
-		for dy := 1; dy < c.scale; dy++ {
-			copy(img.Pix[(y0+dy)*img.Stride:], line)
-		}
-	}
-	return img
-}
