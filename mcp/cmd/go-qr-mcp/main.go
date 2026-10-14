@@ -33,10 +33,7 @@ func main() {
 	}
 	flag.Parse()
 
-	version := "(devel)"
-	if bi, ok := debug.ReadBuildInfo(); ok && bi.Main.Version != "" {
-		version = bi.Main.Version
-	}
+	version := version()
 	if *showVersion {
 		fmt.Println(version)
 		return
@@ -65,4 +62,22 @@ func main() {
 	if err := s.Run(ctx, &mcp.StdioTransport{}); err != nil && ctx.Err() == nil {
 		log.Fatal(err)
 	}
+}
+
+// buildVersion is set by release builds, which are not built from the
+// module cache: scripts/build-binaries.sh passes
+// -ldflags "-X main.buildVersion=vX.Y.Z".
+var buildVersion string
+
+// version reports the version of a release build, or else the module
+// version recorded in the build (a tag for `go install ...@vX`, or
+// "(devel)" for local builds).
+func version() string {
+	if buildVersion != "" {
+		return buildVersion
+	}
+	if bi, ok := debug.ReadBuildInfo(); ok && bi.Main.Version != "" {
+		return bi.Main.Version
+	}
+	return "(devel)"
 }

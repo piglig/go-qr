@@ -113,6 +113,35 @@ jobs:
             (cd $m && go mod verify && go vet ./... && go test ./...)
           done
 
+  # The release workflow builds these archives when it releases tools or
+  # mcp; build them here too, so that a change that breaks a platform or the
+  # script fails before a release.
+  binaries:
+    name: release binaries
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version: stable
+          cache-dependency-path: |
+            tools/go.sum
+            mcp/go.sum
+      - name: Build
+        run: |
+          scripts/build-binaries.sh tools 0.0.0 "$RUNNER_TEMP/dist"
+          scripts/build-binaries.sh mcp 0.0.0 "$RUNNER_TEMP/dist"
+      - name: Check the binaries
+        working-directory: ${{ runner.temp }}/dist
+        run: |
+          sha256sum -c generator_0.0.0_checksums.txt go-qr-mcp_0.0.0_checksums.txt
+          tar -xzf generator_0.0.0_linux_amd64.tar.gz
+          tar -xzf go-qr-mcp_0.0.0_linux_amd64.tar.gz
+          test "$(generator_0.0.0_linux_amd64/generator version)" = v0.0.0
+          test "$(go-qr-mcp_0.0.0_linux_amd64/go-qr-mcp -version)" = v0.0.0
+          generator_0.0.0_linux_amd64/generator encode -png qr.png hello
+          test "$(generator_0.0.0_linux_amd64/generator decode qr.png)" = hello
+
   vulncheck:
     runs-on: ubuntu-latest
     steps:

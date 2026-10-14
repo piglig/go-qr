@@ -109,9 +109,18 @@ func setFlagsAmong(fs *flag.FlagSet, names ...string) []string {
 	return hit
 }
 
-// version reports the module version recorded in the build (a tag for
-// `go install ...@vX`, or "(devel)" for local builds).
+// buildVersion is set by release builds, which are not built from the
+// module cache: scripts/build-binaries.sh passes
+// -ldflags "-X github.com/piglig/go-qr/tools/generator/cmd.buildVersion=vX.Y.Z".
+var buildVersion string
+
+// version reports the version of a release build, or else the module
+// version recorded in the build (a tag for `go install ...@vX`, or
+// "(devel)" for local builds).
 func version() string {
+	if buildVersion != "" {
+		return buildVersion
+	}
 	if bi, ok := debug.ReadBuildInfo(); ok && bi.Main.Version != "" {
 		return bi.Main.Version
 	}

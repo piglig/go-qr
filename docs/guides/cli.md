@@ -6,6 +6,13 @@
 go install github.com/piglig/go-qr/tools/generator@latest
 ```
 
+Without Go, download the archive for your platform from the latest
+[`tools/v*` release](https://github.com/piglig/go-qr/releases): Linux,
+macOS and Windows, on amd64 and arm64. *Since tools/v1.1.7.* Each release
+lists SHA-256 checksums, and
+`gh attestation verify <archive> --repo piglig/go-qr` checks that an
+archive was built by the repository's release workflow.
+
 The tool lives in its own module, `github.com/piglig/go-qr/tools`, which is
 versioned separately (`tools/v1.x`) and pins a released version of the
 library. `go version -m $(go env GOPATH)/bin/generator` shows which library
