@@ -95,7 +95,12 @@ image ──► luminance ──► threshold ──► locate ──► fit gri
    version information from version 7. Every alignment pattern is then
    predicted, located in a small window and added to the fit; with enough
    of them, a cubic polynomial correction for lens distortion is fitted
-   too, and kept only if the fixed patterns read back better with it. If
+   too, and kept only if the fixed patterns read back better with it.
+   Finally the alignment patterns are located again through the fitted
+   grid, and their displacements from it, interpolated bilinearly between
+   neighboring patterns, correct the grid locally where the symbol bends
+   or the lens distorts more than the global model follows; the
+   correction is kept unless the fixed patterns read back worse. If
    the timing patterns of the best triple do not read back, the other
    finder assignments and triples are fitted and the best kept. If none
    reads back well, pairs of well-confirmed finders imply the third, which

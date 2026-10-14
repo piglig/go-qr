@@ -38,7 +38,9 @@ ones this library renders. If that fails, it locates the finder patterns
 with a locally adaptive threshold and fits a model of the module grid to
 the symbol's own structure: the corners of the finders' nested squares,
 the alignment patterns and the timing patterns. The model follows
-perspective and moderate lens distortion, and when a finder is unreadable
+perspective and moderate lens distortion, and, through the measured
+positions of the alignment patterns, a surface that bends locally
+(*Since v2.7*); when a finder is unreadable
 the other two imply it. Modules are then read from the grayscale image,
 each against the modules around it. If nothing is found at full
 resolution, the symbol is located again in the image downscaled by 2, 4,
@@ -64,8 +66,8 @@ also read mirrored.
 | Micro QR, rMQR, FNC1 in second position, Hanzi mode | ❌ `ErrUnsupported` |
 
 Modules should be at least 2 pixels wide. Large symbols (version 20 and up)
-in photos are the hardest case: lens distortion bends their grid more than
-the model follows. Move closer to the code rather than zooming out. See
+in photos are the hardest case: a lens or a bent sheet distorts their grid
+far from the finders, where small errors in the model add up. Move closer to the code rather than zooming out. See
 [Performance](../explanation/performance.md#reading-photos) for how the decoder
 compares with others on real photos.
 
