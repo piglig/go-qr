@@ -94,8 +94,8 @@ show them to the model. In short:
 Input: `paths` (one or more local PNG, JPEG or GIF files) or `image_base64`.
 
 Images are decoded at full resolution, so small codes in large photos keep
-their detail; files over 25 MB are refused. Every code in each image is
-read, in reading order. Codes that form a [structured append](encoding.md)
+their detail; files over 25 MB or images over 100 megapixels are refused.
+Every code in each image is read, in reading order. Codes that form a [structured append](encoding.md)
 sequence, in one image or across several, are joined in order, whatever
 order they are given in.
 
@@ -191,6 +191,6 @@ File access:
 - Run with `-root` to confine the server to one directory.
 - `generate_qr` writes only the extension that matches its format and never
   replaces a file unless asked to.
-- `decode_qr` reads at most 25 MB per file.
+- `decode_qr` reads at most 25 MB and 100 megapixels per image.
 
 See [SECURITY.md](../../SECURITY.md) to report a vulnerability.
