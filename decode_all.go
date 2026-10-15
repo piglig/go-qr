@@ -165,10 +165,8 @@ func searchAll(img image.Image, cfg decodeConfig, limit int) ([]*DecodeResult, e
 		}
 		pass(tm, false, 1<<k, full == nil)
 	}
+	// The levels end at full resolution unless the limit stopped them.
 	if len(found) < limit {
-		if full == nil {
-			full = hybridThresholds(l, w, h)
-		}
 		pass(full, true, 1, false)
 	}
 	if len(found) > limit {

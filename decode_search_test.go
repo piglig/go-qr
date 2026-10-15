@@ -1,6 +1,7 @@
 package qr
 
 import (
+	"errors"
 	"image"
 	"slices"
 	"testing"
@@ -72,5 +73,17 @@ func TestDecodeSmallCodeInLargeImage(t *testing.T) {
 		if !c.In(image.Rect(780, 880, 960, 1060)) {
 			t.Errorf("corner %v outside the symbol", c)
 		}
+	}
+}
+
+func TestDecodeLargeImageWithoutCode(t *testing.T) {
+	// Over a megapixel, the fast path is tried after the pyramid; an image
+	// of texture holds nothing to find there either.
+	img := benchPhoto(1300, 900, false)
+	if _, err := Decode(img); !errors.Is(err, ErrNotFound) && !errors.Is(err, ErrDecodeFailed) {
+		t.Errorf("Decode = %v, want ErrNotFound or ErrDecodeFailed", err)
+	}
+	if rs, err := DecodeAll(img); len(rs) != 0 || err == nil {
+		t.Errorf("DecodeAll = %d symbols, %v", len(rs), err)
 	}
 }
