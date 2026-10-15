@@ -226,3 +226,72 @@ func TestPerspectiveFallback(t *testing.T) {
 		}
 	}
 }
+
+func TestAlignmentWarpInterpolates(t *testing.T) {
+	// Version 7: alignment rows and columns at modules 6, 22 and 38.
+	w := alignmentWarp{n: 3, nodes: [7]float64{6.5, 22.5, 38.5}}
+	w.dx[1*3+1], w.dy[1*3+1] = 2, -4 // the center pattern only
+	for _, tc := range []struct{ u, v, dx, dy float64 }{
+		{22.5, 22.5, 2, -4},   // at the node
+		{14.5, 22.5, 1, -2},   // halfway to the left column
+		{14.5, 14.5, 0.5, -1}, // halfway to a corner
+		{6.5, 38.5, 0, 0},     // a finder node
+		{0, 22.5, 0, 0},       // past the left column: held at its value
+		{44, 22.5, 0, 0},
+		{22.5, 44, 0, 0},
+	} {
+		dx, dy := w.at(tc.u, tc.v)
+		if math.Abs(dx-tc.dx) > 1e-9 || math.Abs(dy-tc.dy) > 1e-9 {
+			t.Errorf("at(%v, %v) = (%v, %v), want (%v, %v)", tc.u, tc.v, dx, dy, tc.dx, tc.dy)
+		}
+	}
+	m := gridModel{h: perspective{1, 0, 0, 0, 1, 0, 0, 0}}
+	if x, y := m.apply(10, 20); x != 10 || y != 20 {
+		t.Errorf("model without a warp maps (10, 20) to (%v, %v)", x, y)
+	}
+	m.warp = w
+	if x, y := m.apply(22.5, 22.5); x != 24.5 || y != 18.5 {
+		t.Errorf("warped model maps (22.5, 22.5) to (%v, %v), want (24.5, 18.5)", x, y)
+	}
+}
+
+// bulge renders code and displaces its pixels by a smooth bump of amp
+// pixels, at most, around (cx, cy), as a sheet that does not lie flat
+// does; no homography follows it.
+func bulge(code *Code, scale, quiet int, amp, cx, cy, radius float64) *image.Gray {
+	src, _ := code.Image(WithScale(scale), WithQuietZone(quiet))
+	b := src.Bounds()
+	out := image.NewGray(b)
+	for y := 0; y < b.Dy(); y++ {
+		for x := 0; x < b.Dx(); x++ {
+			dx, dy := float64(x)-cx, float64(y)-cy
+			g := amp * math.Exp(-(dx*dx+dy*dy)/(2*radius*radius))
+			sx, sy := int(math.Round(float64(x)-g)), int(math.Round(float64(y)-0.6*g))
+			v := uint8(255)
+			if image.Pt(sx, sy).In(b) {
+				v = src.RGBAAt(sx, sy).G
+			}
+			out.SetGray(x, y, color.Gray{Y: v})
+		}
+	}
+	return out
+}
+
+func TestDecodeLocalBulge(t *testing.T) {
+	// A version 23 code at level L, whose global fit leaves too many
+	// errors in the displaced region without the local correction.
+	text := strings.Repeat("local distortion ", 60)
+	code, err := Encode(text, WithECC(ECCLow))
+	assertNoError(t, err)
+	const scale, quiet = 5, 4
+	side := float64((code.Size() + 2*quiet) * scale)
+	for _, amp := range []float64{2, 2.4, 3} { // in modules
+		img := bulge(code, scale, quiet, amp*scale, side*0.62, side*0.58, side*0.2)
+		res, err := Decode(img)
+		if err != nil {
+			t.Errorf("bulge of %v modules: %v", amp, err)
+			continue
+		}
+		assertEqual(t, text, res.Text)
+	}
+}

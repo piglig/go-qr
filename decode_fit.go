@@ -41,6 +41,7 @@ type gridModel struct {
 	scale float64 // module coordinates are divided by it in the polynomial
 	px    [polyTerms]float64
 	py    [polyTerms]float64
+	warp  alignmentWarp // local correction measured at the alignment patterns
 }
 
 // polyTerms are the monomials u², uv, v², u³, u²v, uv², v³; lower orders are
@@ -53,15 +54,128 @@ func polyBasis(u, v float64) [polyTerms]float64 {
 
 func (m *gridModel) apply(u, v float64) (float64, float64) {
 	x, y := m.h.apply(u, v)
-	if m.scale == 0 {
-		return x, y
+	if m.scale != 0 {
+		b := polyBasis(u/m.scale, v/m.scale)
+		for i, t := range b {
+			x += m.px[i] * t
+			y += m.py[i] * t
+		}
 	}
-	b := polyBasis(u/m.scale, v/m.scale)
-	for i, t := range b {
-		x += m.px[i] * t
-		y += m.py[i] * t
+	if m.warp.n != 0 {
+		dx, dy := m.warp.at(u, v)
+		x, y = x+dx, y+dy
 	}
 	return x, y
+}
+
+// alignmentWarp is the displacement, in pixels, of the alignment pattern
+// centers from where a grid model puts them, interpolated bilinearly
+// between the rows and columns of alignment patterns and held constant
+// beyond the outermost ones. It follows a surface that bends, or a lens
+// that distorts, more locally than one homography and a cubic can. The
+// zero value is no correction.
+type alignmentWarp struct {
+	n      int            // alignment rows and columns, at most 7
+	nodes  [7]float64     // module coordinate of each row and column
+	dx, dy [7 * 7]float64 // displacement at node (i, j), index j*n+i
+}
+
+func (w *alignmentWarp) at(u, v float64) (float64, float64) {
+	i, fu := w.cell(u)
+	j, fv := w.cell(v)
+	n := w.n
+	lerp := func(a *[49]float64) float64 {
+		top := a[j*n+i]*(1-fu) + a[j*n+i+1]*fu
+		bottom := a[(j+1)*n+i]*(1-fu) + a[(j+1)*n+i+1]*fu
+		return top*(1-fv) + bottom*fv
+	}
+	return lerp(&w.dx), lerp(&w.dy)
+}
+
+// cell returns the node interval holding t and the fraction of the way
+// across it, clamped to the outermost nodes.
+func (w *alignmentWarp) cell(t float64) (int, float64) {
+	switch {
+	case t <= w.nodes[0]:
+		return 0, 0
+	case t >= w.nodes[w.n-1]:
+		return w.n - 2, 1
+	}
+	i := 0
+	for t > w.nodes[i+1] {
+		i++
+	}
+	return i, (t - w.nodes[i]) / (w.nodes[i+1] - w.nodes[i])
+}
+
+// maxWarp is the largest displacement, in modules, an alignment center may
+// have from the fitted model to count; a larger one is a false match.
+const maxWarp = 1.0
+
+// measureWarp measures the alignment centers of a symbol, whose alignment
+// rows and columns are at pos, through m and returns their displacements, or the zero warp when
+// fewer than minDistortionPoints are found. The finders anchor the fit, so
+// their nodes have none; a pattern not found takes the mean of its
+// neighbors that have one, spreading inward from those found.
+func measureWarp(dark func(x, y int) bool, m *gridModel, pos []int) alignmentWarp {
+	n := len(pos)
+	if n < 3 {
+		return alignmentWarp{}
+	}
+	w := alignmentWarp{n: n}
+	for i, p := range pos {
+		w.nodes[i] = float64(p) + 0.5
+	}
+	var known [49]bool
+	found := 0
+	for j := 0; j < n; j++ {
+		for i := 0; i < n; i++ {
+			k := j*n + i
+			if isFinderSlot(i, j, n) {
+				known[k] = true
+				continue
+			}
+			u, v := w.nodes[i], w.nodes[j]
+			ex, ey := m.apply(u, v)
+			x1, y1 := m.apply(u+1, v)
+			x2, y2 := m.apply(u, v+1)
+			x, y, ok := searchAlignment(dark, ex, ey, x1-ex, y1-ey, x2-ex, y2-ey, []float64{maxWarp + 0.5})
+			module := math.Min(math.Hypot(x1-ex, y1-ey), math.Hypot(x2-ex, y2-ey))
+			if !ok || math.Hypot(x-ex, y-ey) > maxWarp*module {
+				continue
+			}
+			w.dx[k], w.dy[k] = x-ex, y-ey
+			known[k] = true
+			found++
+		}
+	}
+	if found < minDistortionPoints {
+		return alignmentWarp{}
+	}
+	for filled := true; filled; {
+		filled = false
+		next := known
+		for j := 0; j < n; j++ {
+			for i := 0; i < n; i++ {
+				k := j*n + i
+				if known[k] {
+					continue
+				}
+				sx, sy, c := 0.0, 0.0, 0
+				for _, d := range [4][2]int{{1, 0}, {-1, 0}, {0, 1}, {0, -1}} {
+					a, b := i+d[0], j+d[1]
+					if a >= 0 && a < n && b >= 0 && b < n && known[b*n+a] {
+						sx, sy, c = sx+w.dx[b*n+a], sy+w.dy[b*n+a], c+1
+					}
+				}
+				if c > 0 {
+					w.dx[k], w.dy[k], next[k], filled = sx/float64(c), sy/float64(c), true, true
+				}
+			}
+		}
+		known = next
+	}
+	return w
 }
 
 // fitDistortion fits the homography and the polynomial correction to cs,
@@ -558,10 +672,26 @@ func (g *symbolGeometry) fitSymbol(dark func(x, y int) bool) (*gridModel, int, f
 	// Keep the correction only if the fixed patterns read back better with
 	// it: with small modules, noisy alignment centers make the cubic terms
 	// bend the grid instead of straightening it.
+	score := -1 // structureScore of model, once computed
 	if nfound >= minDistortionPoints {
 		plain := *model
-		if model.fitDistortion(cs, dim) && structureScore(dark, model, bestV) <= structureScore(dark, &plain, bestV) {
-			*model = plain
+		plainScore := structureScore(dark, &plain, bestV)
+		if model.fitDistortion(cs, dim) {
+			score = structureScore(dark, model, bestV)
+		}
+		if score <= plainScore {
+			*model, score = plain, plainScore
+		}
+	}
+	// Local correction: what the global model leaves of the alignment
+	// centers' positions, kept if the fixed patterns read back no worse.
+	if w := measureWarp(dark, model, pos); w.n != 0 {
+		if score < 0 {
+			score = structureScore(dark, model, bestV)
+		}
+		model.warp = w
+		if structureScore(dark, model, bestV) < score {
+			model.warp = alignmentWarp{}
 		}
 	}
 	return model, dim, bestScore, true

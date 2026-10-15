@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- `Decode` and `DecodeAll` correct the module grid locally. After the
+  global fit, the alignment patterns are located again through it, and
+  their displacements from it, interpolated between neighboring patterns,
+  correct the positions where modules are read, so the grid follows a
+  sheet that bends or a lens that distorts more locally than one
+  homography and a cubic can. On the 536 photos of the BoofCV QR Code
+  dataset, `Decode` reads 6 more, all large symbols: 84.8% of the "high
+  version" photos instead of 66.7%, and 78.4% of all photos instead of
+  77.2%, losing none. In the simulated distortion sweeps, barrel
+  distortion k₁ = −0.1 decodes 97% instead of 84%. Decoding time is
+  unchanged except for `DecodeAll`, 6% slower on its benchmark image.
+
 ### Performance
 
 - The optimal segmentation finds the cheapest mode to switch from once per

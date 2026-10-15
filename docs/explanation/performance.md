@@ -47,11 +47,11 @@ nothing here; `DecodeAll`, which reads every code, is compared below.
 | shadows | 92.9% | 92.9% | **100%** | 78.6% | 57.1% | 71.4% |
 | brightness | 78.6% | **96.4%** | 78.6% | 64.3% | 28.6% | 71.4% |
 | bright spots | 53.1% | 40.6% | **59.4%** | 43.8% | 40.6% | 46.9% |
-| high version | 66.7% | **97.0%** | 21.2% | 21.2% | 6.1% | 6.1% |
+| high version | 84.8% | **97.0%** | 21.2% | 21.2% | 6.1% | 6.1% |
 | noncompliant | 87.5% | 62.5% | **93.8%** | 62.5% | 6.2% | 18.8% |
 | pathological | 82.6% | 43.5% | **91.3%** | 65.2% | 4.3% | 34.8% |
 | lots | **100%** | **100%** | 0% | **100%** | **100%** | **100%** |
-| **all photos** | **77.1%** | 73.1% | 68.8% | 45.7% | 40.1% | 34.1% |
+| **all photos** | **78.4%** | 73.1% | 68.8% | 45.7% | 40.1% | 34.1% |
 | decode time, all photos | 8.7 s | **5.5 s** | 106 s | 61 s | 171 s | 34 s |
 
 Counting codes rather than photos, `DecodeAll` (*since v2.6*) reads what
@@ -61,13 +61,17 @@ Counting codes rather than photos, `DecodeAll` (*since v2.6*) reads what
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | lots (7 photos, 420 codes) | 1.7% | **23.3%** | **23.3%** | 0% | 14.0% | 22.6% | 22.6% |
 | rotations (44 photos, 133 codes) | 33.1% | **98.5%** | **98.5%** | 82.0% | 48.1% | 66.2% | 42.1% |
-| **all codes** | 33.5% | **54.3%** | 52.9% | 41.2% | 30.7% | 30.4% | 28.4% |
+| **all codes** | 34.1% | **54.8%** | 52.9% | 41.2% | 30.7% | 30.4% | 28.4% |
 | median decode time per photo | 7.0 ms | 13.0 ms | 5.8 ms | 19.2 ms | 36.0 ms | 70.5 ms | 13.4 ms |
 
 WeChat uses a CNN detector and super-resolution; OpenCV's QRCodeDetector
 reads with quirc. Large symbols are go-qr's weak spot: version 20 and up
-decode in two thirds of the photos where zxing-cpp, which fits a local
-transform between each pair of alignment patterns, reads nearly all.
+decode in 85% of the photos, where zxing-cpp, which fits a local transform
+between each pair of alignment patterns, reads nearly all. Since v2.7 the
+grid is corrected locally by the alignment patterns' measured positions,
+which raised that from 67%; the four photos still missed are version 40
+codes whose global fit is too far off for the alignment patterns to be
+found.
 
 The thresholds the decoder uses were tuned on this dataset, so these
 figures are optimistic for go-qr; the next table, on photos it was not
@@ -119,8 +123,8 @@ if the text matches; neither decoder returned a wrong text.
 | 2 px per module | **91%** | 75% |
 | 1.5 px per module | **66%** | 28% |
 | blur σ 2 px | **100%** | 56% |
-| barrel distortion k₁ = −0.1 | **84%** | 56% |
-| barrel distortion k₁ = −0.15 | **66%** | 41% |
+| barrel distortion k₁ = −0.1 | **97%** | 56% |
+| barrel distortion k₁ = −0.15 | **69%** | 41% |
 | phone mix | **98%** | 42% |
 
 The simulated camera has no glare, texture or damage, which makes these
