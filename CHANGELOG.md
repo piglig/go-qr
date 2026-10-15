@@ -52,6 +52,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `DecodeAll` could miss a code next to one it had already found, at
+  another scale or polarity: a candidate triple holding a finder of the
+  found code and two of its neighbor's set aside all three finders, and
+  the neighbor's own triple with them. Only the found code's finder is set
+  aside now. On the BoofCV QR Code dataset it reads one more code, 670 of
+  1,232.
+
 - `JoinStructuredAppend` panicked on a nil symbol, and on a hand-built
   `StructuredAppend` with a negative index or a total outside 1 to 16. It
   now returns an error wrapping `ErrInvalidArgument`.

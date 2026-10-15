@@ -254,3 +254,43 @@ func BenchmarkDecodeAllNoCode(b *testing.B) {
 		}
 	}
 }
+
+// besideEachOther places codes a and b in a row, b's left edge gap modules
+// after a's right edge, with a quiet zone around both.
+func besideEachOther(t *testing.T, a, b *Code, scale, gap int) *image.Gray {
+	ia := mustImage(t, a, WithScale(scale), WithQuietZone(0))
+	ib := mustImage(t, b, WithScale(scale), WithQuietZone(0))
+	m := 6 * scale
+	sa, sb := ia.Bounds().Size(), ib.Bounds().Size()
+	img := image.NewGray(image.Rect(0, 0, 2*m+sa.X+gap*scale+sb.X, 2*m+max(sa.Y, sb.Y)))
+	draw.Draw(img, img.Bounds(), image.White, image.Point{}, draw.Src)
+	draw.Draw(img, ia.Bounds().Add(image.Pt(m, m)), ia, image.Point{}, draw.Src)
+	draw.Draw(img, ib.Bounds().Add(image.Pt(m+sa.X+gap*scale, m)), ib, image.Point{}, draw.Src)
+	return img
+}
+
+func TestDecodeEveryTripleKeepsNeighborFinders(t *testing.T) {
+	// Two version 2 codes 11 modules apart: a finder of one and two of the
+	// other form a triple as good as the other's own. Once the first code
+	// is found, as by an earlier pass, that triple must not take the other
+	// code's finders with it.
+	first := mustEncode(t, "first symbol", WithVersionRange(2, 2))
+	second := mustEncode(t, "second symbol", WithVersionRange(2, 2))
+	const scale = 4
+	img := besideEachOther(t, first, second, scale, 11)
+	all, err := DecodeAll(img)
+	assertNoError(t, err)
+	assertLen(t, all, 2)
+	for _, known := range all {
+		l := toLuma(img)
+		w, h := img.Bounds().Dx(), img.Bounds().Dy()
+		tm := hybridThresholds(l, w, h)
+		s := newSymbolSearch(tm, false, 1, l, w, h, decodeGrid)
+		_, cands, _ := findFindersStep(tm, false, darkIn(tm, false), s.step())
+		found := []*DecodeResult{known}
+		s.decodeEveryTriple(cands, &found, func(r *DecodeResult) { found = append(found, r) }, 10)
+		if len(found) != 2 {
+			t.Errorf("with %q found first, the other code was not found", known.Text)
+		}
+	}
+}
