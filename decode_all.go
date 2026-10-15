@@ -112,10 +112,29 @@ func searchAll(img image.Image, cfg decodeConfig, limit int) ([]*DecodeResult, e
 		return nil, firstErr
 	}
 
-	pass := func(tm *thresholdMap, inverted bool, scale int) {
+	pass := func(tm *thresholdMap, inverted bool, scale int, refine bool) {
 		s := newSymbolSearch(tm, inverted, scale, l, w, h, decodeGrid)
 		triples, cands, err := findFindersStep(tm, inverted, darkIn(tm, inverted), s.step())
 		before := len(found)
+		if refine && scale > 1 {
+			// As robustDecode does first, so that Decode and DecodeAll
+			// locate a symbol they both read the same way.
+			f := float64(scale)
+			covered := func(t [3]finderPattern) bool {
+				for _, c := range t {
+					for _, r := range found {
+						if inQuad(r.Corners, c.x*f, c.y*f) {
+							return true
+						}
+					}
+				}
+				return false
+			}
+			s.eachRegion(triples, covered, func(res *DecodeResult) bool {
+				add(res)
+				return len(found) < limit
+			})
+		}
 		s.decodeEveryTriple(cands, &found, add, limit)
 		if len(found) > before {
 			return
@@ -130,16 +149,27 @@ func searchAll(img image.Image, cfg decodeConfig, limit int) ([]*DecodeResult, e
 			note(err)
 		}
 	}
-	adaptive := hybridThresholds(l, w, h)
-	for _, inverted := range []bool{false, true} {
-		if len(found) < limit {
-			pass(adaptive, inverted, 1)
+	// The levels in Decode's order, so that a symbol both read is located
+	// the same way; then light symbols on a dark background at full
+	// resolution.
+	pyr := newPyramid(l, w, h)
+	var full *thresholdMap
+	for _, k := range searchOrder(w, h) {
+		if len(found) >= limit {
+			break
 		}
+		p := pyr.level(k)
+		tm := hybridThresholds(p.l, p.w, p.h)
+		if k == 0 {
+			full = tm
+		}
+		pass(tm, false, 1<<k, full == nil)
 	}
-	small, sw, sh := l, w, h
-	for scale := 2; min(w, h)/scale >= minScaledSide && len(found) < limit; scale *= 2 {
-		small, sw, sh = halve(small, sw, sh)
-		pass(hybridThresholds(small, sw, sh), false, scale)
+	if len(found) < limit {
+		if full == nil {
+			full = hybridThresholds(l, w, h)
+		}
+		pass(full, true, 1, false)
 	}
 	if len(found) > limit {
 		found = found[:limit]
