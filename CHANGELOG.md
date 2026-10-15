@@ -17,6 +17,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `Decode` and `DecodeAll` decode with soft decisions a located symbol
+  that hard decisions cannot read. When the function patterns of a grid
+  that does not decode read back as a symbol's, its modules are decided
+  again by a model of the light, contrast and blur around each one, which
+  the function patterns calibrate as pilots, and the codewords it is least
+  sure of are erased in Reed–Solomon decoding (generalized minimum distance
+  decoding). These attempts leave the misdecode protection codewords of
+  ISO/IEC 18004 Table 9 and two more bytes per block unused, and must read
+  a data segment; in 3 million random grids with intact function patterns
+  none decoded. On the 536 BoofCV photos, `Decode` reads 432 instead of
+  420, mostly with glare or blur, and `DecodeAll` 701 codes instead of 675;
+  none is read less. The distortion sweeps decode 958 images instead of
+  950. Decoding time is unchanged, within 2.5% on every benchmark. `Verify`
+  still counts hard decisions only.
+
 - `Decode` and `DecodeAll` correct the module grid locally. After the
   global fit, the alignment patterns are located again through it, and
   their displacements from it, interpolated between neighboring patterns,

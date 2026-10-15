@@ -124,7 +124,7 @@ func locate(res *DecodeResult, at func(u, v float64) (float64, float64), dim int
 
 // searchImage runs the fast and robust samplers over img, each on the image
 // as is and inverted, and returns the first grid that read decodes.
-func searchImage(img image.Image, cfg decodeConfig, read func([][]bool) (*DecodeResult, error)) (*DecodeResult, error) {
+func searchImage(img image.Image, cfg decodeConfig, read gridReader) (*DecodeResult, error) {
 	b := img.Bounds()
 	w, h := b.Dx(), b.Dy()
 	if w < 21 || h < 21 {
@@ -148,7 +148,7 @@ func searchImage(img image.Image, cfg decodeConfig, read func([][]bool) (*Decode
 	try := func(grid [][]bool, r image.Rectangle, inverted bool, err error) (*DecodeResult, error) {
 		if err == nil {
 			var res *DecodeResult
-			if res, err = read(grid); err == nil {
+			if res, err = read(grid, nil); err == nil {
 				d := float64(len(grid))
 				locate(res, func(u, v float64) (float64, float64) {
 					return float64(r.Min.X) + u/d*float64(r.Dx()), float64(r.Min.Y) + v/d*float64(r.Dy())
@@ -300,12 +300,12 @@ func halve(l []uint8, w, h int) ([]uint8, int, int) {
 
 // decodeGrid decodes a sampled module grid, retrying it transposed (which is
 // how a mirror image samples) if it cannot be read as is.
-func decodeGrid(grid [][]bool) (*DecodeResult, error) {
-	res, err := decodeModules(grid)
+func decodeGrid(grid [][]bool, rel []float32) (*DecodeResult, error) {
+	res, err := decodeModules(grid, rel)
 	if err == nil || errors.Is(err, ErrUnsupported) {
 		return res, err
 	}
-	if res, err2 := decodeModules(transpose(grid)); err2 == nil || errors.Is(err2, ErrUnsupported) {
+	if res, err2 := decodeModules(transpose(grid), transposeReliability(rel, len(grid))); err2 == nil || errors.Is(err2, ErrUnsupported) {
 		if res != nil {
 			res.Mirrored = true
 		}
@@ -314,8 +314,8 @@ func decodeGrid(grid [][]bool) (*DecodeResult, error) {
 	return nil, err
 }
 
-func decodeModules(grid [][]bool) (*DecodeResult, error) {
-	data, ver, ecc, mask, err := decodeMatrix(grid)
+func decodeModules(grid [][]bool, rel []float32) (*DecodeResult, error) {
+	data, ver, ecc, mask, err := decodeMatrix(grid, rel)
 	if err != nil {
 		return nil, err
 	}

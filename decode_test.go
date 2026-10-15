@@ -111,7 +111,7 @@ func TestRSCorrectsErrors(t *testing.T) {
 	for i := 0; i < 6; i++ {
 		modules[c-2+i/3][c-2+i%3] = !modules[c-2+i/3][c-2+i%3]
 	}
-	res, err := decodeGrid(modules)
+	res, err := decodeGrid(modules, nil)
 	if err != nil {
 		t.Fatalf("decode after corruption: %v", err)
 	}

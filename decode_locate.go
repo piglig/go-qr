@@ -44,7 +44,7 @@ type finderPattern struct {
 // from the full-resolution luminance l (lw×lh pixels). With refine, set at
 // levels searched before full resolution, finders the level barely
 // resolves are located again in regions at full resolution.
-func robustDecode(tm *thresholdMap, inverted bool, scale int, refine bool, l []uint8, lw, lh int, read func([][]bool) (*DecodeResult, error)) (*DecodeResult, error) {
+func robustDecode(tm *thresholdMap, inverted bool, scale int, refine bool, l []uint8, lw, lh int, read gridReader) (*DecodeResult, error) {
 	s := newSymbolSearch(tm, inverted, scale, l, lw, lh, read)
 	triples, cands, err := findFindersStep(tm, inverted, darkIn(tm, inverted), s.step())
 	if err != nil && len(cands) < 2 {
@@ -181,10 +181,10 @@ type symbolSearch struct {
 	scale    int
 	l        []uint8 // full-resolution luminance, lw×lh
 	lw, lh   int
-	read     func([][]bool) (*DecodeResult, error)
+	read     gridReader
 }
 
-func newSymbolSearch(tm *thresholdMap, inverted bool, scale int, l []uint8, lw, lh int, read func([][]bool) (*DecodeResult, error)) *symbolSearch {
+func newSymbolSearch(tm *thresholdMap, inverted bool, scale int, l []uint8, lw, lh int, read gridReader) *symbolSearch {
 	return &symbolSearch{tm: tm, inverted: inverted, scale: scale, l: l, lw: lw, lh: lh, read: read}
 }
 
@@ -208,7 +208,7 @@ func (s *symbolSearch) readGrid(p mapper, dim int) (*DecodeResult, error) {
 	if s.scale > 1 {
 		p = scaledMapper{p, float64(s.scale)}
 	}
-	res, err := s.read(readModules(s.l, s.lw, s.lh, p, dim, s.inverted))
+	res, err := readSoft(moduleLuma(s.l, s.lw, s.lh, p, dim), dim, s.inverted, s.read)
 	locate(res, p.apply, dim, s.inverted)
 	return res, err
 }

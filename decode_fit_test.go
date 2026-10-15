@@ -152,10 +152,10 @@ func TestDecodeLensDistortion(t *testing.T) {
 	if model.scale == 0 {
 		t.Error("lens correction not applied")
 	}
-	if _, err := decodeGrid(readModules(l, w, h, model, dim, false)); err != nil {
+	if _, err := decodeGrid(readModules(l, w, h, model, dim, false), nil); err != nil {
 		t.Errorf("corrected grid: %v", err)
 	}
-	if _, err := decodeGrid(readModules(l, w, h, model.h, dim, false)); err == nil {
+	if _, err := decodeGrid(readModules(l, w, h, model.h, dim, false), nil); err == nil {
 		t.Error("the homography alone decodes: the test does not need the correction")
 	}
 	res, err := Decode(distorted)
@@ -217,7 +217,7 @@ func TestPerspectiveFallback(t *testing.T) {
 		}
 		decoded := false
 		for _, p := range ps {
-			if res, err := decodeGrid(readModules(l, b.Dx(), b.Dy(), p, g.dim, false)); err == nil && res.Text == text {
+			if res, err := decodeGrid(readModules(l, b.Dx(), b.Dy(), p, g.dim, false), nil); err == nil && res.Text == text {
 				decoded = true
 			}
 		}

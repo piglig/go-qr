@@ -120,16 +120,22 @@ func logoDamage(code *Code, box int) float64 {
 // smallest symbols reserve for detecting errors rather than correcting
 // them. Readers that follow the standard correct no more.
 func correctableErrors(ver int, ecc ECC) int {
-	p := 0
+	return (int(eccCodeWordsPerBlock[ecc][ver]) - misdecodeProtection(ver, ecc)) / 2
+}
+
+// misdecodeProtection returns the misdecode protection codewords p of
+// ISO/IEC 18004 Table 9: check bytes of each block that are not for
+// correcting errors but for detecting a correction gone wrong.
+func misdecodeProtection(ver int, ecc ECC) int {
 	switch {
 	case ver == 1 && ecc == ECCLow:
-		p = 3
+		return 3
 	case ver == 1 && ecc == ECCMedium, ver == 2 && ecc == ECCLow:
-		p = 2
+		return 2
 	case ver == 1, ver == 3 && ecc == ECCLow:
-		p = 1
+		return 1
 	}
-	return (int(eccCodeWordsPerBlock[ecc][ver]) - p) / 2
+	return 0
 }
 
 // rects returns the padded box and the inner logo area in output units.

@@ -179,7 +179,7 @@ func TestReadModulesUnevenLight(t *testing.T) {
 	}
 	d := float64(code.Size())
 	p, _ := quadToQuad([4][2]float64{{0, 0}, {d, 0}, {d, d}, {0, d}}, [4][2]float64{{0, 0}, {float64(w), 0}, {float64(w), float64(h)}, {0, float64(h)}})
-	if _, err := decodeModules(readModules(l, w, h, p, code.Size(), false)); err != nil {
+	if _, err := decodeModules(readModules(l, w, h, p, code.Size(), false), nil); err != nil {
 		t.Fatalf("read under a lighting gradient: %v", err)
 	}
 }

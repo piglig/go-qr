@@ -42,12 +42,17 @@ func (c *Code) Verify(opts ...RenderOption) error {
 	if err != nil {
 		return err
 	}
-	want, _, _, _, err := decodeMatrix(c.modules)
+	want, _, _, _, err := decodeMatrix(c.modules, nil)
 	if err != nil {
 		return fmt.Errorf("%w: the symbol's own modules do not decode: %v", ErrUnreadable, err)
 	}
-	got, err := searchImage(img, decodeConfig{}, func(grid [][]bool) (*DecodeResult, error) {
-		data, ver, ecc, mask, err := decodeMatrix(grid)
+	// Only hard decisions count: a design must scan with readers that do
+	// not decode softly, as most do not.
+	got, err := searchImage(img, decodeConfig{}, func(grid [][]bool, rel []float32) (*DecodeResult, error) {
+		if rel != nil {
+			return nil, fmt.Errorf("%w: only soft decoding reads it", ErrDecodeFailed)
+		}
+		data, ver, ecc, mask, err := decodeMatrix(grid, nil)
 		if err != nil {
 			return nil, err
 		}

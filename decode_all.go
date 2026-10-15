@@ -98,7 +98,7 @@ func searchAll(img image.Image, cfg decodeConfig, limit int) ([]*DecodeResult, e
 		grid, box, err := fastSample(l, w, h, threshold, inverted)
 		if err == nil {
 			var res *DecodeResult
-			if res, err = decodeGrid(grid); err == nil {
+			if res, err = decodeGrid(grid, nil); err == nil {
 				d := float64(len(grid))
 				locate(res, func(u, v float64) (float64, float64) {
 					return float64(box.Min.X) + u/d*float64(box.Dx()), float64(box.Min.Y) + v/d*float64(box.Dy())
