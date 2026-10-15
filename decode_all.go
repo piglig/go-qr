@@ -323,7 +323,9 @@ func readingOrder(rs []*DecodeResult) []*DecodeResult {
 		top := items[0]
 		var row, rest []item
 		for _, it := range items {
-			if math.Abs(it.cy-top.cy) <= top.half {
+			// In the row if either center lies within the other's height:
+			// a small symbol beside a large one shares its row.
+			if math.Abs(it.cy-top.cy) <= math.Max(top.half, it.half) {
 				row = append(row, it)
 			} else {
 				rest = append(rest, it)

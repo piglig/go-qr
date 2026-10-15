@@ -212,6 +212,15 @@ func TestReadingOrder(t *testing.T) {
 	// A row whose symbols sit a little higher or lower stays one row.
 	rs := readingOrder([]*DecodeResult{box(300, 10), box(0, 30), box(150, 0), box(0, 200), box(160, 190)})
 	assertEqual(t, []string{"0,30", "150,0", "300,10", "0,200", "160,190"}, texts(rs))
+
+	// A small symbol beside a large one, top-aligned, reads after it: the
+	// large one's center is lower than the small one's half height, but
+	// the small one lies within the large one's height.
+	sized := func(name string, x, y, side int) *DecodeResult {
+		return &DecodeResult{Text: name, Corners: [4]image.Point{{x, y}, {x + side, y}, {x + side, y + side}, {x, y + side}}}
+	}
+	rs = readingOrder([]*DecodeResult{sized("small", 183, 12, 63), sized("large", 12, 12, 147), sized("below", 12, 200, 63)})
+	assertEqual(t, []string{"large", "small", "below"}, texts(rs))
 }
 
 func TestInQuad(t *testing.T) {
