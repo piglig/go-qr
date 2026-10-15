@@ -238,11 +238,18 @@ func (s *symbolSearch) decodeEveryTriple(cands []finderPattern, found *[]*Decode
 		if used[t.i] || used[t.j] || used[t.k] {
 			continue
 		}
-		a, b, c := cands[t.i], cands[t.j], cands[t.k]
-		if covered(a.x, a.y) || covered(b.x, b.y) || covered(c.x, c.y) {
-			used[t.i], used[t.j], used[t.k] = true, true, true
+		// A finder inside a symbol found so far is that symbol's; the others
+		// of the triple may still belong to another one.
+		skip := false
+		for _, i := range [3]int{t.i, t.j, t.k} {
+			if covered(cands[i].x, cands[i].y) {
+				used[i], skip = true, true
+			}
+		}
+		if skip {
 			continue
 		}
+		a, b, c := cands[t.i], cands[t.j], cands[t.k]
 		// Grids estimated from finder centers decode no symbols here that
 		// the fallback pass would not, and false triples in texture would
 		// each try several.
