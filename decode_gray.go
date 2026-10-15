@@ -121,15 +121,29 @@ type rangeLevel struct {
 }
 
 func newRangePyramid(bw, bh int, at func(i int) (lo, hi uint8)) *rangePyramid {
-	lo, hi := make([]uint8, bw*bh), make([]uint8, bw*bh)
+	// Every level's slices come from one allocation: the window ranges
+	// kept, cell ranges alternating between two buffers as each level is
+	// built from the one before, and a buffer for the separable windows.
+	n, half := bw*bh, ((bw+1)/2)*((bh+1)/2)
+	count, total := 0, 0
+	for w, h := bw, bh; w > 1 || h > 1; {
+		w, h = (w+1)/2, (h+1)/2
+		count++
+		total += w * h
+	}
+	buf := make([]uint8, 2*n+4*half+2*total)
+	a, b := buf[:2*n], buf[2*n:2*n+2*half]
+	tmp, kept := buf[2*n+2*half:2*n+4*half], buf[2*n+4*half:]
+	lo, hi := a[:n], a[n:]
 	for i := range lo {
 		lo[i], hi[i] = at(i)
 	}
-	p := &rangePyramid{}
+	p := &rangePyramid{levels: make([]rangeLevel, 0, count)}
 	w, h := bw, bh
-	for w > 1 || h > 1 {
+	for into := b; w > 1 || h > 1; {
 		nw, nh := (w+1)/2, (h+1)/2
-		clo, chi := make([]uint8, nw*nh), make([]uint8, nw*nh)
+		m := nw * nh
+		clo, chi := into[:m], into[m:2*m]
 		for y := 0; y < nh; y++ {
 			for x := 0; x < nw; x++ {
 				l, u := uint8(255), uint8(0)
@@ -144,7 +158,7 @@ func newRangePyramid(bw, bh int, at func(i int) (lo, hi uint8)) *rangePyramid {
 			}
 		}
 		// Window ranges over 3×3 cells, separably.
-		tlo, thi := make([]uint8, nw*nh), make([]uint8, nw*nh)
+		tlo, thi := tmp[:m], tmp[m:2*m]
 		for y := 0; y < nh; y++ {
 			for x := 0; x < nw; x++ {
 				l, u := uint8(255), uint8(0)
@@ -154,7 +168,8 @@ func newRangePyramid(bw, bh int, at func(i int) (lo, hi uint8)) *rangePyramid {
 				tlo[y*nw+x], thi[y*nw+x] = l, u
 			}
 		}
-		wlo, whi := make([]uint8, nw*nh), make([]uint8, nw*nh)
+		wlo, whi := kept[:m:m], kept[m:2*m:2*m]
+		kept = kept[2*m:]
 		for y := 0; y < nh; y++ {
 			for x := 0; x < nw; x++ {
 				l, u := uint8(255), uint8(0)
@@ -165,6 +180,13 @@ func newRangePyramid(bw, bh int, at func(i int) (lo, hi uint8)) *rangePyramid {
 			}
 		}
 		p.levels = append(p.levels, rangeLevel{wlo, whi, nw, nh})
+		// The next level reads these cells and writes over the buffer
+		// lo and hi were in.
+		if &into[0] == &b[0] {
+			into = a
+		} else {
+			into = b
+		}
 		lo, hi, w, h = clo, chi, nw, nh
 	}
 	return p

@@ -213,10 +213,12 @@ func newSymbolGeometryCorner(dark func(x, y int) bool, t [3]finderPattern, k int
 // bottom-left finders; virtual marks one of them as inferred, as in
 // symbolGeometry.
 func newSymbolGeometryOrdered(dark func(x, y int) bool, tl, tr, bl finderPattern, virtual int) (*symbolGeometry, error) {
-	g := &symbolGeometry{tl: tl, tr: tr, bl: bl, virtual: virtual}
+	// Most triples tried are rejected, so g is copied to the heap only
+	// once it is accepted, and the errors are not formatted.
+	g := symbolGeometry{tl: tl, tr: tr, bl: bl, virtual: virtual}
 	top, left := dist(tl, tr), dist(tl, bl)
 	if top == 0 || left == 0 {
-		return nil, fmt.Errorf("%w: degenerate finder triple", ErrNotFound)
+		return nil, errDegenerateTriple
 	}
 	g.cx, g.cy = (tr.x-tl.x)/top, (tr.y-tl.y)/top
 	g.rx, g.ry = (bl.x-tl.x)/left, (bl.y-tl.y)/left
@@ -243,7 +245,7 @@ func newSymbolGeometryOrdered(dark func(x, y int) bool, tl, tr, bl finderPattern
 	raw := (top/((g.tlC+g.trC)/2) + left/((g.tlR+g.blR)/2)) / 2
 	ver := int(math.Round((raw + 7 - 17) / 4))
 	if ver < MinVersion || ver > MaxVersion {
-		return nil, fmt.Errorf("%w: estimated dimension %.1f maps to version %d", ErrNotFound, raw+7, ver)
+		return nil, errTripleVersion
 	}
 	// From version 7 on, the version information next to the top-right and
 	// bottom-left finders gives the exact size; the estimate from finder
@@ -254,8 +256,14 @@ func newSymbolGeometryOrdered(dark func(x, y int) bool, tl, tr, bl finderPattern
 		}
 	}
 	g.dim = 4*ver + 17
-	return g, nil
+	accepted := g
+	return &accepted, nil
 }
+
+var (
+	errDegenerateTriple = fmt.Errorf("%w: degenerate finder triple", ErrNotFound)
+	errTripleVersion    = fmt.Errorf("%w: finder spacing maps to no version", ErrNotFound)
+)
 
 // finderModuleAlong measures a finder's module size along the unit direction
 // (dx, dy) from the extent of its 7-module width through the center. It
