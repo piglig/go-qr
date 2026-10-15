@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Performance
 
+- `Decode` and `DecodeAll` allocate 20 to 40% fewer objects on
+  photo-sized images: the contrast pyramid of the adaptive threshold takes
+  one allocation instead of six per level, and finder triples rejected
+  while fitting allocate nothing. Decoding time is unchanged.
 - The optimal segmentation finds the cheapest mode to switch from once per
   character instead of once for each of the four modes it switches to, and
   looks up alphanumeric characters in a table. It no longer segments the
