@@ -140,3 +140,59 @@ func FuzzCorrectErasures(f *testing.F) {
 		}
 	})
 }
+
+func TestCorrectErasuresBeyondCapacity(t *testing.T) {
+	// Blocks corrupted beyond repair must be refused, or accepted only as a
+	// codeword within the budget of the received word: what keeps erasure
+	// decoding from inventing data.
+	rng := rand.New(rand.NewSource(5))
+	refused := 0
+	for trial := 0; trial < 20000; trial++ {
+		eccLen := 2 + rng.Intn(29)
+		dataLen := 1 + rng.Intn(60)
+		orig := randomCodeword(rng, dataLen, eccLen)
+		n := len(orig)
+		perm := rng.Perm(n)
+		s := rng.Intn(min(eccLen, n) + 1)
+		e := min(n-s, (eccLen-s)/2+1+rng.Intn(eccLen+1))
+		erasures := perm[:s]
+		got := append([]byte(nil), orig...)
+		for _, p := range erasures {
+			got[p] ^= byte(rng.Intn(256))
+		}
+		corrupt(rng, got, perm[s:s+e])
+		received := append([]byte(nil), got...)
+		budget := eccLen
+		if rng.Intn(2) == 0 {
+			budget = s + rng.Intn(eccLen-s+1)
+		}
+		if err := CorrectErasures(got, eccLen, erasures, budget); err != nil {
+			refused++
+			continue
+		}
+		div, _ := Divisor(eccLen)
+		if !bytes.Equal(Remainder(got[:dataLen], div), got[dataLen:]) {
+			t.Fatalf("trial %d: accepted a block that is not a codeword", trial)
+		}
+		erased := map[int]bool{}
+		for _, p := range erasures {
+			erased[p] = true
+		}
+		other := 0
+		for i := range got {
+			if got[i] != received[i] && !erased[i] {
+				other++
+			}
+		}
+		if 2*other+s > budget {
+			t.Fatalf("trial %d: %d changes besides %d erasures exceed budget %d", trial, other, s, budget)
+		}
+	}
+	if refused < 10000 {
+		t.Errorf("only %d of 20000 blocks beyond repair refused", refused)
+	}
+	cw := randomCodeword(rng, 10, 6)
+	if err := CorrectErasures(cw, 6, []int{0, 1, 2, 3}, 3); !errors.Is(err, ErrUncorrectable) {
+		t.Errorf("more erasures than the budget: %v", err)
+	}
+}

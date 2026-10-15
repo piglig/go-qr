@@ -362,10 +362,9 @@ func CorrectErasures(block []byte, eccLen int, erasures []int, budget int) error
 		return fmt.Errorf("%w: beyond the correction budget", ErrUncorrectable)
 	}
 
+	// Λ and Γ end in nonzero coefficients, so Ψ = ΛΓ does: its degree is
+	// the number of positions to correct.
 	psi := polyMul(lambda, gamma)
-	for len(psi) > 1 && psi[len(psi)-1] == 0 {
-		psi = psi[:len(psi)-1]
-	}
 	positions := make([]int, 0, len(psi)-1)
 	for i := 0; i < n; i++ {
 		if evalReversed(psi, gfInv(gfExp[i%255])) == 0 {
