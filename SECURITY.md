@@ -28,4 +28,5 @@ The decoder and `payload.Parse` are designed to handle untrusted input: they
 must not panic, hang or use memory out of proportion to the input on any
 image or string. Reports of such behavior are in scope. Decoding time grows
 with the number of pixels, so applications should limit the size of images
-they accept; see [Decoding](docs/guides/decoding.md#decoding-untrusted-images).
+they accept, and can bound the time with `DecodeContext` (*since v2.7*);
+see [Decoding](docs/guides/decoding.md#decoding-untrusted-images).

@@ -154,7 +154,9 @@ image ──► luminance ──► threshold ──► locate ──► fit gri
    all levels, at full resolution, and each sampled grid is also decoded
    transposed, which is how a mirror image samples. `DecodeAll` searches
    the levels in the same order, so that it locates a symbol `Decode`
-   reads in the same way.
+   reads in the same way. `DecodeContext` and `DecodeAllContext` check
+   their context between these stages: before each level, each window
+   located again at full resolution and each triple `DecodeAll` decodes.
 8. **Matrix and bitstream** (`decode_matrix.go`, `decode_segments.go`). The
    format information is BCH-corrected, the mask removed, codewords read in
    the placement order, blocks de-interleaved and Reed–Solomon corrected, and

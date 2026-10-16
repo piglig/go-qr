@@ -243,7 +243,8 @@ the number of pixels on any image, at most about 120 ms for a
 12-megapixel one without a code, including images crafted with many
 finder patterns (*since v2.5.1*), and
 decoding the image file itself costs more. Check the dimensions of untrusted uploads
-with `image.DecodeConfig` and reject oversized ones before decoding them.
+with `image.DecodeConfig` and reject oversized ones before decoding them,
+and bound the time each one may take with a context, as below.
 
 ## Bounding the time
 

@@ -4,9 +4,12 @@ Every error returned by the package wraps one of the sentinel values below.
 Test for a category with `errors.Is`; the message adds details such as the
 bit count that did not fit, and may change between releases.
 
-There are two exceptions. `WritePNG`, `WriteSVG` and `WriteText` return
+There are three exceptions. `WritePNG`, `WriteSVG` and `WriteText` return
 the error of the `io.Writer` they write to, wrapped with `%w`, so
-`errors.Is` finds that error instead. A `BatchResult` for a job that
+`errors.Is` finds that error instead. `DecodeContext` and
+`DecodeAllContext` (*since v2.7*) return the context's error,
+`context.Canceled` or `context.DeadlineExceeded`, when it stops them, as
+do `Batch` results for jobs it skipped. A `BatchResult` for a job that
 panicked holds an error of its own; a panic is a bug in this package and
 worth reporting.
 
