@@ -7,14 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Fixed
-
-- `DecodeAll` returns a small symbol beside a large one, top-aligned, in
-  reading order. A symbol joined a row only if its center was within half
-  the row's first symbol's height, so a large symbol to the left of a
-  small one, its center lower than the small one's half height, read
-  after it.
-
 ### Changed
 
 - `Decode` and `DecodeAll` decode with soft decisions a located symbol
@@ -94,6 +86,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   with a gradient 14% faster to render (6.3 ms to 5.4 ms).
 
 ### Fixed
+
+- `DecodeAll` returns a small symbol beside a large one, top-aligned, in
+  reading order. A symbol joined a row only if its center was within half
+  the row's first symbol's height, so a large symbol to the left of a
+  small one, its center lower than the small one's half height, read
+  after it.
 
 - `DecodeAll` could miss a code next to one it had already found, at
   another scale or polarity: a candidate triple holding a finder of the
