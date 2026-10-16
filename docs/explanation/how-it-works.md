@@ -159,7 +159,9 @@ image ──► luminance ──► threshold ──► locate ──► fit gri
    format information is BCH-corrected, the mask removed, codewords read in
    the placement order, blocks de-interleaved and Reed–Solomon corrected, and
    the segments parsed, applying ECI character sets, GS1 and structured
-   append headers. In the soft-decision attempts, a block that hard
+   append headers. The codewords each block corrected are counted, and
+   `DecodeResult` reports them with the unused error correction of
+   ISO/IEC 15415 (*since v2.7*). In the soft-decision attempts, a block that hard
    decisions cannot correct has its 2, 4, … least reliable codewords
    erased, which a Reed–Solomon code corrects twice as many of as errors
    (generalized minimum distance decoding, Forney 1966). Erasing every
