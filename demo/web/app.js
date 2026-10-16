@@ -182,7 +182,9 @@ $("dlSvg").addEventListener("click", () => {
 
 const MAX_SIDE = 1000; // larger images are scaled down before decoding
 
-function decodeSource(source, width, height) {
+// frame is set for frames of the camera, which are searched for dark codes
+// on light only, and not graded.
+function decodeSource(source, width, height, frame = false) {
   const scale = Math.min(1, MAX_SIDE / Math.max(width, height));
   const canvas = $("canvas");
   canvas.width = Math.round(width * scale);
@@ -193,7 +195,7 @@ function decodeSource(source, width, height) {
   ctx.drawImage(source, 0, 0, canvas.width, canvas.height);
   const data = ctx.getImageData(0, 0, canvas.width, canvas.height);
   const started = performance.now();
-  const resp = JSON.parse(goqrDecode(data.data, data.width, data.height));
+  const resp = JSON.parse(goqrDecode(data.data, data.width, data.height, frame));
   resp.ms = performance.now() - started;
   return resp;
 }
@@ -216,6 +218,12 @@ function showDecoded(resp) {
     ["Payload", resp.payload || "plain text"],
     ...(resp.mirrored ? [["Mirrored", "yes"]] : []),
     ...(resp.gs1 ? [["GS1", "yes"]] : []),
+    ["Error correction used", `${resp.errorsCorrected} codewords, ${Math.round(100 * (1 - resp.unusedEC))}% of capacity`
+      + (resp.soft ? ", by soft decisions" : "")],
+    ...(resp.quality ? [
+      ["Print quality (ISO/IEC 15415)", `grade ${resp.quality.grade}, ${resp.quality.pixelsPerModule.toFixed(1)} px per module`],
+      ...resp.quality.parameters.map(([k, v]) => ["· " + k, v]),
+    ] : []),
   ]);
 }
 
@@ -271,7 +279,7 @@ async function startCamera() {
   const scan = () => {
     if (!stream) return;
     if (video.videoWidth) {
-      const resp = decodeSource(video, video.videoWidth, video.videoHeight);
+      const resp = decodeSource(video, video.videoWidth, video.videoHeight, true);
       if (!resp.error) {
         showDecoded(resp);
         stopCamera();

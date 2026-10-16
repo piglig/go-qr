@@ -11,7 +11,7 @@ import (
 // "goqr-ready" event, and blocks:
 //
 //	goqrEncode(requestJSON string) string
-//	goqrDecode(rgba Uint8Array | Uint8ClampedArray, width, height int) string
+//	goqrDecode(rgba Uint8Array | Uint8ClampedArray, width, height int, frame bool) string
 func main() {
 	js.Global().Set("goqrEncode", js.FuncOf(func(_ js.Value, args []js.Value) any {
 		var req EncodeRequest
@@ -26,7 +26,8 @@ func main() {
 		// CopyBytesToGo takes a Uint8Array; canvas data is a Uint8ClampedArray.
 		view := js.Global().Get("Uint8Array").New(src.Get("buffer"), src.Get("byteOffset"), len(pix))
 		js.CopyBytesToGo(pix, view)
-		return marshal(decodeRGBA(pix, args[1].Int(), args[2].Int()))
+		frame := len(args) > 3 && args[3].Truthy()
+		return marshal(decodeRGBA(pix, args[1].Int(), args[2].Int(), frame))
 	}))
 	js.Global().Call("dispatchEvent", js.Global().Get("Event").New("goqr-ready"))
 	select {}
