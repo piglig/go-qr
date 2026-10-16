@@ -5,8 +5,10 @@
 // generator polynomial (Divisor) and the codeword remainder (Remainder); the
 // decoder side recovers a possibly-corrupted codeword (Correct) via syndrome
 // evaluation, the Berlekamp-Massey algorithm, a Chien search, and Forney's
-// algorithm. The Galois-field tables and the generator-polynomial cache are
-// built once, in a single ordered init, with no external dependencies.
+// algorithm, and with some positions known to be unreliable
+// (CorrectErasures) through Forney syndromes. The Galois-field tables and
+// the generator-polynomial cache are built once, in a single ordered init,
+// with no external dependencies.
 package reedsolomon
 
 import (
@@ -309,4 +311,79 @@ func formalDerivative(poly []byte) []byte {
 		}
 	}
 	return res
+}
+
+// CorrectErasures repairs, in place, a received codeword of the form
+// [data... | ecc...] with eccLen ECC bytes, whose bytes at the positions in
+// erasures are known to be unreliable. It corrects the erasures and up to
+// e further errors anywhere, provided 2e + len(erasures) <= budget, where
+// budget is at most eccLen; a caller keeps eccLen - budget bytes of
+// redundancy unused against miscorrection. The positions changed are those
+// erased, whatever their values, and those of the errors found. It returns
+// ErrUncorrectable (wrapped) if no codeword is within the budget.
+func CorrectErasures(block []byte, eccLen int, erasures []int, budget int) error {
+	s := len(erasures)
+	budget = min(budget, eccLen)
+	if s > budget {
+		return fmt.Errorf("%w: too many erasures", ErrUncorrectable)
+	}
+	n := len(block)
+	seen := make(map[int]bool, s)
+	for _, pos := range erasures {
+		if pos < 0 || pos >= n || seen[pos] {
+			return fmt.Errorf("%w: erasure position %d out of range or repeated", ErrUncorrectable, pos)
+		}
+		seen[pos] = true
+	}
+	syndromes := make([]byte, eccLen)
+	hasError := false
+	for i := 0; i < eccLen; i++ {
+		syndromes[i] = eval(block, gfExp[i])
+		if syndromes[i] != 0 {
+			hasError = true
+		}
+	}
+	if !hasError {
+		return nil
+	}
+
+	// Erasure locator Γ(x) = Π (1 - X_j x), X_j = α^(n-1-pos).
+	gamma := []byte{1}
+	for _, pos := range erasures {
+		gamma = polyMul(gamma, []byte{1, gfExp[(n-1-pos)%255]})
+	}
+
+	// Forney syndromes Ξ = Γ·S mod x^eccLen; the error locator Λ follows
+	// from Ξ_s .. Ξ_(eccLen-1) as from plain syndromes.
+	xi := polyMul(gamma, syndromes)[:eccLen]
+	lambda := berlekampMassey(xi[s:])
+	for len(lambda) > 1 && lambda[len(lambda)-1] == 0 {
+		lambda = lambda[:len(lambda)-1]
+	}
+	errs := len(lambda) - 1
+	if 2*errs+s > budget {
+		return fmt.Errorf("%w: beyond the correction budget", ErrUncorrectable)
+	}
+
+	// Λ and Γ end in nonzero coefficients, so Ψ = ΛΓ does: its degree is
+	// the number of positions to correct.
+	psi := polyMul(lambda, gamma)
+	positions := make([]int, 0, len(psi)-1)
+	for i := 0; i < n; i++ {
+		if evalReversed(psi, gfInv(gfExp[i%255])) == 0 {
+			positions = append(positions, n-1-i)
+		}
+	}
+	if len(positions) != len(psi)-1 {
+		return fmt.Errorf("%w: locator roots outside the codeword", ErrUncorrectable)
+	}
+	if err := forneyCorrect(block, syndromes, psi, positions); err != nil {
+		return err
+	}
+	for i := 0; i < eccLen; i++ {
+		if eval(block, gfExp[i]) != 0 {
+			return fmt.Errorf("%w: residual error after correction", ErrUncorrectable)
+		}
+	}
+	return nil
 }
