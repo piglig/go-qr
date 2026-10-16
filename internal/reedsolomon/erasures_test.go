@@ -79,10 +79,14 @@ func TestCorrectErasuresBudget(t *testing.T) {
 
 func TestCorrectErasuresRefusesBadPositions(t *testing.T) {
 	cw := randomCodeword(rand.New(rand.NewSource(4)), 10, 8)
-	cw[0] ^= 1
-	for _, erasures := range [][]int{{3, 3}, {-1}, {len(cw)}} {
-		if err := CorrectErasures(append([]byte(nil), cw...), 8, erasures, 8); !errors.Is(err, ErrUncorrectable) {
-			t.Errorf("erasures %v: error %v", erasures, err)
+	damaged := append([]byte(nil), cw...)
+	damaged[0] ^= 1
+	// Refused whether or not the block needs correcting.
+	for name, block := range map[string][]byte{"intact": cw, "damaged": damaged} {
+		for _, erasures := range [][]int{{3, 3}, {-1}, {len(cw)}} {
+			if err := CorrectErasures(append([]byte(nil), block...), 8, erasures, 8); !errors.Is(err, ErrUncorrectable) {
+				t.Errorf("%s block, erasures %v: error %v", name, erasures, err)
+			}
 		}
 	}
 }

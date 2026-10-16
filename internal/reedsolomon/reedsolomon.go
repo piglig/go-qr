@@ -6,8 +6,9 @@
 // decoder side recovers a possibly-corrupted codeword (Correct) via syndrome
 // evaluation, the Berlekamp-Massey algorithm, a Chien search, and Forney's
 // algorithm, and with some positions known to be unreliable
-// (CorrectErasures) through Forney syndromes. The Galois-field tables and the generator-polynomial cache are
-// built once, in a single ordered init, with no external dependencies.
+// (CorrectErasures) through Forney syndromes. The Galois-field tables and
+// the generator-polynomial cache are built once, in a single ordered init,
+// with no external dependencies.
 package reedsolomon
 
 import (
@@ -327,6 +328,13 @@ func CorrectErasures(block []byte, eccLen int, erasures []int, budget int) error
 		return fmt.Errorf("%w: too many erasures", ErrUncorrectable)
 	}
 	n := len(block)
+	seen := make(map[int]bool, s)
+	for _, pos := range erasures {
+		if pos < 0 || pos >= n || seen[pos] {
+			return fmt.Errorf("%w: erasure position %d out of range or repeated", ErrUncorrectable, pos)
+		}
+		seen[pos] = true
+	}
 	syndromes := make([]byte, eccLen)
 	hasError := false
 	for i := 0; i < eccLen; i++ {
@@ -341,12 +349,7 @@ func CorrectErasures(block []byte, eccLen int, erasures []int, budget int) error
 
 	// Erasure locator Γ(x) = Π (1 - X_j x), X_j = α^(n-1-pos).
 	gamma := []byte{1}
-	seen := make(map[int]bool, s)
 	for _, pos := range erasures {
-		if pos < 0 || pos >= n || seen[pos] {
-			return fmt.Errorf("%w: erasure position %d out of range or repeated", ErrUncorrectable, pos)
-		}
-		seen[pos] = true
 		gamma = polyMul(gamma, []byte{1, gfExp[(n-1-pos)%255]})
 	}
 
