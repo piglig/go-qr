@@ -27,10 +27,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   ISO/IEC 18004 Table 9 and two more bytes per block unused, and must read
   a data segment; in 3 million random grids with intact function patterns
   none decoded. On the 536 BoofCV photos, `Decode` reads 432 instead of
-  420, mostly with glare or blur, and `DecodeAll` 701 codes instead of 675;
+  420, mostly with glare or blur, and `DecodeAll` 703 codes instead of 676;
   none is read less. The distortion sweeps decode 958 images instead of
-  950. Decoding time is unchanged, within 2.5% on every benchmark. `Verify`
-  still counts hard decisions only.
+  950. The benchmarks take within 1.5% of the time they did; on the BoofCV
+  photos, `Decode` takes 2% less in all and `DecodeAll` 1% more, up to 30%
+  more on sheets of many small codes. `Verify` still counts hard decisions
+  only.
 
 - `Decode` and `DecodeAll` correct the module grid locally. After the
   global fit, the alignment patterns are located again through it, and
