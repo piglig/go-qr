@@ -15,7 +15,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   12 megapixels, which is most frames of video in which a code is looked
   for. The decoding guide has a section on scanning video.
 
-
 - `DecodeContext` and `DecodeAllContext` stop searching when a context is
   done and return its error; `DecodeAllContext` also returns the symbols
   read so far. They check the context between the stages of the search,
