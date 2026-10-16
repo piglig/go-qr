@@ -167,7 +167,8 @@ const (
 
 // A region holds at most maxRegionPixels, as two search levels would, and a
 // quarter of the image; a symbol that needs more has modules large enough
-// at its level to be read there. regionSlack is the margin on the size of a symbol in a region.
+// at its level to be read there. regionSlack is the margin on the size of
+// a symbol in a region.
 const (
 	maxRegionPixels = 2 * searchPixels
 	regionSlack     = 1.25
