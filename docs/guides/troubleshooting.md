@@ -81,6 +81,8 @@ not accept rounded or circular finders.
 - **Several codes.** `Decode` returns one of them. `DecodeAll`
   (*since v2.6*) returns every code in reading order; or crop the image to
   the code you want.
+- **Light code on a dark background not read.** `WithoutInverted` skips
+  the search for such codes; leave it out for them.
 
 ## The text has wrong characters
 

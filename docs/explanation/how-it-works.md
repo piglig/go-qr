@@ -151,7 +151,8 @@ image ──► luminance ──► threshold ──► locate ──► fit gri
    resolution, within a window around its finders, which costs the
    window's pixels rather than the image's.
 7. **Retries.** Light symbols on dark backgrounds are searched for after
-   all levels, at full resolution, and each sampled grid is also decoded
+   all levels, at full resolution, unless `WithoutInverted` skips them
+   (*since v2.7*), and each sampled grid is also decoded
    transposed, which is how a mirror image samples. `DecodeAll` searches
    the levels in the same order, so that it locates a symbol `Decode`
    reads in the same way. `DecodeContext` and `DecodeAllContext` check
