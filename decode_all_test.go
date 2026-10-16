@@ -1,6 +1,7 @@
 package qr
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"image"
@@ -294,7 +295,7 @@ func TestDecodeEveryTripleKeepsNeighborFinders(t *testing.T) {
 		l := toLuma(img)
 		w, h := img.Bounds().Dx(), img.Bounds().Dy()
 		tm := hybridThresholds(l, w, h)
-		s := newSymbolSearch(tm, false, 1, l, w, h, decodeGrid)
+		s := newSymbolSearch(context.Background(), tm, false, 1, l, w, h, decodeGrid)
 		_, cands, _ := findFindersStep(tm, false, darkIn(tm, false), s.step())
 		found := []*DecodeResult{known}
 		s.decodeEveryTriple(cands, &found, func(r *DecodeResult) { found = append(found, r) }, 10)
