@@ -41,7 +41,12 @@ func classifyModules(vals []float64, dim int, inverted bool) ([][]bool, []float3
 	around := make([]float64, n)
 	rel := make([]float32, n)
 	resid := make([]float64, n)
-	a, b, c := make([]float64, n), make([]float64, n), make([]float64, n)
+	// Summed-area tables of the terms of the normal equations, refilled
+	// each iteration; that of the luminances is the windows'.
+	m := (dim + 1) * (dim + 1)
+	tables := make([]float64, 6*m)
+	sp, sm, spm, smm, slp, slm := tables[:m], tables[m:2*m], tables[2*m:3*m], tables[3*m:4*m], tables[4*m:5*m], tables[5*m:]
+	sl := w.sat
 	for iter := 0; iter < 3; iter++ {
 		for i := range label {
 			label[i] = dark[i]
@@ -65,49 +70,60 @@ func classifyModules(vals []float64, dim int, inverted bool) ([][]bool, []float3
 				around[r*dim+col] = s / 12
 			}
 		}
-		sp := newGridSums(dim, func(i int) float64 { return label[i] })
-		sm := newGridSums(dim, func(i int) float64 { return around[i] })
-		spm := newGridSums(dim, func(i int) float64 { return label[i] * around[i] })
-		smm := newGridSums(dim, func(i int) float64 { return around[i] * around[i] })
-		sl := newGridSums(dim, func(i int) float64 { return vals[i] })
-		slp := newGridSums(dim, func(i int) float64 { return vals[i] * label[i] })
-		slm := newGridSums(dim, func(i int) float64 { return vals[i] * around[i] })
+		sn := dim + 1
+		for r := 0; r < dim; r++ {
+			var p, mo, pm, mm, lp, lm float64
+			for col := 0; col < dim; col++ {
+				i := r*dim + col
+				l, ar, v := label[i], around[i], vals[i]
+				p += l
+				mo += ar
+				pm += l * ar
+				mm += ar * ar
+				lp += v * l
+				lm += v * ar
+				j, k := (r+1)*sn+col+1, r*sn+col+1
+				sp[j], sm[j], spm[j], smm[j], slp[j], slm[j] = sp[k]+p, sm[k]+mo, spm[k]+pm, smm[k]+mm, slp[k]+lp, slm[k]+lm
+			}
+		}
 		for r := 0; r < dim; r++ {
 			for col := 0; col < dim; col++ {
 				i := r*dim + col
 				r0, c0, r1, c1 := w.bounds(r, col)
 				cnt := float64((r1 - r0) * (c1 - c0))
-				p, m, pm, mm := sp.sum(r0, c0, r1, c1), sm.sum(r0, c0, r1, c1), spm.sum(r0, c0, r1, c1), smm.sum(r0, c0, r1, c1)
+				p, mo, pm, mm := satSum(sp, sn, r0, c0, r1, c1), satSum(sm, sn, r0, c0, r1, c1), satSum(spm, sn, r0, c0, r1, c1), satSum(smm, sn, r0, c0, r1, c1)
 				// Normal equations for (a, b, c); dark² = dark.
-				x, ok := solve3([3][3]float64{{cnt, p, m}, {p, p, pm}, {m, pm, mm}},
-					[3]float64{sl.sum(r0, c0, r1, c1), slp.sum(r0, c0, r1, c1), slm.sum(r0, c0, r1, c1)})
+				x, ok := solve3([3][3]float64{{cnt, p, mo}, {p, p, pm}, {mo, pm, mm}},
+					[3]float64{satSum(sl, sn, r0, c0, r1, c1), satSum(slp, sn, r0, c0, r1, c1), satSum(slm, sn, r0, c0, r1, c1)})
 				if !ok || x[1] >= 0 { // no contrast in the window
-					a[i] = math.NaN()
+					rel[i], resid[i] = 0, 0
 					continue
 				}
-				a[i], b[i], c[i] = x[0], x[1], x[2]
+				// The decision changes dark, not the labels the fit uses.
+				d0 := vals[i] - (x[0] + x[2]*around[i])
+				d1 := d0 - x[1]
+				if math.Abs(d1) < math.Abs(d0) {
+					dark[i], resid[i] = 1, d1*d1
+				} else {
+					dark[i], resid[i] = 0, d0*d0
+				}
+				rel[i] = float32(math.Abs(d0*d0 - d1*d1))
 			}
-		}
-		for i := range dark {
-			if math.IsNaN(a[i]) {
-				rel[i], resid[i] = 0, 0
-				continue
-			}
-			d0 := vals[i] - (a[i] + c[i]*around[i])
-			d1 := d0 - b[i]
-			if math.Abs(d1) < math.Abs(d0) {
-				dark[i], resid[i] = 1, d1*d1
-			} else {
-				dark[i], resid[i] = 0, d0*d0
-			}
-			rel[i] = float32(math.Abs(d0*d0 - d1*d1))
 		}
 	}
-	rs := newGridSums(dim, func(i int) float64 { return resid[i] })
+	rs := sp // reused for the residuals
+	sn := dim + 1
+	for r := 0; r < dim; r++ {
+		row := 0.0
+		for col := 0; col < dim; col++ {
+			row += resid[r*dim+col]
+			rs[(r+1)*sn+col+1] = rs[r*sn+col+1] + row
+		}
+	}
 	for r := 0; r < dim; r++ {
 		for col := 0; col < dim; col++ {
 			r0, c0, r1, c1 := w.bounds(r, col)
-			v := rs.sum(r0, c0, r1, c1)/float64((r1-r0)*(c1-c0)) + 1
+			v := satSum(rs, sn, r0, c0, r1, c1)/float64((r1-r0)*(c1-c0)) + 1
 			rel[r*dim+col] /= float32(v)
 		}
 	}
@@ -125,47 +141,27 @@ func classifyModules(vals []float64, dim int, inverted bool) ([][]bool, []float3
 // neighborWeights are the offsets and weights of a module's neighbors.
 var neighborWeights = [8][3]int{{-1, 0, 2}, {1, 0, 2}, {0, -1, 2}, {0, 1, 2}, {-1, -1, 1}, {-1, 1, 1}, {1, -1, 1}, {1, 1, 1}}
 
-// gridSums is a summed-area table over a dim×dim grid.
-type gridSums struct {
-	n int
-	s []float64
-}
-
-func newGridSums(dim int, at func(i int) float64) gridSums {
-	n := dim + 1
-	t := gridSums{n, make([]float64, n*n)}
-	for r := 0; r < dim; r++ {
-		row := 0.0
-		for c := 0; c < dim; c++ {
-			row += at(r*dim + c)
-			t.s[(r+1)*n+c+1] = t.s[r*n+c+1] + row
-		}
-	}
-	return t
-}
-
-// sum returns the sum over rows r0 to r1-1 and columns c0 to c1-1.
-func (t gridSums) sum(r0, c0, r1, c1 int) float64 {
-	n := t.n
-	return t.s[r1*n+c1] - t.s[r0*n+c1] - t.s[r1*n+c0] + t.s[r0*n+c0]
+// satSum returns the sum over rows r0 to r1-1 and columns c0 to c1-1 of
+// the summed-area table s of a grid of n-1 columns.
+func satSum(s []float64, n, r0, c0, r1, c1 int) float64 {
+	return s[r1*n+c1] - s[r0*n+c1] - s[r1*n+c0] + s[r0*n+c0]
 }
 
 // solve3 solves a·x = y by Cramer's rule.
 func solve3(a [3][3]float64, y [3]float64) ([3]float64, bool) {
-	det3 := func(m [3][3]float64) float64 {
-		return m[0][0]*(m[1][1]*m[2][2]-m[1][2]*m[2][1]) - m[0][1]*(m[1][0]*m[2][2]-m[1][2]*m[2][0]) + m[0][2]*(m[1][0]*m[2][1]-m[1][1]*m[2][0])
-	}
-	det := det3(a)
+	det := det3(a[0][0], a[0][1], a[0][2], a[1][0], a[1][1], a[1][2], a[2][0], a[2][1], a[2][2])
 	if math.Abs(det) < 1e-9 {
 		return [3]float64{}, false
 	}
-	var x [3]float64
-	for k := 0; k < 3; k++ {
-		m := a
-		for r := 0; r < 3; r++ {
-			m[r][k] = y[r]
-		}
-		x[k] = det3(m) / det
-	}
-	return x, true
+	return [3]float64{
+		det3(y[0], a[0][1], a[0][2], y[1], a[1][1], a[1][2], y[2], a[2][1], a[2][2]) / det,
+		det3(a[0][0], y[0], a[0][2], a[1][0], y[1], a[1][2], a[2][0], y[2], a[2][2]) / det,
+		det3(a[0][0], a[0][1], y[0], a[1][0], a[1][1], y[1], a[2][0], a[2][1], y[2]) / det,
+	}, true
+}
+
+// det3 returns the determinant of the 3×3 matrix of rows (a, b, c), (d, e,
+// f) and (g, h, i).
+func det3(a, b, c, d, e, f, g, h, i float64) float64 {
+	return a*(e*i-f*h) - b*(d*i-f*g) + c*(d*h-e*g)
 }
