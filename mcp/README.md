@@ -4,9 +4,10 @@ A [Model Context Protocol](https://modelcontextprotocol.io) server that gives
 AI assistants exact QR Code tools, built on
 [go-qr](https://github.com/piglig/go-qr):
 
-- `decode_qr` decodes the code in a local image and explains what scanning it
-  would do, with risk signals such as lookalike domains, open Wi-Fi or
-  embedded 2FA secrets;
+- `decode_qr` decodes every code in a local image and explains what
+  scanning each would do, with risk signals such as lookalike domains, open
+  Wi-Fi, embedded 2FA secrets, or several codes where a sticker may cover
+  the genuine one;
 - `generate_qr` creates plain, payload (Wi-Fi, contact, event, 2FA, SEPA
   payment, ...) and styled codes, and verifies that each one scans;
 - `inspect_qr` explains content the assistant already has.

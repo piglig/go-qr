@@ -60,7 +60,8 @@ camera scanning reads them.
 - **SVG** draws modules and finders as paths, and gradients as an SVG
   `<linearGradient>` whose id is derived from its colors and angle, so
   several codes inlined in one HTML page do not interfere.
-- **PNG** with shapes in two colors is an 8-bit paletted image, about 2.7× the
-  cost of a plain PNG. Gradients and finder colors need an RGBA PNG, about 10×
-  the cost, mostly compression.
+- **PNG** with shapes in two colors is an 8-bit paletted image, about 11×
+  the cost of a plain PNG, which is written straight from the modules at
+  one bit per pixel. Gradients and finder colors need an RGBA PNG, about
+  38× the cost, mostly compression.
 - For many styled codes, SVG is the fast choice.
