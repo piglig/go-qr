@@ -2,6 +2,8 @@ package qr
 
 import (
 	"image"
+	"image/draw"
+	"math"
 	"testing"
 	"unicode/utf8"
 )
@@ -119,6 +121,56 @@ func FuzzDecodeAllRoundTrip(f *testing.F) {
 			if err != nil || len(rs) != 2 || rs[0].Text != a || rs[1].Text != b {
 				t.Fatalf("DecodeAll = %d results, %v; want %q and %q", len(rs), err, a, b)
 			}
+		}
+	})
+}
+
+// FuzzGrade grades a rendering of fuzzed text that the noise damages, at
+// a fuzzed scale and orientation. It must not panic, and its grades and
+// values must be in range; without noise, a rendering grades A.
+func FuzzGrade(f *testing.F) {
+	f.Add("grade", uint8(4), uint8(0), []byte(nil))
+	f.Add("https://example.com/grade", uint8(2), uint8(3), []byte{7, 200, 3, 99, 41})
+	f.Fuzz(func(t *testing.T, text string, scale, turn uint8, noise []byte) {
+		code, err := Encode(text)
+		if err != nil {
+			return
+		}
+		src, err := code.Image(WithScale(int(scale)%6 + 2))
+		if err != nil {
+			return
+		}
+		var img image.Image = src
+		switch turn % 4 {
+		case 1:
+			img = mirror(src)
+		case 2:
+			img = rotateGray(src, 0.2)
+		}
+		if turn%4 != 3 {
+			g := image.NewGray(img.Bounds())
+			draw.Draw(g, g.Bounds(), img, img.Bounds().Min, draw.Src)
+			for i := 0; i+1 < len(noise); i += 2 {
+				p := (int(noise[i])<<8 | int(noise[i+1])) * 7919 % len(g.Pix)
+				g.Pix[p] = 255 - g.Pix[p]
+			}
+			img = g
+		}
+		q, err := Grade(img)
+		if err != nil {
+			if len(noise) == 0 && turn%4 != 2 {
+				t.Fatalf("clean rendering: %v", err)
+			}
+			return
+		}
+		for _, p := range []QualityParameter{q.SymbolContrast, q.Modulation, q.ReflectanceMargin,
+			q.FixedPatternDamage, q.AxialNonuniformity, q.GridNonuniformity, q.UnusedErrorCorrection} {
+			if p.Grade < GradeF || p.Grade > GradeA || p.Grade < q.Grade || math.IsNaN(p.Value) || math.IsInf(p.Value, 0) {
+				t.Fatalf("parameter %+v of %+v", p, q)
+			}
+		}
+		if len(noise) == 0 && turn%4 < 2 && q.Grade != GradeA {
+			t.Fatalf("clean rendering grades %v: %+v", q.Grade, q)
 		}
 	})
 }
