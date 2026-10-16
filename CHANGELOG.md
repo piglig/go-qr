@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `DecodeAll` returns a small symbol beside a large one, top-aligned, in
+  reading order. A symbol joined a row only if its center was within half
+  the row's first symbol's height, so a large symbol to the left of a
+  small one, its center lower than the small one's half height, read
+  after it.
+
 ### Changed
 
 - `Decode` and `DecodeAll` correct the module grid locally. After the
