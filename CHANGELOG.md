@@ -15,7 +15,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   so on a 48-megapixel image without a code they return within about
   170 ms of the deadline, of the 400 ms the image takes.
 
-
 - `Grade` decodes a symbol and grades its print quality by the parameters
   of ISO/IEC 15415: symbol contrast, modulation, reflectance margin, fixed
   pattern damage of the finder patterns, axial and grid nonuniformity,
