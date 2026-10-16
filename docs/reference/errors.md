@@ -28,9 +28,9 @@ case err != nil:
 | `ErrUnencodableChar` | segment constructors | A character the requested mode cannot hold, such as a lowercase letter in `AlphanumericSegment`. |
 | `ErrLogoTooLarge` | rendering, `Verify` | The codewords under the logo would use more than 75% of the correction capacity of an error correction block. |
 | `ErrUnreadable` *Since v2.1* | `Verify` | The rendering could not be decoded back to the code's data, or a dark color lacks contrast with the background. |
-| `ErrNotFound` | `Decode`, `DecodeAll` | No symbol was located: the image is too small, has no contrast, or contains no finder patterns. |
-| `ErrDecodeFailed` | `Decode`, `DecodeAll` | A symbol was located but not read: unreadable format information, too many errors to correct, or a malformed bitstream. |
-| `ErrUnsupported` | `Decode`, `DecodeAll` | The symbol uses a feature the decoder does not implement: an unsupported ECI, FNC1 in second position, or Hanzi mode. |
+| `ErrNotFound` | `Decode`, `DecodeAll`, `Grade` | No symbol was located: the image is too small, has no contrast, or contains no finder patterns. |
+| `ErrDecodeFailed` | `Decode`, `DecodeAll`, `Grade` | A symbol was located but not read: unreadable format information, too many errors to correct, or a malformed bitstream; for `Grade`, also a symbol that only soft decisions read. |
+| `ErrUnsupported` | `Decode`, `DecodeAll`, `Grade` | The symbol uses a feature the decoder does not implement: an unsupported ECI, FNC1 in second position, or Hanzi mode. |
 
 The `payload` package has its own sentinels: `ErrUnrecognized` and
 `ErrMalformed` from `Parse`, and `ErrInvalidEPC` from `EPC.Validate`.

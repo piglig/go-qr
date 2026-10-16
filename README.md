@@ -33,7 +33,9 @@
   the smallest version and raises error correction into spare capacity.
 - **Styled, and still readable.** Dot and rounded modules, round finders,
   colors, gradients and logos. `Verify` renders the result, decodes it and
-  checks the contrast, so you know a design scans before you publish it.
+  checks the contrast, so you know a design scans before you publish it,
+  and `Grade` grades a rendering or a photo of a print by the quality
+  parameters of ISO/IEC 15415.
 - **A decoder that reads photos.** Perspective, lens distortion, glare,
   blur, photos of screens and codes with a damaged finder pattern, and with
   `DecodeAll` every code in a photo. It reads about as many real photos as
