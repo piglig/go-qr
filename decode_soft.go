@@ -208,11 +208,12 @@ func (q *builder) codewordReliability(rel []float32) []float32 {
 
 // softCorrect corrects a block of an attempt beyond the first hard decision:
 // by hard decision within budget, then by erasing its 2, 4, ... least
-// reliable bytes, rel[i] being byte i's reliability.
-func softCorrect(codeword []byte, eccLen int, rel []float32, budget int) error {
+// reliable bytes, rel[i] being byte i's reliability. It returns the
+// positions it erased.
+func softCorrect(codeword []byte, eccLen int, rel []float32, budget int) ([]int, error) {
 	err := reedsolomon.CorrectErasures(codeword, eccLen, nil, budget)
 	if err == nil || budget < 2 {
-		return err
+		return nil, err
 	}
 	order := make([]int, len(codeword))
 	for i := range order {
@@ -224,8 +225,8 @@ func softCorrect(codeword []byte, eccLen int, rel []float32, budget int) error {
 		copy(try, codeword)
 		if reedsolomon.CorrectErasures(try, eccLen, order[:s], budget) == nil {
 			copy(codeword, try)
-			return nil
+			return order[:s], nil
 		}
 	}
-	return err
+	return nil, err
 }

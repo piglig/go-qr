@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `DecodeResult` reports how much error correction a decode used:
+  `ErrorsCorrected` counts the codewords repaired, and
+  `UnusedErrorCorrection` gives the share of the correction capacity left
+  in the block that needed most, as ISO/IEC 15415 defines it, from 1 for a
+  clean read to 0. `SoftDecision` reports a symbol that only soft
+  decisions read.
+
 ### Changed
 
 - `Decode` and `DecodeAll` decode with soft decisions a located symbol
