@@ -13,7 +13,9 @@ import (
 // It mirrors the encoder geometry exactly by reusing drawFunctionPatterns to
 // rebuild the function-module map and applyMask (which is its own inverse) to
 // remove the mask.
-func decodeMatrix(modules [][]bool) (data []byte, ver int, ecl ECC, mask int, err error) {
+// rel, if not nil, holds the reliability of each module for an attempt
+// beyond the first hard decision; see softCorrect.
+func decodeMatrix(modules [][]bool, rel []float32) (data []byte, ver int, ecl ECC, mask int, err error) {
 	size := len(modules)
 	if size < 21 || (size-17)%4 != 0 {
 		return nil, 0, 0, 0, fmt.Errorf("%w: bad matrix size %d", ErrDecodeFailed, size)
@@ -41,7 +43,11 @@ func decodeMatrix(modules [][]bool) (data []byte, ver int, ecl ECC, mask int, er
 	}
 
 	raw := b.readCodewords()
-	data, err = deinterleaveAndCorrect(raw, ver, ecl)
+	var cwRel []float32
+	if rel != nil {
+		cwRel = b.codewordReliability(rel)
+	}
+	data, err = deinterleaveAndCorrect(raw, ver, ecl, cwRel)
 	if err != nil {
 		return nil, 0, 0, 0, err
 	}
@@ -166,7 +172,9 @@ func (q *builder) readCodewords() []byte {
 // deinterleaveAndCorrect splits the interleaved raw codewords back into ECC
 // blocks (reverse of addEccAndInterLeave), Reed-Solomon corrects each block,
 // and concatenates the corrected data codewords in order.
-func deinterleaveAndCorrect(raw []byte, ver int, ecl ECC) ([]byte, error) {
+// With rel, the reliability of each raw codeword, the blocks are corrected
+// by softCorrect instead of Correct.
+func deinterleaveAndCorrect(raw []byte, ver int, ecl ECC, rel []float32) ([]byte, error) {
 	numBlocks := int(numErrorCorrectionBlocks[ecl][ver])
 	blockEccLen := int(eccCodeWordsPerBlock[ecl][ver])
 	rawCodewords := numRawDataModules(ver) / 8
@@ -179,14 +187,24 @@ func deinterleaveAndCorrect(raw []byte, ver int, ecl ECC) ([]byte, error) {
 	// long, and short blocks leave an unused "gap" byte at index shortDataLen.
 	// The interleave skips that gap; the inverse must too.
 	blocks := make([][]byte, numBlocks)
+	var blockRel [][]float32
 	for i := range blocks {
 		blocks[i] = make([]byte, shortBlockLen+1)
+	}
+	if rel != nil {
+		blockRel = make([][]float32, numBlocks)
+		for i := range blockRel {
+			blockRel[i] = make([]float32, shortBlockLen+1)
+		}
 	}
 	k := 0
 	for i := 0; i <= shortBlockLen; i++ {
 		for j := 0; j < numBlocks; j++ {
 			if i != shortDataLen || j >= numShortBlocks {
 				blocks[j][i] = raw[k]
+				if rel != nil {
+					blockRel[j][i] = rel[k]
+				}
 				k++
 			}
 		}
@@ -203,7 +221,14 @@ func deinterleaveAndCorrect(raw []byte, ver int, ecl ECC) ([]byte, error) {
 		codeword := make([]byte, 0, dataLen+blockEccLen)
 		codeword = append(codeword, block[:dataLen]...)                     // data (gap excluded)
 		codeword = append(codeword, block[shortBlockLen+1-blockEccLen:]...) // ecc
-		if err := reedsolomon.Correct(codeword, blockEccLen); err != nil {
+		var err error
+		if rel == nil {
+			err = reedsolomon.Correct(codeword, blockEccLen)
+		} else {
+			r := append(append(make([]float32, 0, len(codeword)), blockRel[j][:dataLen]...), blockRel[j][shortBlockLen+1-blockEccLen:]...)
+			err = softCorrect(codeword, blockEccLen, r, blockEccLen-misdecodeProtection(ver, ecl)-gmdMargin)
+		}
+		if err != nil {
 			return nil, fmt.Errorf("%w: %v", ErrDecodeFailed, err)
 		}
 		out = append(out, codeword[:dataLen]...)

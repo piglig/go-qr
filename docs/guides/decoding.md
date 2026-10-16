@@ -58,6 +58,7 @@ last, and every sampled symbol is also read mirrored.
 | Rotation, noise, blur, low contrast, uneven lighting | ✅ |
 | Perspective (photos taken at an angle, up to about 50°) | ✅ *Since v2.4* |
 | Photos of screens, very large modules, a finder covered by glare or damage | ✅ *Since v2.4* |
+| Glare, blur or damage over the data modules | ✅ *Since v2.7*, by soft decisions; see below |
 | Light-on-dark (inverted) and mirror images | ✅ |
 | Styled codes: dots, rounded modules, round finders, gradients | ✅ |
 | Version information of version 7+ symbols, with error correction | ✅ |
@@ -67,6 +68,16 @@ last, and every sampled symbol is also read mirrored.
 | Curved surfaces (bottles, cans) | ⚠️ small symbols only |
 | Several symbols in one image | ✅ with `DecodeAll` *Since v2.6* |
 | Micro QR, rMQR, FNC1 in second position, Hanzi mode | ❌ `ErrUnsupported` |
+
+When a located symbol does not decode, the decoder reads its modules
+again with soft decisions (*Since v2.7*): the function patterns, whose
+values are known, calibrate a model of the light, contrast and blur
+around each module, and the codewords it is least sure of are erased,
+which Reed–Solomon codes correct twice as many of as errors. On the
+BoofCV photos this reads 12 more, mostly with glare or blur, and none
+fewer. These attempts keep part of the error correction unused against
+misreads. `Verify` does not count them: a design must scan with readers
+that decode by hard decisions only, as most do.
 
 Modules should be at least 2 pixels wide. Large symbols (version 20 and up)
 in photos are the hardest case: a lens or a bent sheet distorts their grid

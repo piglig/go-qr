@@ -99,6 +99,39 @@ func thresholdModules(vals []float64, dim int, inverted bool) [][]bool {
 	return modules
 }
 
+// moduleWindows gives the mean luminance of the window of modules around
+// each module of a dim×dim grid, through a summed-area table.
+type moduleWindows struct {
+	sat         []float64
+	dim, radius int
+}
+
+func newModuleWindows(vals []float64, dim int) moduleWindows {
+	n := dim + 1
+	sat := make([]float64, n*n)
+	for r := 0; r < dim; r++ {
+		row := 0.0
+		for c := 0; c < dim; c++ {
+			row += vals[r*dim+c]
+			sat[(r+1)*n+c+1] = sat[r*n+c+1] + row
+		}
+	}
+	return moduleWindows{sat, dim, max(moduleWindowMin, dim/8)}
+}
+
+// bounds returns the window around module (r, c), rows r0 to r1-1 and
+// columns c0 to c1-1.
+func (w moduleWindows) bounds(r, c int) (r0, c0, r1, c1 int) {
+	return max(0, r-w.radius), max(0, c-w.radius), min(w.dim, r+w.radius+1), min(w.dim, c+w.radius+1)
+}
+
+func (w moduleWindows) mean(r, c int) float64 {
+	r0, c0, r1, c1 := w.bounds(r, c)
+	n := w.dim + 1
+	sum := w.sat[r1*n+c1] - w.sat[r0*n+c1] - w.sat[r1*n+c0] + w.sat[r0*n+c0]
+	return sum / float64((r1-r0)*(c1-c0))
+}
+
 // moduleWindowMin is the least radius, in modules, of the thresholding
 // window: 3 spans a finder pattern's width, so its rings are compared with
 // the light around them.

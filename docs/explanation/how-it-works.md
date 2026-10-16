@@ -114,7 +114,19 @@ image ──► luminance ──► threshold ──► locate ──► fit gri
    mean of nine samples over its center, bilinear for modules of three
    pixels or more, and it is dark when darker than the mean of a window of
    modules around it. The window is measured in modules, not pixels, so it
-   suits any module size and follows uneven lighting.
+   suits any module size and follows uneven lighting. When the grid does
+   not decode but its function patterns read back as a symbol's, 75% of
+   their modules or more, the grid most likely sits on a symbol whose
+   modules glare, blur or damage made hard to tell apart, and it is
+   decoded again with soft decisions (`decode_soft.go`,
+   `decode_equalize.go`, *since v2.7*). The function patterns serve as
+   pilots, as in a radio receiver: their values are known, so they
+   calibrate, over a window around each module, a model of the image,
+   luminance = a + b·dark + c·(darkness of the neighbors), whose terms are
+   the light level, the contrast that glare lowers and the blur that
+   darkens modules next to dark ones. Each module is decided by the model
+   given its neighbors' decisions, three times over, and its reliability
+   is the likelihood ratio of its two values.
 6. **Scales.** Symbols are located in a pyramid of the image, halved
    repeatedly down to 150 pixels. Texture finer than a module, such as a
    screen's pixel grid or halftone dots, averages out at the coarser
@@ -139,7 +151,14 @@ image ──► luminance ──► threshold ──► locate ──► fit gri
    format information is BCH-corrected, the mask removed, codewords read in
    the placement order, blocks de-interleaved and Reed–Solomon corrected, and
    the segments parsed, applying ECI character sets, GS1 and structured
-   append headers.
+   append headers. In the soft-decision attempts, a block that hard
+   decisions cannot correct has its 2, 4, … least reliable codewords
+   erased, which a Reed–Solomon code corrects twice as many of as errors
+   (generalized minimum distance decoding, Forney 1966). Erasing every
+   check byte would always yield a codeword, so these attempts keep the
+   misdecode protection codewords of ISO/IEC 18004 Table 9 and two more
+   bytes per block unused, and must read a data segment; in 3 million
+   random grids with intact function patterns, none decoded.
 
 The decoder reuses the encoder's layout code to know which modules are
 function patterns, so the two cannot disagree about the geometry.
