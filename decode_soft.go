@@ -4,6 +4,7 @@ import (
 	"errors"
 	"math"
 	"sort"
+	"sync"
 
 	"github.com/piglig/go-qr/v2/internal/reedsolomon"
 )
@@ -93,17 +94,47 @@ func pilotAccuracy(grid [][]bool) float64 {
 	if ver < MinVersion || ver > MaxVersion || 4*ver+17 != dim {
 		return 0
 	}
-	t := getTemplate(ver)
-	ok, total := 0, 0
-	for i, known := range t.pilot {
-		if known {
-			total++
-			if grid[i/dim][i%dim] == t.pilotDark[i] {
-				ok++
+	pilots := getPilots(ver)
+	ok := 0
+	for _, m := range pilots {
+		if grid[m.y][m.x] == m.dark {
+			ok++
+		}
+	}
+	return float64(ok) / float64(len(pilots))
+}
+
+// pilotModule is a module known before reading the symbol, and its value.
+type pilotModule struct {
+	x, y uint8
+	dark bool
+}
+
+// pilotCache maps version -> []pilotModule. It is kept apart from the
+// encoder's templates, which are far larger, so that the grids of any
+// version that decoding tries leave little memory behind.
+var pilotCache sync.Map
+
+// getPilots returns, row by row, the modules of version known before
+// reading the symbol: the function modules other than the format
+// information, which depends on the level and mask.
+func getPilots(version int) []pilotModule {
+	if v, ok := pilotCache.Load(version); ok {
+		return v.([]pilotModule)
+	}
+	size := version*4 + 17
+	b := newBuilder(version, ECCLow)
+	b.drawFunctionPatterns()
+	var pilots []pilotModule
+	for y := 0; y < size; y++ {
+		for x := 0; x < size; x++ {
+			if b.isFunction[y][x] && !isFormatModule(x, y, size) {
+				pilots = append(pilots, pilotModule{uint8(x), uint8(y), b.modules[y][x]})
 			}
 		}
 	}
-	return float64(ok) / float64(total)
+	actual, _ := pilotCache.LoadOrStore(version, pilots)
+	return actual.([]pilotModule)
 }
 
 // isFormatModule reports whether module (x, y) of a symbol n modules wide
@@ -143,20 +174,32 @@ func transposeReliability(rel []float32, dim int) []float32 {
 	return t
 }
 
-// codewordReliability returns the reliability of each raw codeword of a
-// symbol of the given version, in placement order: that of its least
-// reliable module.
-func codewordReliability(rel []float32, ver int) []float32 {
-	n := 4*ver + 17
-	out := make([]float32, numRawDataModules(ver)/8)
+// codewordReliability returns the reliability of each raw codeword of q's
+// version, in placement order, from that of each module, row by row: that
+// of its least reliable module. It walks the placement as readCodewords
+// does.
+func (q *builder) codewordReliability(rel []float32) []float32 {
+	n := numRawDataModules(q.version) / 8
+	out := make([]float32, n)
 	for i := range out {
 		out[i] = float32(math.Inf(1))
 	}
-	bitAt := getTemplate(ver).bitAt
-	for y := 0; y < n; y++ {
-		for x, b := range bitAt[y] {
-			if b >= 0 && int(b)/8 < len(out) {
-				out[b/8] = min(out[b/8], rel[y*n+x])
+	i := 0
+	for right := q.size - 1; right >= 1; right -= 2 {
+		if right == 6 {
+			right = 5
+		}
+		for vert := 0; vert < q.size; vert++ {
+			for j := 0; j < 2; j++ {
+				x := right - j
+				y := vert
+				if ((right + 1) & 2) == 0 {
+					y = q.size - 1 - vert
+				}
+				if !q.isFunction[y][x] && i < n*8 {
+					out[i>>3] = min(out[i>>3], rel[y*q.size+x])
+					i++
+				}
 			}
 		}
 	}

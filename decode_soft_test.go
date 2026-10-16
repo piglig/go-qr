@@ -292,3 +292,95 @@ func TestSoftAttemptsLeaveProtectionUnused(t *testing.T) {
 		t.Errorf("soft attempt corrected 3 errors of a 1-L symbol: %q", res.Text)
 	}
 }
+
+func TestPilotsAreTheKnownModules(t *testing.T) {
+	for ver := MinVersion; ver <= MaxVersion; ver++ {
+		b := newBuilder(ver, ECCLow)
+		b.drawFunctionPatterns()
+		known := map[[2]int]bool{}
+		for _, m := range getPilots(ver) {
+			at := [2]int{int(m.x), int(m.y)}
+			if known[at] || m.dark != b.modules[m.y][m.x] {
+				t.Fatalf("version %d, module %v: repeated or wrong value", ver, at)
+			}
+			known[at] = true
+		}
+		for y := 0; y < b.size; y++ {
+			for x := 0; x < b.size; x++ {
+				if want := b.isFunction[y][x] && !isFormatModule(x, y, b.size); known[[2]int{x, y}] != want {
+					t.Fatalf("version %d, module (%d, %d): known %v, want %v", ver, x, y, !want, want)
+				}
+			}
+		}
+	}
+}
+
+// TestCodewordReliabilityFollowsPlacement checks the decoder's walk of the
+// codeword placement against the encoder's map of the bit each module
+// carries.
+func TestCodewordReliabilityFollowsPlacement(t *testing.T) {
+	rng := rand.New(rand.NewSource(3))
+	for ver := MinVersion; ver <= MaxVersion; ver++ {
+		b := newBuilder(ver, ECCLow)
+		b.drawFunctionPatterns()
+		n := b.size
+		rel := make([]float32, n*n)
+		for i := range rel {
+			rel[i] = rng.Float32()
+		}
+		want := make([]float32, numRawDataModules(ver)/8)
+		for i := range want {
+			want[i] = float32(math.Inf(1))
+		}
+		for y, row := range bitMap(b) { // not cached, unlike getTemplate's
+			for x, bit := range row {
+				if bit >= 0 && int(bit)/8 < len(want) {
+					want[bit/8] = min(want[bit/8], rel[y*n+x])
+				}
+			}
+		}
+		assertEqual(t, want, b.codewordReliability(rel), "version %d", ver)
+	}
+}
+
+// TestSoftDecodingBuildsNoTemplates expects the attempts on grids of any
+// version to leave the encoder's templates, which hold far more per version
+// than decoding needs, unbuilt.
+func TestSoftDecodingBuildsNoTemplates(t *testing.T) {
+	rng := rand.New(rand.NewSource(5))
+	tried := 0
+	for _, ver := range []int{27, 33, 39} {
+		if _, ok := templateCache.Load(ver); ok {
+			continue // built by an encoding test
+		}
+		tried++
+		dim := 4*ver + 17
+		b := newBuilder(ver, ECCMedium)
+		b.drawFunctionPatterns()
+		b.drawFormatBits(rng.Intn(8))
+		vals := make([]float64, dim*dim)
+		for y := 0; y < dim; y++ {
+			for x := 0; x < dim; x++ {
+				dark := b.modules[y][x]
+				if !b.isFunction[y][x] {
+					dark = rng.Intn(2) == 0
+				}
+				v := 200.0
+				if dark {
+					v = 60
+				}
+				vals[y*dim+x] = v + rng.NormFloat64()*25
+			}
+		}
+		assertTrue(t, pilotAccuracy(thresholdModules(vals, dim, false)) >= softGate, "version %d grid fails the gate", ver)
+		if _, err := readSoft(vals, dim, false, decodeGrid); err == nil {
+			t.Fatalf("random version %d grid decoded", ver)
+		}
+		if _, ok := templateCache.Load(ver); ok {
+			t.Errorf("soft decoding built the version %d template", ver)
+		}
+	}
+	if tried == 0 {
+		t.Skip("every version tried has a template from another test")
+	}
+}

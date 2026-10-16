@@ -45,7 +45,7 @@ func decodeMatrix(modules [][]bool, rel []float32) (data []byte, ver int, ecl EC
 	raw := b.readCodewords()
 	var cwRel []float32
 	if rel != nil {
-		cwRel = codewordReliability(rel, ver)
+		cwRel = b.codewordReliability(rel)
 	}
 	data, err = deinterleaveAndCorrect(raw, ver, ecl, cwRel)
 	if err != nil {

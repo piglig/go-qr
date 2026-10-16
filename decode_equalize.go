@@ -23,7 +23,7 @@ func classifyModules(vals []float64, dim int, inverted bool) ([][]bool, []float3
 	if ver < MinVersion || ver > MaxVersion || 4*ver+17 != dim {
 		return nil, nil
 	}
-	t := getTemplate(ver)
+	pilots := getPilots(ver)
 	n := dim * dim
 	w := newModuleWindows(vals, dim)
 
@@ -48,14 +48,13 @@ func classifyModules(vals []float64, dim int, inverted bool) ([][]bool, []float3
 	sp, sm, spm, smm, slp, slm := tables[:m], tables[m:2*m], tables[2*m:3*m], tables[3*m:4*m], tables[4*m:5*m], tables[5*m:]
 	sl := w.sat
 	for iter := 0; iter < 3; iter++ {
-		for i := range label {
-			label[i] = dark[i]
-			if t.pilot[i] {
-				label[i] = 0
-				if t.pilotDark[i] != inverted {
-					label[i] = 1
-				}
+		copy(label, dark)
+		for _, m := range pilots {
+			v := 0.0
+			if m.dark != inverted {
+				v = 1
 			}
+			label[int(m.y)*dim+int(m.x)] = v
 		}
 		// Darkness of the neighbors, the four sides weighing twice the
 		// corners; outside the symbol is the light quiet zone.

@@ -23,11 +23,6 @@ type qrTemplate struct {
 	// functionRows has the function patterns packed by row, with the format
 	// bits of mask 0 at level L; the other modules are light.
 	functionRows []moduleLine
-
-	// pilot[y*size+x] reports whether module (x, y) is known before reading
-	// the symbol: a function module other than the format information,
-	// which depends on the level and mask. pilotDark is its value.
-	pilot, pilotDark []bool
 }
 
 // templateCache maps version -> *qrTemplate. Templates are immutable once built,
@@ -60,14 +55,6 @@ func getTemplate(version int) *qrTemplate {
 	}
 
 	t.bitAt = bitMap(b)
-	t.pilot, t.pilotDark = make([]bool, size*size), make([]bool, size*size)
-	for y := 0; y < size; y++ {
-		for x := 0; x < size; x++ {
-			if b.isFunction[y][x] && !isFormatModule(x, y, size) {
-				t.pilot[y*size+x], t.pilotDark[y*size+x] = true, b.modules[y][x]
-			}
-		}
-	}
 	t.functionRows = make([]moduleLine, size)
 	for y := 0; y < size; y++ {
 		for x := 0; x < size; x++ {
