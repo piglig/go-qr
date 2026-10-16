@@ -84,9 +84,16 @@ func TestBoofCV(t *testing.T) {
 				continue
 			}
 			for _, d := range decoders {
-				start := time.Now()
-				texts := d.decode(img)
-				ms := float64(time.Since(start).Microseconds()) / 1000
+				// A single decode of a few milliseconds can time as zero
+				// where the clock ticks coarsely, as on Windows; decode
+				// repeatedly for at least minDecodeTime instead.
+				var texts []string
+				runs, start := 0, time.Now()
+				for runs == 0 || time.Since(start) < minDecodeTime {
+					texts = d.decode(img)
+					runs++
+				}
+				ms := float64(time.Since(start).Nanoseconds()) / float64(runs) / 1e6
 				if texts == nil {
 					texts = []string{}
 				}
@@ -132,3 +139,7 @@ func decodeGozxingMulti(img image.Image) []string {
 	}
 	return texts
 }
+
+// minDecodeTime is how long TestBoofCV decodes each image for, repeatedly,
+// to time it.
+const minDecodeTime = 20 * time.Millisecond
