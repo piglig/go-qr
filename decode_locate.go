@@ -94,6 +94,9 @@ func (s *symbolSearch) eachRegion(triples [][3]finderPattern, skip func([3]finde
 			for i := range res.Corners {
 				res.Corners[i] = res.Corners[i].Add(r.Min)
 			}
+			if res.centers != nil {
+				res.centers.shift(r.Min)
+			}
 			if !found(res) {
 				return nil
 			}

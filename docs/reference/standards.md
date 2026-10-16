@@ -18,6 +18,7 @@ page lists what the encoder and decoder support, by section of the standard.
 | Format and version information with BCH correction | ✅ | ✅ | Decoder corrects up to 3 bit errors. |
 | Mirror images | — | ✅ | |
 | Reflectance reversal (light on dark) | — | ✅ | |
+| Print quality grading (ISO/IEC 15415) | — | ✅ | *Since v2.7.* `Grade` estimates the parameters from an image; see [Grading print quality](../guides/decoding.md#grading-print-quality). |
 | Micro QR, rMQR, Model 1 | ❌ | ❌ | |
 | Hanzi mode (GB/T 18284) | ❌ | ❌ | Reported as `ErrUnsupported`. |
 

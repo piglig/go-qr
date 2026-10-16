@@ -168,6 +168,57 @@ and polarity, so it takes several times as long as `Decode` on an image of
 one symbol: 13.7 ms against 3.5 ms, the medians over the BoofCV photos.
 `qr.WithMaxSymbols(n)` stops it after `n` symbols.
 
+## Grading print quality
+
+*Since v2.7.* `Grade` decodes a symbol by hard decisions, as `Verify`
+does, and grades it by the print quality parameters of ISO/IEC 15415, A
+to F, the lowest of which is the symbol's grade:
+
+```go
+q, err := qr.Grade(img)
+if err != nil {
+	return err
+}
+fmt.Println(q.Grade, q.SymbolContrast, q.Modulation, q.UnusedErrorCorrection)
+```
+
+| Parameter | What it measures | A | B | C | D |
+| --- | --- | --- | --- | --- | --- |
+| `SymbolContrast` | Highest less lowest reflectance in the symbol and quiet zone | ≥ 0.70 | ≥ 0.55 | ≥ 0.40 | ≥ 0.20 |
+| `Modulation` | How evenly dark and light the modules are, weighed against the error correction left | | | | |
+| `ReflectanceMargin` | Modulation for modules on the right side of the threshold | | | | |
+| `FixedPatternDamage` | Modules of the finder patterns and separators read wrong or weakly, the worst finder counting | 0 | 1 | 2 | 3 |
+| `AxialNonuniformity` | Difference between the module pitch along the two axes, relative | ≤ 0.06 | ≤ 0.08 | ≤ 0.10 | ≤ 0.12 |
+| `GridNonuniformity` | Largest offset, in modules, of an alignment pattern from a regular grid | ≤ 0.38 | ≤ 0.50 | ≤ 0.63 | ≤ 0.75 |
+| `UnusedErrorCorrection` | As [in the result](#how-much-error-correction-a-symbol-used) | ≥ 0.62 | ≥ 0.50 | ≥ 0.37 | ≥ 0.25 |
+
+Modulation and reflectance margin grade each module (A from 0.50 of half
+the symbol contrast away from the threshold, B 0.40, C 0.30, D 0.20) and
+each codeword by its worst module; at each grade level, the codewords
+below it count as erased, and the level is worth no more than the grade
+of the error correction they would leave. A few weak codewords therefore
+cost nothing while error correction absorbs them.
+
+The grades are estimates, for comparing prints and watching them wear;
+they do not replace a calibrated verifier. Reflectance is estimated from
+the image's luminance, linearized as sRGB, relative to white; each module
+is measured over a disc of 0.6 modules at the center the decoder located;
+and a single image counts, where a verifier calibrates its lighting and
+averages several. Take the photo squarely, evenly lit, with modules at
+least 5 pixels wide: perspective lowers the two nonuniformity grades, and
+glare, blur and shadows lower the others, as they do a print's
+readability.
+
+Styles show in the grades: rounded and circular finders differ from the
+standard's square ones at their corners, which `FixedPatternDamage`
+grades F, and a logo uses up error correction:
+
+| Rendering of a version 3-H code | Grade |
+| --- | --- |
+| Square, dot or rounded modules; gradients of dark colors | A |
+| `WithLogo(logo, 0.2)` | C: unused error correction 0.45 |
+| `WithFinderShape(qr.FinderRounded)` or `FinderCircle` | F: fixed pattern damage |
+
 ## Options
 
 `WithFastPathOnly()` skips the robust path. Use it to check images you have
