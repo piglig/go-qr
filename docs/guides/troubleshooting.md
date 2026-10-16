@@ -64,7 +64,8 @@ not accept rounded or circular finders.
   with the code and keep it near the center.
 - **Very large images.** No need to downscale: the decoder searches reduced
   scales itself and reads modules at full resolution. A 12-megapixel photo
-  takes about 50 ms.
+  takes about 10 ms when the code fills a fair part of it, and about
+  50 ms when the code is very small or missing.
 - **Several codes.** Only one is read. Crop the image to the code you want.
 
 ## The text has wrong characters

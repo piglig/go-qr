@@ -115,14 +115,26 @@ image ──► luminance ──► threshold ──► locate ──► fit gri
    pixels or more, and it is dark when darker than the mean of a window of
    modules around it. The window is measured in modules, not pixels, so it
    suits any module size and follows uneven lighting.
-6. **Scales.** If the full-resolution search finds nothing, the image is
-   halved repeatedly down to 150 pixels and searched again. Texture finer
-   than a module, such as a screen's pixel grid or halftone dots, averages
-   out, and a module that a local threshold split becomes a few pixels.
-   Modules are read at full resolution.
-7. **Retries.** Both paths run on the image as is and inverted, and each
-   sampled grid is also decoded transposed, which is how a mirror image
-   samples.
+6. **Scales.** Symbols are located in a pyramid of the image, halved
+   repeatedly down to 150 pixels. Texture finer than a module, such as a
+   screen's pixel grid or halftone dots, averages out at the coarser
+   levels, and a module that a local threshold split becomes a few pixels.
+   Locating costs about the pixels of the level, and camera photos hold
+   far more pixels than their codes need: on the BoofCV photos, only 7 of
+   the 109 readable 8-megapixel ones need full resolution. So the search
+   starts at the level nearest half a megapixel, goes coarser, then finer
+   down to full resolution; it tries the levels a search from full
+   resolution would, so it finds the same symbols. Modules are read at
+   full resolution. A finder whose modules span fewer than 3 pixels at
+   its level locates the symbol too imprecisely to read it there; before
+   full resolution has been searched, the symbol is located again at full
+   resolution, within a window around its finders, which costs the
+   window's pixels rather than the image's.
+7. **Retries.** Light symbols on dark backgrounds are searched for after
+   all levels, at full resolution, and each sampled grid is also decoded
+   transposed, which is how a mirror image samples. `DecodeAll` searches
+   the levels in the same order, so that it locates a symbol `Decode`
+   reads in the same way.
 8. **Matrix and bitstream** (`decode_matrix.go`, `decode_segments.go`). The
    format information is BCH-corrected, the mask removed, codewords read in
    the placement order, blocks de-interleaved and Reed–Solomon corrected, and

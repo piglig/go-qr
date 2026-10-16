@@ -42,12 +42,15 @@ perspective and moderate lens distortion, and, through the measured
 positions of the alignment patterns, a surface that bends locally
 (*Since v2.7*); when a finder is unreadable
 the other two imply it. Modules are then read from the grayscale image,
-each against the modules around it. If nothing is found at full
-resolution, the symbol is located again in the image downscaled by 2, 4,
-and so on, which removes texture finer than the modules, such as a
-screen's pixel grid; the modules are still read at full resolution. Each
-path is tried on the image as is and inverted, and every sampled symbol is
-also read mirrored.
+each against the modules around it. Symbols are located in the image and
+in its halvings, which remove texture finer than the modules, such as a
+screen's pixel grid; the modules are always read at full resolution. In
+large images the search starts at the halving nearest half a megapixel,
+where the codes of camera photos are usually found, and goes on to
+coarser and then finer ones; a code that is found there but too small to
+locate precisely is located again at full resolution, in a window around
+it (*Since v2.7*). Light symbols on a dark background are searched for
+last, and every sampled symbol is also read mirrored.
 
 | Input | Supported |
 | --- | --- |
@@ -126,8 +129,9 @@ text, err := qr.JoinStructuredAppend(results...)
 ```
 
 `DecodeAll` keeps searching after the first symbol, through every scale
-and polarity, so it takes about twice as long as `Decode` on an image of
-one symbol. `qr.WithMaxSymbols(n)` stops it after `n` symbols.
+and polarity, so it takes several times as long as `Decode` on an image of
+one symbol: 13 ms against 3.4 ms, the medians over the BoofCV photos.
+`qr.WithMaxSymbols(n)` stops it after `n` symbols.
 
 ## Options
 
@@ -148,7 +152,8 @@ bug worth surfacing. `WithMaxSymbols(n)` *Since v2.6* limits `DecodeAll` to
 
 The decoder is fuzz-tested against arbitrary images and malformed
 bitstreams, and returns errors rather than panicking. Its cost grows with
-the number of pixels on any image, about 50 ms for a 12-megapixel photo,
-including images crafted with many finder patterns (*since v2.5.1*), and
+the number of pixels on any image, at most about 120 ms for a
+12-megapixel one without a code, including images crafted with many
+finder patterns (*since v2.5.1*), and
 decoding the image file itself costs more. Check the dimensions of untrusted uploads
 with `image.DecodeConfig` and reject oversized ones before decoding them.

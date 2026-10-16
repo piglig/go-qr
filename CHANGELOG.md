@@ -31,6 +31,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Performance
 
+- `Decode` searches large images from the scale where codes in camera
+  photos are usually found instead of from full resolution. Symbols are
+  located in a pyramid of the image, halved down to 150 pixels; the search
+  starts at the level nearest half a megapixel, goes coarser, then finer
+  down to full resolution, and searches light symbols on dark backgrounds
+  last. It tries the levels a search from full resolution would, so it
+  reads the same images. A code found at a level where its modules span
+  fewer than 3 pixels is located again at full resolution within a window
+  around its finders, before the whole image is. On the 536 BoofCV photos
+  `Decode` takes 4.5 s instead of 8.3 s and reads the same 420; the median
+  12-megapixel photo takes 11 ms instead of 47 ms. In photos of several
+  codes, it may now return another of them. `DecodeAll` searches in the
+  same order, reads the same codes and takes as long. Large images use
+  more memory: 5.4 MB instead of 2.1 MB for a 12-megapixel image, 19 MB
+  instead of 8.1 MB for 48 megapixels.
 - `Decode` and `DecodeAll` allocate 20 to 40% fewer objects on
   photo-sized images: the contrast pyramid of the adaptive threshold takes
   one allocation instead of six per level, and finder triples rejected

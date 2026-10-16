@@ -160,44 +160,126 @@ func searchImage(img image.Image, cfg decodeConfig, read func([][]bool) (*Decode
 		return nil, err
 	}
 
-	var adaptive *thresholdMap
-	for _, inverted := range []bool{false, true} {
+	// fast tries the fast path, which reads crisp, axis-aligned images such
+	// as rendered ones.
+	fast := func(inverted bool) (*DecodeResult, error, bool) {
 		grid, box, err := fastSample(l, w, h, threshold, inverted)
-		if res, err := try(grid, box, inverted, err); err == nil || errors.Is(err, ErrUnsupported) {
-			return res, err
-		}
-		if cfg.fastPathOnly {
-			continue
-		}
-		if adaptive == nil {
-			adaptive = hybridThresholds(l, w, h)
-		}
-		res, err := robustDecode(adaptive, inverted, 1, l, w, h, read)
-		if err == nil || errors.Is(err, ErrUnsupported) {
-			return res, err
-		}
-		note(err)
+		res, err := try(grid, box, inverted, err)
+		return res, err, err == nil || errors.Is(err, ErrUnsupported)
 	}
 	if cfg.fastPathOnly {
+		for _, inverted := range []bool{false, true} {
+			if res, err, done := fast(inverted); done {
+				return res, err
+			}
+		}
 		return nil, firstErr
 	}
+	// Photos from cameras have far more pixels than their codes need, and
+	// the fast path reads only rendered images, which are small.
+	smallImage := w*h <= fastFirstPixels
+	if smallImage {
+		if res, err, done := fast(false); done {
+			return res, err
+		}
+	}
 
-	// Locate at coarser scales. Texture finer than a module, such as a
-	// screen's pixel grid or halftone dots, breaks the finder patterns'
-	// runs at full resolution but averages out at a scale closer to the
-	// module size, as do very large modules that a local threshold splits.
-	// The modules are still read at full resolution.
-	small, sw, sh := l, w, h
-	for scale := 2; min(w, h)/scale >= minScaledSide; scale *= 2 {
-		small, sw, sh = halve(small, sw, sh)
-		res, err := robustDecode(hybridThresholds(small, sw, sh), false, scale, l, w, h, read)
+	// The robust path locates symbols in a pyramid of the image, halved
+	// level by level. A coarser level averages out texture finer than a
+	// module, such as noise, a screen's pixel grid or halftone dots, and
+	// fits very large modules into the local threshold's window; a finer
+	// one resolves smaller modules. The modules are always read at full
+	// resolution. Locating costs about the pixels of the level, so the
+	// search starts at the level nearest searchPixels, where most symbols
+	// in photos are found, goes coarser, and then finer down to full
+	// resolution. It tries the same levels in any image as a search from
+	// full resolution would, so it finds the same symbols, at a fraction
+	// of the cost in camera photos.
+	pyr := newPyramid(l, w, h)
+	var full *thresholdMap // level 0's, also for the inverted image
+	for _, k := range searchOrder(w, h) {
+		p := pyr.level(k)
+		tm := hybridThresholds(p.l, p.w, p.h)
+		if k == 0 {
+			full = tm
+		}
+		// Regions are located again at full resolution only before it
+		// has been searched as a whole.
+		res, err := robustDecode(tm, false, 1<<k, full == nil, l, w, h, read)
 		if err == nil || errors.Is(err, ErrUnsupported) {
 			return res, err
 		}
 		note(err)
 	}
+
+	// Light symbols on a dark background, at full resolution.
+	if !smallImage {
+		if res, err, done := fast(false); done {
+			return res, err
+		}
+	}
+	if res, err, done := fast(true); done {
+		return res, err
+	}
+	res, err := robustDecode(full, true, 1, false, l, w, h, read)
+	if err == nil || errors.Is(err, ErrUnsupported) {
+		return res, err
+	}
+	note(err)
 	return nil, firstErr
 }
+
+// luma is a luminance image, one byte per pixel.
+type luma struct {
+	l    []uint8
+	w, h int
+}
+
+// pyramid holds an image and its halvings, made as they are needed.
+type pyramid []luma
+
+func newPyramid(l []uint8, w, h int) *pyramid { return &pyramid{{l, w, h}} }
+
+// level returns the image halved k times.
+func (p *pyramid) level(k int) luma {
+	for len(*p) <= k {
+		last := (*p)[len(*p)-1]
+		small, sw, sh := halve(last.l, last.w, last.h)
+		*p = append(*p, luma{small, sw, sh})
+	}
+	return (*p)[k]
+}
+
+// searchOrder returns the pyramid levels the robust search locates symbols
+// in for a w×h image, in order: from the level nearest searchPixels to the
+// coarsest whose shorter side has minScaledSide pixels, then finer down to
+// full resolution, level 0.
+func searchOrder(w, h int) []int {
+	levels := 0
+	for min(w, h)>>(levels+1) >= minScaledSide {
+		levels++
+	}
+	start := 0
+	for start < levels && w*h>>(2*start) > searchPixels {
+		start++
+	}
+	order := make([]int, 0, levels+1)
+	for k := start; k <= levels; k++ {
+		order = append(order, k)
+	}
+	for k := start - 1; k >= 0; k-- {
+		order = append(order, k)
+	}
+	return order
+}
+
+// searchPixels is the size, in pixels, of the pyramid level the robust
+// search starts at; fastFirstPixels the largest image the fast path is
+// tried on before it.
+const (
+	searchPixels    = 500_000
+	fastFirstPixels = 1_000_000
+)
 
 // minScaledSide is the shortest side, in pixels, of the coarsest image the
 // symbol is located in.

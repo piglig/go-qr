@@ -129,7 +129,7 @@ func TestDecodeCornersCoarseScale(t *testing.T) {
 	w, h := img.Bounds().Dx(), img.Bounds().Dy()
 	l := toLuma(img)
 	small, sw, sh := halve(l, w, h)
-	res, err := robustDecode(hybridThresholds(small, sw, sh), false, 2, l, w, h, decodeGrid)
+	res, err := robustDecode(hybridThresholds(small, sw, sh), false, 2, false, l, w, h, decodeGrid)
 	if err != nil {
 		t.Fatal(err)
 	}
