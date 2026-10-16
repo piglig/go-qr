@@ -110,7 +110,7 @@ func searchAll(img image.Image, cfg decodeConfig, limit int) ([]*DecodeResult, e
 	// A crisp image of a single symbol, as the fast path reads, holds no
 	// other symbol: the fast path needs the dark pixels' bounding box to be
 	// that symbol.
-	for _, inverted := range []bool{false, true} {
+	for _, inverted := range cfg.polarities() {
 		grid, box, err := fastSample(l, w, h, threshold, inverted)
 		if err == nil {
 			var res *DecodeResult
@@ -186,7 +186,7 @@ func searchAll(img image.Image, cfg decodeConfig, limit int) ([]*DecodeResult, e
 	}
 	// The levels end at full resolution unless the limit or the context
 	// stopped them.
-	if len(found) < limit && full != nil {
+	if len(found) < limit && full != nil && !cfg.noInverted {
 		pass(full, true, 1, false)
 	}
 	if len(found) > limit {

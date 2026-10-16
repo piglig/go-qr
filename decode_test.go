@@ -153,6 +153,28 @@ func TestDecodeInverted(t *testing.T) {
 	assertEqual(t, "light on dark", decodeText(t, rotateGray(img, 0.1)))
 }
 
+func TestDecodeWithoutInverted(t *testing.T) {
+	code := mustEncode(t, "light on dark")
+	light := mustImage(t, code, WithForeground(color.White), WithBackground(color.Black))
+	for name, img := range map[string]image.Image{"crisp": light, "rotated": rotateGray(light, 0.1)} {
+		if res, err := Decode(img, WithoutInverted()); err == nil {
+			t.Errorf("%s: read %q light on dark", name, res.Text)
+		}
+		if rs, err := DecodeAll(img, WithoutInverted()); err == nil {
+			t.Errorf("%s: DecodeAll read %d symbols light on dark", name, len(rs))
+		}
+	}
+	if _, err := Decode(light, WithoutInverted(), WithFastPathOnly()); err == nil {
+		t.Error("fast path read the symbol light on dark")
+	}
+	// Dark symbols still read.
+	dark := mustImage(t, code)
+	assertEqual(t, "light on dark", decodeText(t, rotateGray(dark, 0.1), WithoutInverted()))
+	rs, err := DecodeAll(rotateGray(dark, 0.1), WithoutInverted())
+	assertNoError(t, err)
+	assertLen(t, rs, 1)
+}
+
 func TestDecodeMirrored(t *testing.T) {
 	code := mustEncode(t, "seen in a mirror")
 	img := mirror(mustImage(t, code, WithScale(4)))
@@ -611,11 +633,19 @@ func BenchmarkDecodePhoto(b *testing.B) {
 }
 
 func BenchmarkDecodeNoCode(b *testing.B) {
+	benchmarkDecodeNoCode(b)
+}
+
+func BenchmarkDecodeNoCodeWithoutInverted(b *testing.B) {
+	benchmarkDecodeNoCode(b, WithoutInverted())
+}
+
+func benchmarkDecodeNoCode(b *testing.B, opts ...DecodeOption) {
 	img := benchPhoto(640, 480, false)
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		if _, err := Decode(img); err == nil {
+		if _, err := Decode(img, opts...); err == nil {
 			b.Fatal("decoded an image without a code")
 		}
 	}
