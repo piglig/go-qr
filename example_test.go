@@ -229,6 +229,23 @@ func ExampleDecodeResult_corners() {
 	// Output: [(16,16) (100,16) (100,100) (16,100)] false
 }
 
+// UnusedErrorCorrection tells how much damage a symbol could still take:
+// scanning printed codes over time shows them wearing out before they fail.
+func ExampleDecodeResult_errorCorrection() {
+	code, _ := qr.Encode("https://example.com/label/0042", qr.WithECC(qr.ECCMedium))
+	img, _ := code.Image(qr.WithScale(4))
+	// A scratch across the data modules.
+	draw.Draw(img, image.Rect(60, 90, 110, 96), image.White, image.Point{}, draw.Src)
+
+	res, err := qr.Decode(img)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Printf("%s: %d codewords corrected, %.0f%% of error correction unused\n",
+		res.Text, res.ErrorsCorrected, 100*res.UnusedErrorCorrection)
+	// Output: https://example.com/label/0042: 6 codewords corrected, 67% of error correction unused
+}
+
 func ExampleDecodeAll() {
 	sheet := image.NewRGBA(image.Rect(0, 0, 400, 200))
 	draw.Draw(sheet, sheet.Bounds(), image.White, image.Point{}, draw.Src)

@@ -29,6 +29,10 @@ If `Verify` passes but a printed code does not scan:
   two, clear of other graphics.
 - **Too much data.** Large versions are dense; shorten URLs, or use
   `WithECC(qr.ECCLow)` for codes shown on screens.
+- **Worn or poorly printed.** Photograph the print and decode it:
+  `DecodeResult.UnusedErrorCorrection` (*since v2.7*) shows how much of
+  its error correction the damage already uses, from 1 for none to 0;
+  below 0.25 the print is close to failing.
 
 ## A ZXing-based reader fails on a plain code
 
