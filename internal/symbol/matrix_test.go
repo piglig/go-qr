@@ -1,9 +1,12 @@
 package symbol
 
 import (
+	"errors"
 	"math"
 	"math/rand"
 	"testing"
+
+	"github.com/piglig/go-qr/v2/internal/errs"
 )
 
 // rawCodewords returns the interleaved codewords of a symbol of a version
@@ -76,5 +79,19 @@ func TestDeinterleaveCountsErrorCorrection(t *testing.T) {
 				t.Errorf("unused error correction = %v, want %v", got.UnusedEC, tt.want)
 			}
 		})
+	}
+}
+
+// TestReadMatrixRejectsSizes expects grids of no symbol's size to fail
+// before their format information is read.
+func TestReadMatrixRejectsSizes(t *testing.T) {
+	for _, n := range []int{0, 20, 22, 4*(MaxVersion+1) + 17} {
+		grid := make([][]bool, n)
+		for y := range grid {
+			grid[y] = make([]bool, n)
+		}
+		if _, err := ReadMatrix(grid, nil); !errors.Is(err, errs.ErrDecodeFailed) {
+			t.Errorf("%d×%d grid: error %v, want ErrDecodeFailed", n, n, err)
+		}
 	}
 }

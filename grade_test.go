@@ -196,3 +196,18 @@ func TestQualityGradeString(t *testing.T) {
 		assertEqual(t, want, g.String(), "String")
 	}
 }
+
+// TestGradeOptions expects Grade to search as Decode does with the same
+// options: light symbols on dark are graded unless WithoutInverted skips
+// them.
+func TestGradeOptions(t *testing.T) {
+	code := mustEncode(t, "options")
+	light := mustImage(t, code, WithScale(6), WithForeground(color.White), WithBackground(color.Black))
+	q := mustGrade(t, light, WithFastPathOnly())
+	if !q.Result.Inverted || q.Grade != GradeA {
+		t.Errorf("fast path: grade %v, inverted %v", q.Grade, q.Result.Inverted)
+	}
+	if _, err := Grade(light, WithoutInverted()); !errors.Is(err, ErrNotFound) && !errors.Is(err, ErrDecodeFailed) {
+		t.Errorf("WithoutInverted: error %v, want no symbol", err)
+	}
+}
