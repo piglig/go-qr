@@ -106,7 +106,9 @@ codes, err := qr.EncodeStructured(longText, qr.WithECC(qr.ECCMedium), qr.WithVer
 ```
 
 Readers that support structured append combine the symbols themselves. With
-this library's decoder, decode every symbol, in any order, and join them:
+this library's decoder, decode every symbol, in any order, and join them;
+when the symbols are photographed together, the results of `DecodeAll`
+(*since v2.6*) go straight to `JoinStructuredAppend`:
 
 ```go
 results := make([]*qr.DecodeResult, len(images))

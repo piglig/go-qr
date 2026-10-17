@@ -14,7 +14,9 @@
 //
 // EncodeBytes encodes binary data, and EncodeSegments encodes segments built
 // with NumericSegment, AlphanumericSegment, BytesSegment, KanjiSegment and
-// ECISegment exactly as given.
+// ECISegment exactly as given. WithGS1 marks a GS1 element string, and
+// EncodeStructured spreads text too long for one symbol over up to 16
+// linked by structured append.
 //
 // # Rendering
 //
@@ -31,9 +33,16 @@
 //
 // # Decoding
 //
-// Decode locates and reads a symbol in an image, including rotated, noisy,
-// low-contrast, inverted and mirrored ones, and returns the text along with
-// the version, error correction level, mask and segments.
+// Decode locates and reads a symbol in an image, from crisp renderings to
+// camera photos: rotation, perspective, lens distortion, blur, glare,
+// noise, low contrast, a damaged finder, inverted and mirrored symbols. It
+// returns the text along with the version, error correction level, mask,
+// segments and the symbol's corners in the image:
+//
+//	res, err := qr.Decode(img)
+//
+// DecodeAll reads every symbol in an image, in reading order, and
+// JoinStructuredAppend joins the symbols of a structured append sequence.
 //
 // # Batches
 //
@@ -42,8 +51,10 @@
 //
 // # Payloads
 //
-// The payload subpackage builds the Wi-Fi, contact, email, SMS, phone,
-// location and URL strings that phone scanners act on.
+// The payload subpackage builds the strings that phone scanners act on,
+// such as Wi-Fi networks, contacts, calendar events, 2FA accounts, SEPA
+// payments, email, SMS, phone numbers, locations and URLs, and parses
+// decoded text back into them.
 //
 // # Errors
 //
