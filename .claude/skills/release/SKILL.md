@@ -9,7 +9,7 @@ disable-model-invocation: true
 Releases are made by `.github/workflows/release.yml`; tags are protected
 and a hook blocks creating them by hand. This skill prepares and checks the
 pull requests that trigger the workflow. The steps are in
-[CONTRIBUTING.md](../../../CONTRIBUTING.md#releases).
+[CONTRIBUTING.md](../../../.github/CONTRIBUTING.md#releases).
 
 ## 1. Check that main is ready
 

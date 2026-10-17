@@ -4,7 +4,7 @@
 
 Security fixes are released for the latest minor version of v2. Version 1 is
 no longer maintained; please upgrade (see
-[Upgrading to v2](docs/guides/upgrading-to-v2.md)).
+[Upgrading to v2](../docs/guides/upgrading-to-v2.md)).
 
 | Version | Supported |
 | --- | --- |
@@ -29,4 +29,4 @@ must not panic, hang or use memory out of proportion to the input on any
 image or string. Reports of such behavior are in scope. Decoding time grows
 with the number of pixels, so applications should limit the size of images
 they accept, and can bound the time with `DecodeContext` (*since v2.7*);
-see [Decoding](docs/guides/decoding.md#decoding-untrusted-images).
+see [Decoding](../docs/guides/decoding.md#decoding-untrusted-images).

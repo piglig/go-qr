@@ -1,7 +1,7 @@
 # Instructions for AI coding assistants
 
 These rules apply to every change made with an AI assistant in this
-repository. [CONTRIBUTING.md](CONTRIBUTING.md) has the full contributor
+repository. [CONTRIBUTING.md](.github/CONTRIBUTING.md) has the full contributor
 guide; where the two differ, this file is the stricter one.
 
 ## Repository
@@ -41,7 +41,7 @@ go run honnef.co/go/tools/cmd/staticcheck@latest ./...
 
 CI compares every pull request with its base: benchmark time and
 allocations, and the decode rates of the synthetic distortion sweeps (see
-[CONTRIBUTING.md](CONTRIBUTING.md#performance-and-accuracy)). Passing it is
+[CONTRIBUTING.md](.github/CONTRIBUTING.md#performance-and-accuracy)). Passing it is
 necessary, not sufficient:
 
 - A change to a hot path (encoding, rendering, `Decode`) needs before and
@@ -79,7 +79,7 @@ Update these in the same pull request as the code:
 Never create tags or GitHub releases, and never push to `main`; tags are
 protected and only the release workflow creates them. Start a release only
 when a maintainer asks, and then only through the steps in
-[CONTRIBUTING.md](CONTRIBUTING.md#releases):
+[CONTRIBUTING.md](.github/CONTRIBUTING.md#releases):
 
 - the library: `scripts/release.sh` to see the suggested version, then
   `scripts/release.sh X.Y.Z` to open the release pull request;

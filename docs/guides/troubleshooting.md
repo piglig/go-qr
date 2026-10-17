@@ -99,4 +99,4 @@ The `generator` tool is released separately and pins a library release, so
 options added to the library after that release are not flags yet. Check
 `generator version` against the [CLI guide](cli.md), use the library
 directly, or build the tool from a checkout with a workspace (see
-[CONTRIBUTING.md](../../CONTRIBUTING.md)).
+[CONTRIBUTING.md](../../.github/CONTRIBUTING.md)).

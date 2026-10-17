@@ -199,4 +199,4 @@ File access:
   replaces a file unless asked to.
 - `decode_qr` reads at most 25 MB and 100 megapixels per image.
 
-See [SECURITY.md](../../SECURITY.md) to report a vulnerability.
+See [SECURITY.md](../../.github/SECURITY.md) to report a vulnerability.

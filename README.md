@@ -8,7 +8,6 @@
   <a href="https://pkg.go.dev/github.com/piglig/go-qr/v2"><img src="https://pkg.go.dev/badge/github.com/piglig/go-qr/v2.svg" alt="Go Reference"></a>
   <a href="https://github.com/piglig/go-qr/actions/workflows/go.yml?query=branch%3Amain"><img src="https://github.com/piglig/go-qr/actions/workflows/go.yml/badge.svg?branch=main" alt="Build Status"></a>
   <a href="https://app.codecov.io/github/piglig/go-qr"><img src="https://img.shields.io/codecov/c/github/piglig/go-qr" alt="Coverage"></a>
-  <a href="https://goreportcard.com/report/github.com/piglig/go-qr/v2"><img src="https://goreportcard.com/badge/github.com/piglig/go-qr/v2" alt="Go Report Card"></a>
   <a href="https://github.com/avelino/awesome-go#utilities"><img src="https://awesome.re/mentioned-badge.svg" alt="Mentioned in Awesome Go"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green.svg" alt="MIT License"></a>
 </p>
@@ -127,9 +126,9 @@ See the [MCP guide](docs/guides/mcp.md) for other clients and the tools.
 ## Contributing
 
 Bug reports, ideas and pull requests are welcome. Read
-[CONTRIBUTING.md](CONTRIBUTING.md) for how to set up the repository, run the
+[CONTRIBUTING.md](.github/CONTRIBUTING.md) for how to set up the repository, run the
 tests and fuzzers, and send a change. Report security issues privately as
-described in [SECURITY.md](SECURITY.md).
+described in [SECURITY.md](.github/SECURITY.md).
 
 ## License
 
