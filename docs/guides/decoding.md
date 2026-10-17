@@ -224,7 +224,49 @@ grades F, and a logo uses up error correction:
 `WithFastPathOnly()` skips the robust path. Use it to check images you have
 just rendered yourself, where it is faster and an unexpected failure is a
 bug worth surfacing. `WithMaxSymbols(n)` *Since v2.6* limits `DecodeAll` to
-`n` symbols; `Decode` ignores it.
+`n` symbols; `Decode` ignores it. `WithoutInverted()` *Since v2.7* skips the
+search for light symbols on a dark background; see
+[scanning video](#scanning-video).
+
+## Scanning video
+
+Most frames of a camera feed in which a code is being looked for hold no
+code, and a frame without a code is the slowest to decode: every scale of
+it is searched. Three things keep up with the frames:
+
+- `WithoutInverted()` skips the last search, for light symbols on a dark
+  background, which printed codes rarely are. On frames of texture without
+  a code, from VGA to 12 megapixels, it saves 28% of the time.
+- A frame needs no more pixels than its code: downscale frames to a
+  megapixel or two before decoding when the code fills a good part of
+  the view.
+- Once a code is found, look for it in the next frames around where it
+  was, through `SubImage`; `Decode` reports `Corners` in the coordinates
+  of the full frame:
+
+```go
+type subImager interface {
+	SubImage(r image.Rectangle) image.Image
+}
+
+var last image.Rectangle // where the code was in the previous frame
+for frame := range frames {
+	var res *qr.DecodeResult
+	var err error
+	if !last.Empty() {
+		res, err = qr.Decode(frame.(subImager).SubImage(last), qr.WithoutInverted())
+	}
+	if last.Empty() || err != nil {
+		res, err = qr.Decode(frame, qr.WithoutInverted())
+	}
+	if err != nil {
+		last = image.Rectangle{}
+		continue
+	}
+	last = around(res.Corners, frame.Bounds()) // the corners' bounding box, enlarged
+	handle(res)
+}
+```
 
 ## Errors
 

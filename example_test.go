@@ -325,3 +325,18 @@ func ExampleDecodeAllContext() {
 	}
 	// Output: read before the deadline
 }
+
+// Frames of a camera feed rarely hold light codes on dark backgrounds, and
+// most hold no code at all: skipping that search saves time on each.
+func ExampleWithoutInverted() {
+	code, _ := qr.Encode("a frame of video")
+	frame, _ := code.Image(qr.WithScale(3))
+
+	res, err := qr.Decode(frame, qr.WithoutInverted())
+	if err != nil {
+		fmt.Println("no code in this frame")
+		return
+	}
+	fmt.Println(res.Text)
+	// Output: a frame of video
+}
