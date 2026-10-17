@@ -9,6 +9,8 @@ import (
 	"image/draw"
 	"testing"
 	"time"
+
+	"github.com/piglig/go-qr/v2/internal/detect"
 )
 
 // sheet places the renderings of each text, at scale s, in a grid of
@@ -292,11 +294,11 @@ func TestDecodeEveryTripleKeepsNeighborFinders(t *testing.T) {
 	assertNoError(t, err)
 	assertLen(t, all, 2)
 	for _, known := range all {
-		l := toLuma(img)
+		l := detect.ToLuma(img)
 		w, h := img.Bounds().Dx(), img.Bounds().Dy()
-		tm := hybridThresholds(l, w, h)
+		tm := detect.HybridThresholds(l, w, h)
 		s := newSymbolSearch(context.Background(), tm, false, 1, l, w, h, decodeGrid)
-		_, cands, _ := findFindersStep(tm, false, darkIn(tm, false), s.step())
+		_, cands, _ := detect.FindFindersStep(tm, false, detect.DarkIn(tm, false), s.step())
 		found := []*DecodeResult{known}
 		s.decodeEveryTriple(cands, &found, func(r *DecodeResult) { found = append(found, r) }, 10)
 		if len(found) != 2 {

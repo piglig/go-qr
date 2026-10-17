@@ -1,4 +1,4 @@
-package qr
+package detect
 
 import (
 	"math"
@@ -6,10 +6,10 @@ import (
 	"github.com/piglig/go-qr/v2/internal/symbol"
 )
 
-// classifyModules decides each module of a dim×dim grid of luminances, row
+// ClassifyModules decides each module of a dim×dim grid of luminances, row
 // by row, with the function patterns as pilots: modules whose values are
 // known calibrate a model of the image that the threshold of
-// thresholdModules does not account for. Over the window of modules around
+// ThresholdModules does not account for. Over the window of modules around
 // each module, it fits by least squares
 //
 //	luminance = a + b·dark + c·(darkness of the 8 neighbors)
@@ -22,14 +22,14 @@ import (
 // times. It also returns each module's reliability: the log-likelihood
 // ratio of the two values, |d0² − d1²| over the residual variance of the
 // window. It returns nil if dim is not a symbol's size.
-func classifyModules(vals []float64, dim int, inverted bool) ([][]bool, []float32) {
+func ClassifyModules(vals []float64, dim int, inverted bool) ([][]bool, []float32) {
 	ver := (dim - 17) / 4
-	if ver < MinVersion || ver > MaxVersion || 4*ver+17 != dim {
+	if ver < symbol.MinVersion || ver > symbol.MaxVersion || 4*ver+17 != dim {
 		return nil, nil
 	}
 	pilots := symbol.Pilots(ver)
 	n := dim * dim
-	w := newModuleWindows(vals, dim)
+	w := NewModuleWindows(vals, dim)
 
 	// dark holds physical darkness, 1 or 0: inverted symbols have light
 	// dark modules.
@@ -65,7 +65,7 @@ func classifyModules(vals []float64, dim int, inverted bool) ([][]bool, []float3
 		for r := 0; r < dim; r++ {
 			for col := 0; col < dim; col++ {
 				s := 0.0
-				for _, d := range neighborWeights {
+				for _, d := range NeighborWeights {
 					if rr, cc := r+d[0], col+d[1]; rr >= 0 && rr < dim && cc >= 0 && cc < dim {
 						s += float64(d[2]) * label[rr*dim+cc]
 					}
@@ -141,8 +141,8 @@ func classifyModules(vals []float64, dim int, inverted bool) ([][]bool, []float3
 	return modules, rel
 }
 
-// neighborWeights are the offsets and weights of a module's neighbors.
-var neighborWeights = [8][3]int{{-1, 0, 2}, {1, 0, 2}, {0, -1, 2}, {0, 1, 2}, {-1, -1, 1}, {-1, 1, 1}, {1, -1, 1}, {1, 1, 1}}
+// NeighborWeights are the offsets and weights of a module's neighbors.
+var NeighborWeights = [8][3]int{{-1, 0, 2}, {1, 0, 2}, {0, -1, 2}, {0, 1, 2}, {-1, -1, 1}, {-1, 1, 1}, {1, -1, 1}, {1, 1, 1}}
 
 // satSum returns the sum over rows r0 to r1-1 and columns c0 to c1-1 of
 // the summed-area table s of a grid of n-1 columns.

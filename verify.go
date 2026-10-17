@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"image/color"
 
+	"github.com/piglig/go-qr/v2/internal/detect"
 	"github.com/piglig/go-qr/v2/internal/symbol"
 )
 
@@ -73,5 +74,5 @@ func (c *Code) Verify(opts ...RenderOption) error {
 // composited over white.
 func luminanceOverWhite(c color.Color) float64 {
 	r, g, b, a := c.RGBA()
-	return float64(lumaPremul(r>>8, g>>8, b>>8, a>>8)) / 255
+	return float64(detect.LumaPremul(r>>8, g>>8, b>>8, a>>8)) / 255
 }

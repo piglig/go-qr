@@ -7,6 +7,7 @@ import (
 	"math/rand"
 	"testing"
 
+	"github.com/piglig/go-qr/v2/internal/detect"
 	"github.com/piglig/go-qr/v2/internal/symbol"
 )
 
@@ -117,7 +118,7 @@ func TestSoftDecodingRejectsRandomGrids(t *testing.T) {
 				vals[y*dim+x] = v + rng.NormFloat64()*25
 			}
 		}
-		if pilotAccuracy(thresholdModules(vals, dim, false)) >= softGate {
+		if pilotAccuracy(detect.ThresholdModules(vals, dim, false)) >= softGate {
 			passed++
 		}
 		if res, err := readSoft(vals, dim, false, decodeGrid); err == nil {
@@ -169,7 +170,7 @@ func TestClassifyModulesUndoesBlurAndShade(t *testing.T) {
 	for y := 0; y < dim; y++ {
 		for x := 0; x < dim; x++ {
 			around := 0.0
-			for _, d := range neighborWeights {
+			for _, d := range detect.NeighborWeights {
 				if code.Module(x+d[1], y+d[0]) {
 					around += float64(d[2])
 				}
@@ -193,8 +194,8 @@ func TestClassifyModulesUndoesBlurAndShade(t *testing.T) {
 		}
 		return n
 	}
-	eq, rel := classifyModules(vals, dim, false)
-	th := wrong(thresholdModules(vals, dim, false))
+	eq, rel := detect.ClassifyModules(vals, dim, false)
+	th := wrong(detect.ThresholdModules(vals, dim, false))
 	t.Logf("modules wrong: threshold %d, channel model %d", th, wrong(eq))
 	// 38 and 3 when written.
 	if th < 20 || wrong(eq) > th/4 {
@@ -203,7 +204,7 @@ func TestClassifyModulesUndoesBlurAndShade(t *testing.T) {
 	if len(rel) != dim*dim {
 		t.Fatalf("%d reliabilities", len(rel))
 	}
-	if g, r := classifyModules(vals[:100], 10, false); g != nil || r != nil {
+	if g, r := detect.ClassifyModules(vals[:100], 10, false); g != nil || r != nil {
 		t.Error("classified a grid of no symbol size")
 	}
 }
@@ -276,7 +277,7 @@ func TestSoftDecodingBuildsNoTemplates(t *testing.T) {
 				vals[y*dim+x] = v + rng.NormFloat64()*25
 			}
 		}
-		assertTrue(t, pilotAccuracy(thresholdModules(vals, dim, false)) >= softGate, "version %d grid fails the gate", ver)
+		assertTrue(t, pilotAccuracy(detect.ThresholdModules(vals, dim, false)) >= softGate, "version %d grid fails the gate", ver)
 		if _, err := readSoft(vals, dim, false, decodeGrid); err == nil {
 			t.Fatalf("random version %d grid decoded", ver)
 		}

@@ -5,6 +5,8 @@ import (
 	"image"
 	"slices"
 	"testing"
+
+	"github.com/piglig/go-qr/v2/internal/detect"
 )
 
 func TestSearchOrder(t *testing.T) {
@@ -12,12 +14,12 @@ func TestSearchOrder(t *testing.T) {
 		w, h int
 		want []int
 	}{
-		{164, 164, []int{0}},               // too small to halve
-		{640, 480, []int{0, 1}},            // under searchPixels: from full resolution
+		{164, 164, []int{0}},               // too small to detect.Halve
+		{640, 480, []int{0, 1}},            // under detect.SearchPixels: from full resolution
 		{2400, 1800, []int{2, 3, 1, 0}},    // 4.3 MP: from a quarter
 		{4000, 3000, []int{3, 4, 2, 1, 0}}, // 12 MP: from an eighth
 	} {
-		if got := searchOrder(tc.w, tc.h); !slices.Equal(got, tc.want) {
+		if got := detect.SearchOrder(tc.w, tc.h); !slices.Equal(got, tc.want) {
 			t.Errorf("searchOrder(%d, %d) = %v, want %v", tc.w, tc.h, got, tc.want)
 		}
 	}
@@ -27,9 +29,9 @@ func TestRegion(t *testing.T) {
 	// A version 4 symbol (33 modules) at level 1, its modules 1.5 pixels
 	// there: finder centers 26 modules apart.
 	s := &symbolSearch{scale: 2, lw: 4000, lh: 3000}
-	f := func(x, y, m float64) finderPattern { return finderPattern{x: x, y: y, moduleSize: m} }
+	f := func(x, y, m float64) detect.FinderPattern { return detect.FinderPattern{X: x, Y: y, ModuleSize: m} }
 	tl, tr, bl := f(500, 500, 1.5), f(539, 500, 1.5), f(500, 539, 1.5)
-	r, ok := s.region([3]finderPattern{tl, tr, bl})
+	r, ok := s.region([3]detect.FinderPattern{tl, tr, bl})
 	if !ok {
 		t.Fatal("no region for a barely resolved triple")
 	}
@@ -39,7 +41,7 @@ func TestRegion(t *testing.T) {
 	if want := image.Rect(898, 898, 1102, 1102); r != want {
 		t.Errorf("region %v, want %v", r, want)
 	}
-	for name, tri := range map[string][3]finderPattern{
+	for name, tri := range map[string][3]detect.FinderPattern{
 		"modules resolved":  {f(500, 500, 3), f(578, 500, 3), f(500, 578, 3)},
 		"beyond version 40": {f(100, 100, 1.2), f(900, 100, 1.2), f(100, 900, 1.2)},
 		"window too large":  {f(100, 100, 2.9), f(600, 100, 2.9), f(100, 600, 2.9)},
@@ -51,7 +53,7 @@ func TestRegion(t *testing.T) {
 	// Finders 300 pixels apart with modules of 0.8 imply about 380 modules
 	// per side; the window, about 0.5 megapixels, would pass the size cap.
 	full := &symbolSearch{scale: 1, lw: 4000, lh: 3000}
-	if r, ok := full.region([3]finderPattern{f(1000, 1000, 0.8), f(1300, 1000, 0.8), f(1000, 1300, 0.8)}); ok {
+	if r, ok := full.region([3]detect.FinderPattern{f(1000, 1000, 0.8), f(1300, 1000, 0.8), f(1000, 1300, 0.8)}); ok {
 		t.Errorf("finders too far apart for one symbol: region %v", r)
 	}
 }
@@ -77,7 +79,7 @@ func TestDecodeSmallCodeInLargeImage(t *testing.T) {
 }
 
 func TestDecodeLargeImageWithoutCode(t *testing.T) {
-	// Over a megapixel, the fast path is tried after the pyramid; an image
+	// Over a megapixel, the fast path is tried after the detect.Pyramid; an image
 	// of texture holds nothing to find there either.
 	img := benchPhoto(1300, 900, false)
 	if _, err := Decode(img); !errors.Is(err, ErrNotFound) && !errors.Is(err, ErrDecodeFailed) {

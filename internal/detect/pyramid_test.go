@@ -1,4 +1,4 @@
-package qr
+package detect
 
 import (
 	"math/rand"

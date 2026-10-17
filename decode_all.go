@@ -7,6 +7,8 @@ import (
 	"image"
 	"math"
 	"sort"
+
+	"github.com/piglig/go-qr/v2/internal/detect"
 )
 
 // WithMaxSymbols makes DecodeAll stop after n symbols, which saves time when
@@ -79,9 +81,9 @@ func searchAll(img image.Image, cfg decodeConfig, limit int) ([]*DecodeResult, e
 	if w < 21 || h < 21 {
 		return nil, fmt.Errorf("%w: image too small (%dx%d)", ErrNotFound, w, h)
 	}
-	l := toLuma(img)
-	threshold, lo, hi := otsuThreshold(l)
-	if hi-lo < minContrast {
+	l := detect.ToLuma(img)
+	threshold, lo, hi := detect.OtsuThreshold(l)
+	if hi-lo < detect.MinContrast {
 		return nil, fmt.Errorf("%w: image has no contrast", ErrNotFound)
 	}
 
@@ -111,7 +113,7 @@ func searchAll(img image.Image, cfg decodeConfig, limit int) ([]*DecodeResult, e
 	// other symbol: the fast path needs the dark pixels' bounding box to be
 	// that symbol.
 	for _, inverted := range cfg.polarities() {
-		grid, box, err := fastSample(l, w, h, threshold, inverted)
+		grid, box, err := detect.FastSample(l, w, h, threshold, inverted)
 		if err == nil {
 			var res *DecodeResult
 			if res, err = decodeGrid(grid, nil); err == nil {
@@ -128,21 +130,21 @@ func searchAll(img image.Image, cfg decodeConfig, limit int) ([]*DecodeResult, e
 		return nil, firstErr
 	}
 
-	pass := func(tm *thresholdMap, inverted bool, scale int, refine bool) {
+	pass := func(tm *detect.ThresholdMap, inverted bool, scale int, refine bool) {
 		if cfg.canceled() != nil {
 			return
 		}
 		s := newSymbolSearch(cfg.ctx, tm, inverted, scale, l, w, h, decodeGrid)
-		triples, cands, err := findFindersStep(tm, inverted, darkIn(tm, inverted), s.step())
+		triples, cands, err := detect.FindFindersStep(tm, inverted, detect.DarkIn(tm, inverted), s.step())
 		before := len(found)
 		if refine && scale > 1 {
 			// As robustDecode does first, so that Decode and DecodeAll
 			// locate a symbol they both read the same way.
 			f := float64(scale)
-			covered := func(t [3]finderPattern) bool {
+			covered := func(t [3]detect.FinderPattern) bool {
 				for _, c := range t {
 					for _, r := range found {
-						if inQuad(r.Corners, c.x*f, c.y*f) {
+						if inQuad(r.Corners, c.X*f, c.Y*f) {
 							return true
 						}
 					}
@@ -171,14 +173,14 @@ func searchAll(img image.Image, cfg decodeConfig, limit int) ([]*DecodeResult, e
 	// The levels in Decode's order, so that a symbol both read is located
 	// the same way; then light symbols on a dark background at full
 	// resolution.
-	pyr := newPyramid(l, w, h)
-	var full *thresholdMap
-	for _, k := range searchOrder(w, h) {
+	pyr := detect.NewPyramid(l, w, h)
+	var full *detect.ThresholdMap
+	for _, k := range detect.SearchOrder(w, h) {
 		if len(found) >= limit || cfg.canceled() != nil {
 			break
 		}
-		p := pyr.level(k)
-		tm := hybridThresholds(p.l, p.w, p.h)
+		p := pyr.Level(k)
+		tm := detect.HybridThresholds(p.L, p.W, p.H)
 		if k == 0 {
 			full = tm
 		}
@@ -212,12 +214,12 @@ const (
 // that may be a symbol, skipping triples with a finder of a symbol already
 // in *found or centered inside one. It passes each new symbol to add and
 // stops at limit symbols.
-func (s *symbolSearch) decodeEveryTriple(cands []finderPattern, found *[]*DecodeResult, add func(*DecodeResult), limit int) {
+func (s *symbolSearch) decodeEveryTriple(cands []detect.FinderPattern, found *[]*DecodeResult, add func(*DecodeResult), limit int) {
 	if len(cands) < 3 {
 		return
 	}
-	cands = append([]finderPattern(nil), cands...)
-	sort.SliceStable(cands, func(i, j int) bool { return cands[i].count > cands[j].count })
+	cands = append([]detect.FinderPattern(nil), cands...)
+	sort.SliceStable(cands, func(i, j int) bool { return cands[i].Count > cands[j].Count })
 	if len(cands) > maxEveryTripleCandidates {
 		cands = cands[:maxEveryTripleCandidates]
 	}
@@ -236,11 +238,11 @@ func (s *symbolSearch) decodeEveryTriple(cands []finderPattern, found *[]*Decode
 	for i, a := range cands {
 		near = near[:0]
 		for j, b := range cands {
-			if j == i || max(a.moduleSize, b.moduleSize) > 2*min(a.moduleSize, b.moduleSize) {
+			if j == i || max(a.ModuleSize, b.ModuleSize) > 2*min(a.ModuleSize, b.ModuleSize) {
 				continue
 			}
-			module := (a.moduleSize + b.moduleSize) / 2
-			d := dist(a, b)
+			module := (a.ModuleSize + b.ModuleSize) / 2
+			d := detect.Dist(a, b)
 			if d < 14*0.8/math.Sqrt2*module || d > (4*MaxVersion+10)*1.2*math.Sqrt2*module {
 				continue
 			}
@@ -258,7 +260,7 @@ func (s *symbolSearch) decodeEveryTriple(cands []finderPattern, found *[]*Decode
 					continue
 				}
 				seen[key] = true
-				if sc := finderTripleScore(cands[key[0]], cands[key[1]], cands[key[2]]); !math.IsInf(sc, 1) {
+				if sc := detect.FinderTripleScore(cands[key[0]], cands[key[1]], cands[key[2]]); !math.IsInf(sc, 1) {
 					triples = append(triples, scored{key[0], key[1], key[2], sc})
 				}
 			}
@@ -290,7 +292,7 @@ func (s *symbolSearch) decodeEveryTriple(cands []finderPattern, found *[]*Decode
 		// of the triple may still belong to another one.
 		skip := false
 		for _, i := range [3]int{t.i, t.j, t.k} {
-			if covered(cands[i].x, cands[i].y) {
+			if covered(cands[i].X, cands[i].Y) {
 				used[i], skip = true, true
 			}
 		}
@@ -301,7 +303,7 @@ func (s *symbolSearch) decodeEveryTriple(cands []finderPattern, found *[]*Decode
 		// Grids estimated from finder centers decode no symbols here that
 		// the fallback pass would not, and false triples in texture would
 		// each try several.
-		res, err := s.decodeTriples([][3]finderPattern{{a, b, c}}, nil, nil, false)
+		res, err := s.decodeTriples([][3]detect.FinderPattern{{a, b, c}}, nil, nil, false)
 		if err != nil || res == nil {
 			failures++
 			continue
@@ -312,7 +314,7 @@ func (s *symbolSearch) decodeEveryTriple(cands []finderPattern, found *[]*Decode
 			continue // found before, at another scale or polarity
 		}
 		for i, c := range cands {
-			if !used[i] && inQuad(res.Corners, c.x*f, c.y*f) {
+			if !used[i] && inQuad(res.Corners, c.X*f, c.Y*f) {
 				used[i] = true
 			}
 		}

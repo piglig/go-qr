@@ -2,8 +2,8 @@ package qr
 
 import (
 	"errors"
-	"math"
 
+	"github.com/piglig/go-qr/v2/internal/detect"
 	"github.com/piglig/go-qr/v2/internal/symbol"
 )
 
@@ -16,7 +16,7 @@ import (
 // block are erased, which Reed–Solomon codes correct twice as many of as
 // errors (generalized minimum distance decoding, Forney 1966); and the
 // modules are classified again by a model of the image fitted to the known
-// modules (classifyModules).
+// modules (detect.ClassifyModules).
 //
 // Attempts beyond the first hard decision raise the chance of correcting
 // noise into a wrong codeword, so they keep redundancy unused: the
@@ -39,43 +39,20 @@ const softGate = 0.75
 // decodes it with read: by hard decisions first, then, if the grid passes
 // softGate, with erasures and with the modules classified again.
 func readSoft(vals []float64, dim int, inverted bool, read gridReader) (*DecodeResult, error) {
-	grid := thresholdModules(vals, dim, inverted)
+	grid := detect.ThresholdModules(vals, dim, inverted)
 	res, err := read(grid, nil)
 	if err == nil || errors.Is(err, ErrUnsupported) || pilotAccuracy(grid) < softGate {
 		return res, err
 	}
-	if r, e := read(grid, thresholdReliability(vals, dim)); e == nil && hasData(r) || errors.Is(e, ErrUnsupported) {
+	if r, e := read(grid, detect.ThresholdReliability(vals, dim)); e == nil && hasData(r) || errors.Is(e, ErrUnsupported) {
 		return r, e
 	}
-	if eq, rel := classifyModules(vals, dim, inverted); eq != nil {
+	if eq, rel := detect.ClassifyModules(vals, dim, inverted); eq != nil {
 		if r, e := read(eq, rel); e == nil && hasData(r) || errors.Is(e, ErrUnsupported) {
 			return r, e
 		}
 	}
 	return res, err
-}
-
-// thresholdReliability returns how far each module's luminance lies from
-// the mean it is thresholded at, relative to the mean distance over the
-// grid.
-func thresholdReliability(vals []float64, dim int) []float32 {
-	w := newModuleWindows(vals, dim)
-	rel := make([]float32, dim*dim)
-	sum := 0.0
-	for r := 0; r < dim; r++ {
-		for c := 0; c < dim; c++ {
-			d := math.Abs(vals[r*dim+c] - w.mean(r, c))
-			rel[r*dim+c] = float32(d)
-			sum += d
-		}
-	}
-	if sum > 0 {
-		scale := float32(float64(len(rel)) / sum)
-		for i := range rel {
-			rel[i] *= scale
-		}
-	}
-	return rel
 }
 
 // pilotAccuracy returns the fraction of the known modules of grid that read
