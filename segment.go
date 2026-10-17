@@ -4,6 +4,9 @@ import (
 	"fmt"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/piglig/go-qr/v2/internal/bitbuffer"
+	"github.com/piglig/go-qr/v2/internal/charset"
 )
 
 // Mode is a QR segment mode. Its value is the 4-bit mode indicator written
@@ -69,7 +72,7 @@ const alphanumericCharset = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ $%*+-./:"
 type Segment struct {
 	mode     Mode
 	numChars int
-	data     bitBuffer
+	data     bitbuffer.Buffer
 }
 
 // Mode returns the segment mode.
@@ -84,14 +87,14 @@ func NumericSegment(digits string) (Segment, error) {
 	if !isNumeric(digits) {
 		return Segment{}, fmt.Errorf("%w: %q is not numeric", ErrUnencodableChar, digits)
 	}
-	var bb bitBuffer
+	var bb bitbuffer.Buffer
 	for i := 0; i < len(digits); i += 3 {
 		n := min(len(digits)-i, 3)
 		val := 0
 		for _, d := range digits[i : i+n] {
 			val = val*10 + int(d-'0')
 		}
-		bb.appendBits(val, n*3+1)
+		bb.AppendBits(val, n*3+1)
 	}
 	return Segment{mode: ModeNumeric, numChars: len(digits), data: bb}, nil
 }
@@ -102,23 +105,23 @@ func AlphanumericSegment(text string) (Segment, error) {
 	if !isAlphanumeric(text) {
 		return Segment{}, fmt.Errorf("%w: %q is not alphanumeric", ErrUnencodableChar, text)
 	}
-	var bb bitBuffer
+	var bb bitbuffer.Buffer
 	i := 0
 	for ; i+1 < len(text); i += 2 {
-		bb.appendBits(int(alphanumericValue[text[i]])*45+int(alphanumericValue[text[i+1]]), 11)
+		bb.AppendBits(int(alphanumericValue[text[i]])*45+int(alphanumericValue[text[i+1]]), 11)
 	}
 	if i < len(text) {
-		bb.appendBits(int(alphanumericValue[text[i]]), 6)
+		bb.AppendBits(int(alphanumericValue[text[i]]), 6)
 	}
 	return Segment{mode: ModeAlphanumeric, numChars: len(text), data: bb}, nil
 }
 
 // BytesSegment returns a byte-mode segment holding data verbatim.
 func BytesSegment(data []byte) Segment {
-	var bb bitBuffer
-	bb.grow(len(data) * 8)
+	var bb bitbuffer.Buffer
+	bb.Grow(len(data) * 8)
 	for _, b := range data {
-		bb.appendBits(int(b), 8)
+		bb.AppendBits(int(b), 8)
 	}
 	return Segment{mode: ModeByte, numChars: len(data), data: bb}
 }
@@ -126,14 +129,14 @@ func BytesSegment(data []byte) Segment {
 // KanjiSegment returns a Kanji-mode segment. Every character of text must be
 // in the Shift_JIS double-byte range covered by QR Kanji mode.
 func KanjiSegment(text string) (Segment, error) {
-	var bb bitBuffer
+	var bb bitbuffer.Buffer
 	n := 0
 	for _, r := range text {
-		v, ok := kanjiValue(r)
+		v, ok := charset.KanjiValue(r)
 		if !ok {
 			return Segment{}, fmt.Errorf("%w: %q is not encodable in kanji mode", ErrUnencodableChar, r)
 		}
-		bb.appendBits(v, 13)
+		bb.AppendBits(v, 13)
 		n++
 	}
 	return Segment{mode: ModeKanji, numChars: n, data: bb}, nil
@@ -143,18 +146,18 @@ func KanjiSegment(text string) (Segment, error) {
 // interpret the bytes of following byte-mode segments; for example 26 is
 // UTF-8 and 3 is ISO-8859-1. assignment must be in [0, 999999].
 func ECISegment(assignment int) (Segment, error) {
-	var bb bitBuffer
+	var bb bitbuffer.Buffer
 	switch {
 	case assignment < 0 || assignment > 999999:
 		return Segment{}, fmt.Errorf("%w: ECI assignment %d out of range", ErrInvalidArgument, assignment)
 	case assignment < 1<<7:
-		bb.appendBits(assignment, 8)
+		bb.AppendBits(assignment, 8)
 	case assignment < 1<<14:
-		bb.appendBits(0b10, 2)
-		bb.appendBits(assignment, 14)
+		bb.AppendBits(0b10, 2)
+		bb.AppendBits(assignment, 14)
 	default:
-		bb.appendBits(0b110, 3)
-		bb.appendBits(assignment, 21)
+		bb.AppendBits(0b110, 3)
+		bb.AppendBits(assignment, 21)
 	}
 	return Segment{mode: ModeECI, data: bb}, nil
 }
@@ -166,10 +169,10 @@ const eciUTF8 = 26
 // index (0-based) of total symbols carrying one message whose bytes XOR to
 // parity (ISO/IEC 18004 §8).
 func structuredAppendSegment(index, total int, parity byte) Segment {
-	var bb bitBuffer
-	bb.appendBits(index, 4)
-	bb.appendBits(total-1, 4)
-	bb.appendBits(int(parity), 8)
+	var bb bitbuffer.Buffer
+	bb.AppendBits(index, 4)
+	bb.AppendBits(total-1, 4)
+	bb.AppendBits(int(parity), 8)
 	return Segment{mode: ModeStructuredAppend, data: bb}
 }
 
@@ -275,7 +278,7 @@ func totalBits(segs []Segment, ver int) int {
 		if ccBits > 0 && s.numChars >= 1<<ccBits {
 			return -1
 		}
-		total += 4 + ccBits + s.data.len()
+		total += 4 + ccBits + s.data.Len()
 	}
 	return total
 }

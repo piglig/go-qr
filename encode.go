@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/piglig/go-qr/v2/internal/bitbuffer"
 	"github.com/piglig/go-qr/v2/internal/symbol"
 )
 
@@ -226,21 +227,21 @@ func encodeSegments(segs []Segment, c encodeConfig) (*Code, error) {
 	}
 
 	capacityBits := symbol.NumDataCodewords(ver, symbol.Level(ecc)) * 8
-	var bb bitBuffer
-	bb.grow(capacityBits)
+	var bb bitbuffer.Buffer
+	bb.Grow(capacityBits)
 	for _, s := range segs {
-		bb.appendBits(int(s.mode), 4)
-		bb.appendBits(s.numChars, s.mode.charCountBits(ver))
-		bb.appendBuffer(&s.data)
+		bb.AppendBits(int(s.mode), 4)
+		bb.AppendBits(s.numChars, s.mode.charCountBits(ver))
+		bb.AppendBuffer(&s.data)
 	}
 
 	// Terminator, then pad to a byte boundary, then alternate pad bytes.
-	bb.appendBits(0, min(4, capacityBits-bb.len()))
-	bb.appendBits(0, (8-bb.len()%8)%8)
-	for pad := 0xEC; bb.len() < capacityBits; pad ^= 0xEC ^ 0x11 {
-		bb.appendBits(pad, 8)
+	bb.AppendBits(0, min(4, capacityBits-bb.Len()))
+	bb.AppendBits(0, (8-bb.Len()%8)%8)
+	for pad := 0xEC; bb.Len() < capacityBits; pad ^= 0xEC ^ 0x11 {
+		bb.AppendBits(pad, 8)
 	}
-	return newCode(ver, ecc, bb.bytes(), c.mask)
+	return newCode(ver, ecc, bb.Bytes(), c.mask)
 }
 
 // fitVersion returns the smallest version in [minVer, maxVer] whose data

@@ -1,17 +1,17 @@
-package qr
+package bitbuffer
 
-// bitBuffer is an append-only sequence of bits, packed eight to a byte
+// Buffer is an append-only sequence of bits, packed eight to a byte
 // (most-significant bit first). The zero value is an empty buffer.
-type bitBuffer struct {
+type Buffer struct {
 	data []byte // packed bits; bit i lives at data[i/8], MSB-first
 	n    int    // number of valid bits
 }
 
 // len returns the number of bits in the buffer.
-func (b *bitBuffer) len() int { return b.n }
+func (b *Buffer) Len() int { return b.n }
 
 // grow ensures room for another n bits without reallocating.
-func (b *bitBuffer) grow(n int) {
+func (b *Buffer) Grow(n int) {
 	need := (b.n + n + 7) / 8
 	if need > cap(b.data) {
 		d := make([]byte, len(b.data), need)
@@ -21,7 +21,7 @@ func (b *bitBuffer) grow(n int) {
 }
 
 // getBit returns the i-th bit. Out-of-range indices read as 0.
-func (b *bitBuffer) getBit(i int) bool {
+func (b *Buffer) GetBit(i int) bool {
 	if i < 0 || i >= b.n {
 		return false
 	}
@@ -29,7 +29,7 @@ func (b *bitBuffer) getBit(i int) bool {
 }
 
 // appendBit appends a single bit.
-func (b *bitBuffer) appendBit(set bool) {
+func (b *Buffer) AppendBit(set bool) {
 	if b.n>>3 >= len(b.data) {
 		b.data = append(b.data, 0)
 	}
@@ -41,18 +41,18 @@ func (b *bitBuffer) appendBit(set bool) {
 
 // appendBits appends the low length bits of val, most-significant bit first.
 // Callers guarantee 0 <= length <= 31 and 0 <= val < 1<<length.
-func (b *bitBuffer) appendBits(val, length int) {
+func (b *Buffer) AppendBits(val, length int) {
 	if length < 0 || length > 31 || val>>uint(length) != 0 {
-		panic("qr: bitBuffer.appendBits value out of range")
+		panic("qr: Buffer.appendBits value out of range")
 	}
 	for i := length - 1; i >= 0; i-- {
-		b.appendBit((val>>uint(i))&1 != 0)
+		b.AppendBit((val>>uint(i))&1 != 0)
 	}
 }
 
 // appendBuffer appends every bit of other.
-func (b *bitBuffer) appendBuffer(other *bitBuffer) {
-	b.grow(other.n)
+func (b *Buffer) AppendBuffer(other *Buffer) {
+	b.Grow(other.n)
 	if b.n%8 == 0 {
 		// Byte-aligned: copy whole bytes. Bits past other.n are zero.
 		b.data = append(b.data[:b.n/8], other.data[:(other.n+7)/8]...)
@@ -60,11 +60,11 @@ func (b *bitBuffer) appendBuffer(other *bitBuffer) {
 		return
 	}
 	for i := 0; i < other.n; i++ {
-		b.appendBit(other.getBit(i))
+		b.AppendBit(other.GetBit(i))
 	}
 }
 
 // bytes returns the buffer packed into bytes; the final byte is zero-padded.
-func (b *bitBuffer) bytes() []byte {
+func (b *Buffer) Bytes() []byte {
 	return b.data[:(b.n+7)/8]
 }

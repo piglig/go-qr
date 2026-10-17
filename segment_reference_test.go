@@ -7,6 +7,7 @@ import (
 	"testing"
 	"unicode/utf8"
 
+	"github.com/piglig/go-qr/v2/internal/charset"
 	"github.com/piglig/go-qr/v2/internal/symbol"
 )
 
@@ -89,7 +90,7 @@ func referenceCharModes(runes []rune, ver int, gs1 bool) []Mode {
 			cur[2] = prev[2] + 20
 			step[2] = ModeNumeric
 		}
-		if _, ok := kanjiValue(r); ok {
+		if _, ok := charset.KanjiValue(r); ok {
 			cur[3] = prev[3] + 78
 			step[3] = ModeKanji
 		}
@@ -152,11 +153,11 @@ func sameSegments(a, b []Segment) bool {
 		return false
 	}
 	for i := range a {
-		if a[i].mode != b[i].mode || a[i].numChars != b[i].numChars || a[i].data.len() != b[i].data.len() {
+		if a[i].mode != b[i].mode || a[i].numChars != b[i].numChars || a[i].data.Len() != b[i].data.Len() {
 			return false
 		}
-		for k := 0; k < a[i].data.len(); k++ {
-			if a[i].data.getBit(k) != b[i].data.getBit(k) {
+		for k := 0; k < a[i].data.Len(); k++ {
+			if a[i].data.GetBit(k) != b[i].data.GetBit(k) {
 				return false
 			}
 		}
@@ -233,7 +234,7 @@ func TestMinSegmentBitsIsALowerBound(t *testing.T) {
 	// Some characters of the Kanji table, such as U+005C, are cheaper in
 	// byte mode; the bound takes the cheaper.
 	for r := rune(0); r < 0x10000; r++ {
-		if _, ok := kanjiValue(r); ok {
+		if _, ok := charset.KanjiValue(r); ok {
 			if got, want := minCharBits([]rune{r}, false), min(utf8.RuneLen(r)*8*6, 78); got != want && !(r < utf8.RuneSelf && isAlphanumericByte(byte(r))) {
 				t.Fatalf("%U: bound %d, want %d", r, got, want)
 			}

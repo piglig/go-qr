@@ -1,4 +1,4 @@
-package qr
+package charset
 
 import "unicode/utf8"
 
@@ -24,13 +24,13 @@ import "unicode/utf8"
 // are scored together and read in one character set; a Kanji mode segment
 // in the symbol marks a Japanese encoder.
 
-// charset is a character set a byte segment can be read in.
-type charset uint8
+// Charset is a character set a byte segment can be read in.
+type Charset uint8
 
 const (
-	charsetUTF8 charset = iota
-	charsetShiftJIS
-	charsetLatin1 // Windows-1252, a superset of ISO-8859-1 for text
+	UTF8 Charset = iota
+	ShiftJIS
+	Latin1 // Windows-1252, a superset of ISO-8859-1 for text
 )
 
 // charClass is a class of characters with similar roles in text.
@@ -165,8 +165,8 @@ var cp1252 = [32]rune{
 	0x02DC, 0x2122, 0x0161, 0x203A, 0x0153, 0x9D, 0x017E, 0x0178,
 }
 
-// appendWindows1252 decodes Windows-1252.
-func appendWindows1252(text, b []byte) []byte {
+// AppendWindows1252 decodes Windows-1252.
+func AppendWindows1252(text, b []byte) []byte {
 	for _, c := range b {
 		r := rune(c)
 		if 0x80 <= c && c <= 0x9F {
@@ -192,25 +192,25 @@ func textCost(text []byte) float64 {
 // a Kanji mode segment: only a Japanese encoder writes one.
 const kanjiPrior = 8
 
-// guessCharset picks the character set of the undeclared byte segments of a
+// Guess picks the character set of the undeclared byte segments of a
 // symbol, none of which is valid UTF-8. hasKanji reports a Kanji mode
 // segment in the symbol.
-func guessCharset(segs [][]byte, hasKanji bool) charset {
+func Guess(segs [][]byte, hasKanji bool) Charset {
 	var latin, sjis float64
 	for _, b := range segs {
-		latin += textCost(appendWindows1252(nil, b))
+		latin += textCost(AppendWindows1252(nil, b))
 		if !validShiftJIS(b) {
-			return charsetLatin1
+			return Latin1
 		}
-		sjis += textCost(appendShiftJIS(nil, b))
+		sjis += textCost(AppendShiftJIS(nil, b))
 	}
 	if hasKanji {
 		sjis -= kanjiPrior
 	}
 	if sjis < latin {
-		return charsetShiftJIS
+		return ShiftJIS
 	}
-	return charsetLatin1
+	return Latin1
 }
 
 // validShiftJIS reports whether b is a sequence of Shift_JIS characters
@@ -222,11 +222,11 @@ func validShiftJIS(b []byte) bool {
 		switch {
 		case c < 0x80, 0xA1 <= c && c <= 0xDF:
 		case i+1 < len(b) && validShiftJISTrail(b[i+1]):
-			v, ok := shiftJISToKanji(c, b[i+1])
+			v, ok := ShiftJISToKanji(c, b[i+1])
 			if !ok {
 				return false
 			}
-			if _, ok := kanjiRune(v); !ok {
+			if _, ok := KanjiRune(v); !ok {
 				return false
 			}
 			i++
@@ -241,4 +241,31 @@ func validShiftJIS(b []byte) bool {
 // Shift_JIS double-byte character.
 func validShiftJISTrail(c byte) bool {
 	return 0x40 <= c && c <= 0x7E || 0x80 <= c && c <= 0xFC
+}
+
+// AppendShiftJIS decodes Shift_JIS: ASCII, half-width katakana, and the
+// double-byte range covered by the QR Kanji table. Anything else becomes
+// U+FFFD.
+func AppendShiftJIS(text, b []byte) []byte {
+	for i := 0; i < len(b); i++ {
+		c := b[i]
+		switch {
+		case c < 0x80:
+			text = append(text, c)
+		case 0xA1 <= c && c <= 0xDF:
+			text = utf8.AppendRune(text, 0xFF61+rune(c-0xA1))
+		case i+1 < len(b):
+			r := utf8.RuneError
+			if v, ok := ShiftJISToKanji(c, b[i+1]); ok {
+				if k, ok := KanjiRune(v); ok {
+					r = k
+				}
+			}
+			text = utf8.AppendRune(text, r)
+			i++
+		default:
+			text = utf8.AppendRune(text, utf8.RuneError)
+		}
+	}
+	return text
 }

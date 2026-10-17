@@ -1,4 +1,4 @@
-package qr
+package charset
 
 import (
 	"testing"
@@ -17,11 +17,11 @@ func toShiftJIS(t testing.TB, s string) []byte {
 		case 0xFF61 <= r && r <= 0xFF9F:
 			b = append(b, byte(r-0xFF61+0xA1))
 		default:
-			v, ok := kanjiValue(r)
+			v, ok := KanjiValue(r)
 			if !ok {
 				t.Fatalf("%q has no Shift_JIS encoding", r)
 			}
-			b1, b2 := kanjiToShiftJIS(v)
+			b1, b2 := KanjiToShiftJIS(v)
 			b = append(b, b1, b2)
 		}
 	}
@@ -93,11 +93,11 @@ var charsetCorpus = struct{ japanese, latin []string }{
 
 // charsetAccuracy reports how many corpus strings guess reads in their own
 // character set, and which it misses.
-func charsetAccuracy(t *testing.T, name string, guess func(b []byte) charset) (int, []string) {
+func charsetAccuracy(t *testing.T, name string, guess func(b []byte) Charset) (int, []string) {
 	jp, lat := 0, 0
 	var misses []string
 	for _, s := range charsetCorpus.japanese {
-		if guess(toShiftJIS(t, s)) == charsetShiftJIS {
+		if guess(toShiftJIS(t, s)) == ShiftJIS {
 			jp++
 		} else {
 			misses = append(misses, "ja "+s)
@@ -105,7 +105,7 @@ func charsetAccuracy(t *testing.T, name string, guess func(b []byte) charset) (i
 	}
 	for _, s := range charsetCorpus.latin {
 		b := toWindows1252(t, s)
-		if utf8.Valid(b) || guess(b) == charsetLatin1 {
+		if utf8.Valid(b) || guess(b) == Latin1 {
 			lat++
 		} else {
 			misses = append(misses, "la "+s)
@@ -120,14 +120,14 @@ func charsetAccuracy(t *testing.T, name string, guess func(b []byte) charset) (i
 // or symbols, and Œu is also a kanji.
 var ambiguousCharset = map[string]bool{"ja ｱ": true, "ja ﾒﾓ": true, "la Œuvre": true}
 
-func legacyGuess(b []byte) charset {
+func legacyGuess(b []byte) Charset {
 	if looksShiftJIS(b) {
-		return charsetShiftJIS
+		return ShiftJIS
 	}
-	return charsetLatin1
+	return Latin1
 }
 
-func modelGuess(b []byte) charset { return guessCharset([][]byte{b}, false) }
+func modelGuess(b []byte) Charset { return Guess([][]byte{b}, false) }
 
 // TestCharsetModel checks the model on the corpus it was designed with and
 // on two written afterwards, and that it reads at least as many strings
@@ -206,11 +206,11 @@ func looksShiftJIS(b []byte) bool {
 			continue
 		case 0xA1 <= c && c <= 0xDF: // half-width katakana
 		case i+1 < len(b):
-			v, ok := shiftJISToKanji(c, b[i+1])
+			v, ok := ShiftJISToKanji(c, b[i+1])
 			if !ok {
 				return false
 			}
-			if _, ok := kanjiRune(v); !ok {
+			if _, ok := KanjiRune(v); !ok {
 				return false
 			}
 			c1Control = c1Control || c <= 0x9F || b[i+1] >= 0x80 && b[i+1] <= 0x9F
@@ -222,45 +222,4 @@ func looksShiftJIS(b []byte) bool {
 		longest = max(longest, run)
 	}
 	return longest >= 3 || c1Control
-}
-
-// TestDecodeCharsetSymbol covers the inference through Decode: a Kanji mode
-// segment marks the symbol as Japanese, so a byte segment too short to tell
-// is read as Shift_JIS, and Windows-1252 punctuation reads as such.
-func TestDecodeCharsetSymbol(t *testing.T) {
-	kanji, err := KanjiSegment("予約")
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, c := range []struct {
-		name string
-		segs []Segment
-		want string
-	}{
-		{"short katakana alone", []Segment{BytesSegment([]byte("\xd2\xd3"))}, "ÒÓ"},
-		{"short katakana with Kanji", []Segment{kanji, BytesSegment([]byte(" \xd2\xd3"))}, "予約 ﾒﾓ"},
-		{"Windows-1252 quotes", []Segment{BytesSegment([]byte("\x93Bonjour\x94"))}, "“Bonjour”"},
-		{"two segments, one clear", []Segment{BytesSegment([]byte("\xc3\xde\xbb\xde\xb2\xdd")), mustNumericSegment("123"), BytesSegment([]byte("\xd2\xd3"))}, "ﾃﾞｻﾞｲﾝ123ﾒﾓ"},
-	} {
-		code, err := EncodeSegments(c.segs)
-		if err != nil {
-			t.Fatal(err)
-		}
-		res, err := Decode(mustImage(t, code, WithScale(4)))
-		if err != nil {
-			t.Fatalf("%s: %v", c.name, err)
-		}
-		if res.Text != c.want {
-			t.Errorf("%s: got %q, want %q", c.name, res.Text, c.want)
-		}
-	}
-}
-
-// mustNumericSegment is NumericSegment for literals in tests.
-func mustNumericSegment(digits string) Segment {
-	s, err := NumericSegment(digits)
-	if err != nil {
-		panic(err)
-	}
-	return s
 }

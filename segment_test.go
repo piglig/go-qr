@@ -2,6 +2,8 @@ package qr
 
 import (
 	"testing"
+
+	"github.com/piglig/go-qr/v2/internal/bitbuffer"
 )
 
 func TestAlphanumericSegment(t *testing.T) {
@@ -460,4 +462,22 @@ func TestTotalBits(t *testing.T) {
 	big := BytesSegment(make([]byte, 256))
 	assertEqual(t, -1, totalBits([]Segment{big}, 9))
 	assertEqual(t, 4+16+256*8, totalBits([]Segment{big}, 10))
+}
+
+// bufFromBits builds a bit buffer from booleans, for literals in tests.
+func bufFromBits(bits ...bool) bitbuffer.Buffer {
+	var b bitbuffer.Buffer
+	for _, bit := range bits {
+		b.AppendBit(bit)
+	}
+	return b
+}
+
+// bitsOf reads a bit buffer back into booleans for comparison.
+func bitsOf(b *bitbuffer.Buffer) []bool {
+	out := make([]bool, b.Len())
+	for i := range out {
+		out[i] = b.GetBit(i)
+	}
+	return out
 }
