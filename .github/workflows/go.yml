@@ -50,7 +50,7 @@ jobs:
 
       - name: Test
         run: |
-          go test -race -coverprofile=coverage.out -covermode=atomic ./...
+          go test -race -coverpkg=./... -coverprofile=coverage.out -covermode=atomic ./...
           (cd tools && go test -race ./...)
           (cd demo && go test ./... && GOOS=js GOARCH=wasm go build -o /dev/null .)
           (cd mcp && go test -race ./...)
