@@ -1,6 +1,7 @@
 package qr
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"image"
@@ -29,7 +30,14 @@ const maxDecodeAllSymbols = 256
 // The error is nil when at least one symbol decodes. Otherwise it is the
 // error Decode would return for img. Since v2.6.
 func DecodeAll(img image.Image, opts ...DecodeOption) ([]*DecodeResult, error) {
-	var cfg decodeConfig
+	return DecodeAllContext(context.Background(), img, opts...)
+}
+
+// DecodeAllContext is DecodeAll with a context: when ctx is done, it stops
+// searching and returns the symbols read so far, in reading order, with
+// ctx.Err(). Since v2.7.
+func DecodeAllContext(ctx context.Context, img image.Image, opts ...DecodeOption) ([]*DecodeResult, error) {
+	cfg := decodeConfig{ctx: ctx}
 	for _, o := range opts {
 		o(&cfg)
 	}
@@ -41,7 +49,11 @@ func DecodeAll(img image.Image, opts ...DecodeOption) ([]*DecodeResult, error) {
 		limit = min(limit, cfg.maxSymbols)
 	}
 	found, err := searchAll(img, cfg, limit)
+	cerr := cfg.canceled()
 	if len(found) == 0 {
+		if cerr != nil {
+			return nil, cerr
+		}
 		return nil, err
 	}
 	for _, res := range found {
@@ -49,7 +61,7 @@ func DecodeAll(img image.Image, opts ...DecodeOption) ([]*DecodeResult, error) {
 			res.Corners[i] = res.Corners[i].Add(img.Bounds().Min)
 		}
 	}
-	return readingOrder(found), nil
+	return readingOrder(found), cerr
 }
 
 // searchAll is searchImage for every symbol: the robust path, at each scale
@@ -57,7 +69,11 @@ func DecodeAll(img image.Image, opts ...DecodeOption) ([]*DecodeResult, error) {
 // candidates that may form a symbol not found yet. A pass that finds
 // nothing that way falls back to searchImage's own search, which can also
 // infer a lost finder.
+// It stops when cfg's context is done.
 func searchAll(img image.Image, cfg decodeConfig, limit int) ([]*DecodeResult, error) {
+	if err := cfg.canceled(); err != nil {
+		return nil, err
+	}
 	b := img.Bounds()
 	w, h := b.Dx(), b.Dy()
 	if w < 21 || h < 21 {
@@ -113,7 +129,10 @@ func searchAll(img image.Image, cfg decodeConfig, limit int) ([]*DecodeResult, e
 	}
 
 	pass := func(tm *thresholdMap, inverted bool, scale int, refine bool) {
-		s := newSymbolSearch(tm, inverted, scale, l, w, h, decodeGrid)
+		if cfg.canceled() != nil {
+			return
+		}
+		s := newSymbolSearch(cfg.ctx, tm, inverted, scale, l, w, h, decodeGrid)
 		triples, cands, err := findFindersStep(tm, inverted, darkIn(tm, inverted), s.step())
 		before := len(found)
 		if refine && scale > 1 {
@@ -136,7 +155,7 @@ func searchAll(img image.Image, cfg decodeConfig, limit int) ([]*DecodeResult, e
 			})
 		}
 		s.decodeEveryTriple(cands, &found, add, limit)
-		if len(found) > before {
+		if len(found) > before || s.canceled() != nil {
 			return
 		}
 		if err != nil && len(cands) < 2 {
@@ -155,7 +174,7 @@ func searchAll(img image.Image, cfg decodeConfig, limit int) ([]*DecodeResult, e
 	pyr := newPyramid(l, w, h)
 	var full *thresholdMap
 	for _, k := range searchOrder(w, h) {
-		if len(found) >= limit {
+		if len(found) >= limit || cfg.canceled() != nil {
 			break
 		}
 		p := pyr.level(k)
@@ -165,8 +184,9 @@ func searchAll(img image.Image, cfg decodeConfig, limit int) ([]*DecodeResult, e
 		}
 		pass(tm, false, 1<<k, full == nil)
 	}
-	// The levels end at full resolution unless the limit stopped them.
-	if len(found) < limit {
+	// The levels end at full resolution unless the limit or the context
+	// stopped them.
+	if len(found) < limit && full != nil {
 		pass(full, true, 1, false)
 	}
 	if len(found) > limit {
@@ -260,7 +280,7 @@ func (s *symbolSearch) decodeEveryTriple(cands []finderPattern, found *[]*Decode
 	}
 	failures := 0
 	for _, t := range triples {
-		if len(*found) >= limit || failures >= maxTripleFailures {
+		if len(*found) >= limit || failures >= maxTripleFailures || s.canceled() != nil {
 			return
 		}
 		if used[t.i] || used[t.j] || used[t.k] {
