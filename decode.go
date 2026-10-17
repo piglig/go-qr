@@ -54,6 +54,20 @@ type DecodeResult struct {
 	// string whose variable-length elements end with the GS character.
 	GS1 bool
 
+	// ErrorsCorrected is the number of codewords that error correction
+	// repaired, over all blocks. Since v2.7.
+	ErrorsCorrected int
+	// UnusedErrorCorrection is the share, from 0 to 1, of the error
+	// correction capacity that the block that needed most left unused, as
+	// ISO/IEC 15415 defines it: 1 for a symbol read without errors, 0 for
+	// one that needed all of it or more. Since v2.7.
+	UnusedErrorCorrection float64
+	// SoftDecision reports a symbol that hard decisions did not read, read
+	// by soft decisions: with the modules decided again by a model of the
+	// image and the least reliable codewords erased. Many readers decode
+	// by hard decisions only. Since v2.7.
+	SoftDecision bool
+
 	codewords []byte // corrected data codewords, for Code.Verify
 }
 
@@ -315,17 +329,18 @@ func decodeGrid(grid [][]bool, rel []float32) (*DecodeResult, error) {
 }
 
 func decodeModules(grid [][]bool, rel []float32) (*DecodeResult, error) {
-	data, ver, ecc, mask, err := decodeMatrix(grid, rel)
+	sd, err := decodeMatrix(grid, rel)
 	if err != nil {
 		return nil, err
 	}
-	bs, err := parseBitstream(data, ver)
+	bs, err := parseBitstream(sd.data, sd.ver)
 	if err != nil {
 		return nil, err
 	}
 	return &DecodeResult{
-		Text: bs.text, Version: ver, ECC: ecc, Mask: mask, Segments: bs.segs,
+		Text: bs.text, Version: sd.ver, ECC: sd.ecc, Mask: sd.mask, Segments: bs.segs,
 		StructuredAppend: bs.structured, GS1: bs.gs1,
+		ErrorsCorrected: sd.corrected, UnusedErrorCorrection: sd.unusedEC, SoftDecision: rel != nil,
 	}, nil
 }
 

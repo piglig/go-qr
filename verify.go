@@ -42,7 +42,7 @@ func (c *Code) Verify(opts ...RenderOption) error {
 	if err != nil {
 		return err
 	}
-	want, _, _, _, err := decodeMatrix(c.modules, nil)
+	want, err := decodeMatrix(c.modules, nil)
 	if err != nil {
 		return fmt.Errorf("%w: the symbol's own modules do not decode: %v", ErrUnreadable, err)
 	}
@@ -52,16 +52,16 @@ func (c *Code) Verify(opts ...RenderOption) error {
 		if rel != nil {
 			return nil, fmt.Errorf("%w: only soft decoding reads it", ErrDecodeFailed)
 		}
-		data, ver, ecc, mask, err := decodeMatrix(grid, nil)
+		sd, err := decodeMatrix(grid, nil)
 		if err != nil {
 			return nil, err
 		}
-		return &DecodeResult{Version: ver, ECC: ecc, Mask: mask, codewords: data}, nil
+		return &DecodeResult{Version: sd.ver, ECC: sd.ecc, Mask: sd.mask, codewords: sd.data}, nil
 	})
 	if err != nil {
 		return fmt.Errorf("%w: %v", ErrUnreadable, err)
 	}
-	if !bytes.Equal(got.codewords, want) {
+	if !bytes.Equal(got.codewords, want.data) {
 		return fmt.Errorf("%w: rendering decodes to different data", ErrUnreadable)
 	}
 	return nil

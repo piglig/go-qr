@@ -27,9 +27,33 @@ fmt.Println(res.Text)
 | `Segments` | Each segment: `Mode`, `NumChars`, the `ECI` in effect (-1 for none), and the raw `Data` (digits, characters, bytes, or Shift_JIS for Kanji). |
 | `StructuredAppend` *Since v2.1* | Position in a sequence, when the symbol is one of several; see [joining](encoding.md#data-too-long-for-one-symbol). |
 | `GS1` *Since v2.1* | The symbol carries a GS1 element string. |
+| `ErrorsCorrected` *Since v2.7* | The number of codewords error correction repaired. |
+| `UnusedErrorCorrection` *Since v2.7* | The share of error correction left unused, from 1 (no errors) to 0, by the block that needed most; see below. |
+| `SoftDecision` *Since v2.7* | Hard decisions did not read the symbol; soft decisions did (see [below](#what-the-decoder-reads)). |
 
 Use `Segments` when the exact bytes matter, for example for binary payloads
 or text in an encoding other than UTF-8.
+
+### How much error correction a symbol used
+
+`UnusedErrorCorrection` is the unused error correction of ISO/IEC 15415,
+computed for each block as 1 − (e + 2t) / (d − p), with e codewords erased,
+t errors corrected, d check codewords and p of them misdecode protection,
+and reported for the block with the least left. A symbol read cleanly has
+1; one that error correction only just recovered has 0. ISO/IEC 15415
+grades a printed symbol A from 0.62 and fails it below 0.25, so a low value
+from a good photo is a sign of a damaged or poorly printed code, before it
+stops scanning:
+
+```go
+res, err := qr.Decode(img)
+if err == nil && res.UnusedErrorCorrection < 0.25 {
+	log.Printf("label %q is barely readable", res.Text)
+}
+```
+
+The value depends on the photo as much as on the print: blur, glare and
+low resolution use error correction too.
 
 ## What the decoder reads
 
