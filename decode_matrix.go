@@ -2,6 +2,7 @@ package qr
 
 import (
 	"fmt"
+	"slices"
 
 	"github.com/piglig/go-qr/v2/internal/reedsolomon"
 )
@@ -15,20 +16,20 @@ import (
 // remove the mask.
 // rel, if not nil, holds the reliability of each module for an attempt
 // beyond the first hard decision; see softCorrect.
-func decodeMatrix(modules [][]bool, rel []float32) (data []byte, ver int, ecl ECC, mask int, err error) {
+func decodeMatrix(modules [][]bool, rel []float32) (symbolData, error) {
 	size := len(modules)
 	if size < 21 || (size-17)%4 != 0 {
-		return nil, 0, 0, 0, fmt.Errorf("%w: bad matrix size %d", ErrDecodeFailed, size)
+		return symbolData{}, fmt.Errorf("%w: bad matrix size %d", ErrDecodeFailed, size)
 	}
-	ver = (size - 17) / 4
+	ver := (size - 17) / 4
 	if ver < MinVersion || ver > MaxVersion {
-		return nil, 0, 0, 0, fmt.Errorf("%w: derived version %d", ErrDecodeFailed, ver)
+		return symbolData{}, fmt.Errorf("%w: derived version %d", ErrDecodeFailed, ver)
 	}
 
 	// Read and error-correct the format bits before touching the data region.
-	ecl, mask, err = readFormat(modules, size)
+	ecl, mask, err := readFormat(modules, size)
 	if err != nil {
-		return nil, 0, 0, 0, err
+		return symbolData{}, err
 	}
 
 	// Reuse a builder purely to rebuild the version's function-pattern map, then
@@ -39,7 +40,7 @@ func decodeMatrix(modules [][]bool, rel []float32) (data []byte, ver int, ecl EC
 		copy(b.modules[y], modules[y])
 	}
 	if err = b.applyMask(mask); err != nil { // XOR is self-inverse → unmask
-		return nil, 0, 0, 0, err
+		return symbolData{}, err
 	}
 
 	raw := b.readCodewords()
@@ -47,11 +48,25 @@ func decodeMatrix(modules [][]bool, rel []float32) (data []byte, ver int, ecl EC
 	if rel != nil {
 		cwRel = b.codewordReliability(rel)
 	}
-	data, err = deinterleaveAndCorrect(raw, ver, ecl, cwRel)
+	sd, err := deinterleaveAndCorrect(raw, ver, ecl, cwRel)
 	if err != nil {
-		return nil, 0, 0, 0, err
+		return symbolData{}, err
 	}
-	return data, ver, ecl, mask, nil
+	sd.ver, sd.ecc, sd.mask = ver, ecl, mask
+	return sd, nil
+}
+
+// symbolData is what decodeMatrix recovers from a module grid.
+type symbolData struct {
+	data []byte // the corrected data codewords
+	ver  int
+	ecc  ECC
+	mask int
+	// corrected counts the codewords error correction changed; unusedEC is
+	// the unused error correction of the block that used most, as
+	// ISO/IEC 15415 defines it.
+	corrected int
+	unusedEC  float64
 }
 
 // readFormat reads the 15-bit format information (two redundant copies),
@@ -173,8 +188,9 @@ func (q *builder) readCodewords() []byte {
 // blocks (reverse of addEccAndInterLeave), Reed-Solomon corrects each block,
 // and concatenates the corrected data codewords in order.
 // With rel, the reliability of each raw codeword, the blocks are corrected
-// by softCorrect instead of Correct.
-func deinterleaveAndCorrect(raw []byte, ver int, ecl ECC, rel []float32) ([]byte, error) {
+// by softCorrect instead of Correct. The result has the data and the
+// error correction counts set.
+func deinterleaveAndCorrect(raw []byte, ver int, ecl ECC, rel []float32) (symbolData, error) {
 	numBlocks := int(numErrorCorrectionBlocks[ecl][ver])
 	blockEccLen := int(eccCodeWordsPerBlock[ecl][ver])
 	rawCodewords := numRawDataModules(ver) / 8
@@ -212,26 +228,48 @@ func deinterleaveAndCorrect(raw []byte, ver int, ecl ECC, rel []float32) ([]byte
 
 	// Build the contiguous RS codeword (data | ecc) per block, dropping the gap
 	// in short blocks, correct it, and collect the corrected data.
-	var out []byte
+	sd := symbolData{unusedEC: 1}
+	// ISO/IEC 15415 rates the error correction a block used against its
+	// capacity: its check codewords less the misdecode protection ones.
+	capacity := blockEccLen - misdecodeProtection(ver, ecl)
 	for j, block := range blocks {
 		dataLen := shortDataLen
 		if j >= numShortBlocks {
 			dataLen = shortDataLen + 1 // long block has one extra data byte
 		}
+		eccStart := shortBlockLen + 1 - blockEccLen
 		codeword := make([]byte, 0, dataLen+blockEccLen)
-		codeword = append(codeword, block[:dataLen]...)                     // data (gap excluded)
-		codeword = append(codeword, block[shortBlockLen+1-blockEccLen:]...) // ecc
-		var err error
+		codeword = append(codeword, block[:dataLen]...)  // data (gap excluded)
+		codeword = append(codeword, block[eccStart:]...) // ecc
+		var (
+			erased []int
+			err    error
+		)
 		if rel == nil {
 			err = reedsolomon.Correct(codeword, blockEccLen)
 		} else {
-			r := append(append(make([]float32, 0, len(codeword)), blockRel[j][:dataLen]...), blockRel[j][shortBlockLen+1-blockEccLen:]...)
-			err = softCorrect(codeword, blockEccLen, r, blockEccLen-misdecodeProtection(ver, ecl)-gmdMargin)
+			r := append(append(make([]float32, 0, len(codeword)), blockRel[j][:dataLen]...), blockRel[j][eccStart:]...)
+			erased, err = softCorrect(codeword, blockEccLen, r, capacity-gmdMargin)
 		}
 		if err != nil {
-			return nil, fmt.Errorf("%w: %v", ErrDecodeFailed, err)
+			return symbolData{}, fmt.Errorf("%w: %v", ErrDecodeFailed, err)
 		}
-		out = append(out, codeword[:dataLen]...)
+		// Errors are the codewords changed that were not erased.
+		errs := 0
+		for i, v := range codeword {
+			orig := block[i]
+			if i >= dataLen {
+				orig = block[eccStart+i-dataLen]
+			}
+			if v != orig {
+				sd.corrected++
+				if !slices.Contains(erased, i) {
+					errs++
+				}
+			}
+		}
+		sd.unusedEC = min(sd.unusedEC, max(0, 1-float64(len(erased)+2*errs)/float64(capacity)))
+		sd.data = append(sd.data, codeword[:dataLen]...)
 	}
-	return out, nil
+	return sd, nil
 }

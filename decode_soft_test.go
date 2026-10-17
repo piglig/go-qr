@@ -178,7 +178,7 @@ func TestSoftCorrectKeepsProtection(t *testing.T) {
 			rel[p] = 0
 		}
 		budget := 7 - misdecodeProtection(1, ECCLow) - gmdMargin
-		if err := softCorrect(append([]byte(nil), cw...), 7, rel, budget); err == nil {
+		if _, err := softCorrect(append([]byte(nil), cw...), 7, rel, budget); err == nil {
 			t.Fatalf("block %d: three errors corrected within budget %d", i, budget)
 		}
 		if err := reedsolomon.Correct(cw, 7); err != nil {
@@ -198,8 +198,21 @@ func TestSoftCorrectKeepsProtection(t *testing.T) {
 		cw[p] ^= 0x5a
 		rel[p] = 0.01
 	}
-	if err := softCorrect(cw, 10, rel, 8); err != nil || string(cw) != string(orig) {
-		t.Errorf("four errors at the least reliable bytes: %v", err)
+	if erased, err := softCorrect(cw, 10, rel, 8); err != nil || string(cw) != string(orig) || erased != nil {
+		t.Errorf("four errors within the budget: erased %v, %v", erased, err)
+	}
+	// Five are not, by hard decisions: two of them are erased.
+	cw = append([]byte(nil), orig...)
+	for _, p := range []int{2, 5, 11, 20, 23} {
+		cw[p] ^= 0x5a
+		rel[p] = 0.01
+	}
+	erased, err := softCorrect(cw, 10, rel, 8)
+	if err != nil || string(cw) != string(orig) {
+		t.Errorf("five errors at the least reliable bytes: %v", err)
+	}
+	if len(erased) != 2 || rel[erased[0]] != 0.01 || rel[erased[1]] != 0.01 {
+		t.Errorf("erased %v, want two of the least reliable bytes", erased)
 	}
 }
 
