@@ -24,8 +24,8 @@ Using the library:
   zone, logos, and checking readability with `Verify`.
 - [Styling](guides/styling.md): module and finder shapes, finder colors and
   gradients.
-- [Decoding](guides/decoding.md): reading codes from images and photos, the
-  result fields, and text encodings.
+- [Decoding](guides/decoding.md): reading codes from images and photos,
+  every code in an image, the result fields, and text encodings.
 - [Payloads](guides/payloads.md): Wi-Fi, contacts, calendar events, 2FA, SEPA
   payments and more, and parsing them back.
 - [Batch processing](guides/batch.md): generating many codes concurrently.

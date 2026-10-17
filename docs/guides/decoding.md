@@ -141,7 +141,7 @@ text, err := qr.JoinStructuredAppend(results...)
 
 `DecodeAll` keeps searching after the first symbol, through every scale
 and polarity, so it takes several times as long as `Decode` on an image of
-one symbol: 13 ms against 3.4 ms, the medians over the BoofCV photos.
+one symbol: 13.7 ms against 3.5 ms, the medians over the BoofCV photos.
 `qr.WithMaxSymbols(n)` stops it after `n` symbols.
 
 ## Options
