@@ -27,3 +27,23 @@ func numRawDataModules(ver int) int {
 	}
 	return res
 }
+
+// codewordBlocks returns the error correction block of each codeword of a
+// symbol of a version and level, in placement order: the inverse of the
+// interleaving in addEccAndInterLeave.
+func codewordBlocks(ver int, ecc ECC) []int {
+	numBlocks := int(numErrorCorrectionBlocks[ecc][ver])
+	eccLen := int(eccCodeWordsPerBlock[ecc][ver])
+	raw := numRawDataModules(ver) / 8
+	numShort := numBlocks - raw%numBlocks
+	shortLen := raw / numBlocks
+	blockOf := make([]int, 0, raw)
+	for i := 0; i <= shortLen; i++ {
+		for j := 0; j < numBlocks; j++ {
+			if i != shortLen-eccLen || j >= numShort {
+				blockOf = append(blockOf, j)
+			}
+		}
+	}
+	return blockOf
+}

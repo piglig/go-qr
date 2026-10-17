@@ -43,7 +43,10 @@ so:
 
 - **Verify the exact options** before publishing. `Verify` decodes the
   rendering and checks the contrast of every dark color in use, including
-  both ends of a gradient and the finder colors.
+  both ends of a gradient and the finder colors. `Grade` (*Since v2.7*)
+  grades the rendering, or a photo of the print, by the quality
+  parameters of ISO/IEC 15415; see
+  [Grading print quality](decoding.md#grading-print-quality).
 - **Keep every dark color dark.** A gradient that fades toward the
   background color fails where it is lightest.
 - **Prefer higher error correction** (`WithECC(qr.ECCQuartile)` or
