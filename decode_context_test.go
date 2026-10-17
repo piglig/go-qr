@@ -103,6 +103,24 @@ func TestDecodeAllContextPartial(t *testing.T) {
 	}
 }
 
+// TestDecodeContextNoSymbol cancels the search of an image without a
+// symbol, which runs every stage, at each of its checks: each returns the
+// context's error.
+func TestDecodeContextNoSymbol(t *testing.T) {
+	img := benchPhoto(400, 300, false)
+	const many = 1 << 30
+	ctx := newCountdown(many)
+	if _, err := DecodeContext(ctx, img); errors.Is(err, context.Canceled) || err == nil {
+		t.Fatalf("uncanceled search: %v", err)
+	}
+	checks := int(many - ctx.n.Load())
+	for n := 0; n < checks; n++ {
+		if _, err := DecodeContext(newCountdown(n), img); !errors.Is(err, context.Canceled) {
+			t.Fatalf("canceled at check %d of %d: %v, want context.Canceled", n, checks, err)
+		}
+	}
+}
+
 // TestDecodeContextDeadline bounds the time spent on a large image without
 // a symbol, the slowest case of the search.
 func TestDecodeContextDeadline(t *testing.T) {
