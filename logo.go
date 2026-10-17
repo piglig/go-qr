@@ -9,6 +9,8 @@ import (
 	"image/png"
 	"strconv"
 	"strings"
+
+	"github.com/piglig/go-qr/v2/internal/symbol"
 )
 
 // logoConfig holds a logo to draw over the center of the symbol.
@@ -76,10 +78,11 @@ func (l *logoConfig) validate(code *Code) error {
 // with a module under the box counts as lost, whatever the logo looks like.
 func logoDamage(code *Code, box int) float64 {
 	ver, ecc := code.Version(), code.ECC()
-	blockOf := codewordBlocks(ver, ecc)
-	bitAt := getTemplate(ver).bitAt
+	l := symbol.Level(ecc)
+	blockOf := symbol.CodewordBlocks(ver, l)
+	bitAt := symbol.BitAt(ver)
 	lost := make([]bool, len(blockOf))
-	perBlock := make([]int, numErrorCorrectionBlocks[ecc][ver])
+	perBlock := make([]int, symbol.NumErrorCorrectionBlocks[l][ver])
 	start := (code.Size() - box) / 2
 	for y := start; y < start+box; y++ {
 		for x := start; x < start+box; x++ {
@@ -90,36 +93,12 @@ func logoDamage(code *Code, box int) float64 {
 			}
 		}
 	}
-	capacity := float64(correctableErrors(ver, ecc))
+	capacity := float64(symbol.CorrectableErrors(ver, l))
 	worst := 0.0
 	for _, n := range perBlock {
 		worst = max(worst, float64(n)/capacity)
 	}
 	return worst
-}
-
-// correctableErrors returns how many codeword errors each block of a symbol
-// can correct: half its error correction codewords, less the
-// misdecode protection codewords p of ISO/IEC 18004 Table 9, which the
-// smallest symbols reserve for detecting errors rather than correcting
-// them. Readers that follow the standard correct no more.
-func correctableErrors(ver int, ecc ECC) int {
-	return (int(eccCodeWordsPerBlock[ecc][ver]) - misdecodeProtection(ver, ecc)) / 2
-}
-
-// misdecodeProtection returns the misdecode protection codewords p of
-// ISO/IEC 18004 Table 9: check bytes of each block that are not for
-// correcting errors but for detecting a correction gone wrong.
-func misdecodeProtection(ver int, ecc ECC) int {
-	switch {
-	case ver == 1 && ecc == ECCLow:
-		return 3
-	case ver == 1 && ecc == ECCMedium, ver == 2 && ecc == ECCLow:
-		return 2
-	case ver == 1, ver == 3 && ecc == ECCLow:
-		return 1
-	}
-	return 0
 }
 
 // rects returns the padded box and the inner logo area in output units.

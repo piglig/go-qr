@@ -1,4 +1,4 @@
-package qr
+package symbol
 
 import "sync"
 
@@ -36,17 +36,17 @@ func getTemplate(version int) *qrTemplate {
 	}
 
 	size := version*4 + 17
-	// A throwaway builder gives us the version's function-pattern map; only
+	// A throwaway Builder gives us the version's function-pattern map; only
 	// isFunction is read here (module values are irrelevant).
-	b := newBuilder(version, ECCLow)
-	b.drawFunctionPatterns()
+	b := NewBuilder(version, Low)
+	b.DrawFunctionPatterns()
 
 	t := &qrTemplate{}
 	for m := 0; m < 8; m++ {
 		p := newPackedModules(size)
 		for y := 0; y < size; y++ {
 			for x := 0; x < size; x++ {
-				if maskInvert(m, x, y) && !b.isFunction[y][x] {
+				if maskInvert(m, x, y) && !b.IsFunction[y][x] {
 					p.set(x, y, true)
 				}
 			}
@@ -58,7 +58,7 @@ func getTemplate(version int) *qrTemplate {
 	t.functionRows = make([]moduleLine, size)
 	for y := 0; y < size; y++ {
 		for x := 0; x < size; x++ {
-			if b.modules[y][x] {
+			if b.Modules[y][x] {
 				t.functionRows[y][x>>6] |= 1 << (x & 63)
 			}
 		}
@@ -69,12 +69,12 @@ func getTemplate(version int) *qrTemplate {
 }
 
 // bitMap walks the codeword placement of ISO/IEC 18004 §7.7.3 over the
-// builder's function-pattern map, recording which data bit each module
+// Builder's function-pattern map, recording which data bit each module
 // carries: two-module-wide columns from the right, alternately upward and
 // downward, skipping the vertical timing pattern.
-func bitMap(b *builder) [][]int16 {
-	size := b.size
-	n := numRawDataModules(b.version) / 8 * 8
+func bitMap(b *Builder) [][]int16 {
+	size := b.Size
+	n := NumRawDataModules(b.Version) / 8 * 8
 	out := make([][]int16, size)
 	backing := make([]int16, size*size)
 	for y := range out {
@@ -95,7 +95,7 @@ func bitMap(b *builder) [][]int16 {
 				y = size - 1 - vert
 			}
 			for j := 0; j < 2; j++ {
-				if x := right - j; !b.isFunction[y][x] && i < n {
+				if x := right - j; !b.IsFunction[y][x] && i < n {
 					out[y][x] = int16(i)
 					i++
 				}
@@ -103,4 +103,17 @@ func bitMap(b *builder) [][]int16 {
 		}
 	}
 	return out
+}
+
+// BitAt returns, for each module (x, y) of a symbol of version, the index in
+// placement order of the data bit it carries, or -1 for function modules and
+// remainder bits; the bit belongs to raw codeword BitAt(version)[y][x]/8. The
+// map is shared and must not be modified.
+func BitAt(version int) [][]int16 { return getTemplate(version).bitAt }
+
+// HasTemplate reports whether the template of version has been built, for
+// tests that check which versions an operation builds.
+func HasTemplate(version int) bool {
+	_, ok := templateCache.Load(version)
+	return ok
 }

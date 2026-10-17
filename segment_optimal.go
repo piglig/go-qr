@@ -3,6 +3,8 @@ package qr
 import (
 	"fmt"
 	"unicode/utf8"
+
+	"github.com/piglig/go-qr/v2/internal/symbol"
 )
 
 // maxOptimalChars bounds the input to the optimal segmenter; no QR Code holds
@@ -42,13 +44,13 @@ func optimalSegments(text string, c encodeConfig, extraBits int) ([]Segment, err
 			} else if ver < 27 {
 				next = 27
 			}
-			if next <= c.maxVer && minSegmentBits(charBits, ver)+extraBits > numDataCodewords(next-1, c.ecc)*8 {
+			if next <= c.maxVer && minSegmentBits(charBits, ver)+extraBits > symbol.NumDataCodewords(next-1, symbol.Level(c.ecc))*8 {
 				ver = next - 1
 				continue
 			}
 			segs = splitSegments(text, runes, charModes(runes, ver, c.gs1), c.gs1)
 		}
-		capacityBits := numDataCodewords(ver, c.ecc) * 8
+		capacityBits := symbol.NumDataCodewords(ver, symbol.Level(c.ecc)) * 8
 		usedBits := totalBits(segs, ver)
 		if usedBits != -1 && usedBits+extraBits <= capacityBits {
 			return segs, nil

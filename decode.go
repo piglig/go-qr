@@ -8,6 +8,8 @@ import (
 	"math"
 	"sort"
 	"strings"
+
+	"github.com/piglig/go-qr/v2/internal/symbol"
 )
 
 // DecodedSegment describes one segment of a decoded symbol.
@@ -389,19 +391,19 @@ func decodeGrid(grid [][]bool, rel []float32) (*DecodeResult, error) {
 }
 
 func decodeModules(grid [][]bool, rel []float32) (*DecodeResult, error) {
-	sd, err := decodeMatrix(grid, rel)
+	sd, err := symbol.ReadMatrix(grid, rel)
 	if err != nil {
 		return nil, err
 	}
-	bs, err := parseBitstream(sd.data, sd.ver)
+	bs, err := parseBitstream(sd.Codewords, sd.Version)
 	if err != nil {
 		return nil, err
 	}
 	return &DecodeResult{
-		Text: bs.text, Version: sd.ver, ECC: sd.ecc, Mask: sd.mask, Segments: bs.segs,
+		Text: bs.text, Version: sd.Version, ECC: ECC(sd.ECC), Mask: sd.Mask, Segments: bs.segs,
 		StructuredAppend: bs.structured, GS1: bs.gs1,
-		ErrorsCorrected: sd.corrected, UnusedErrorCorrection: sd.unusedEC, SoftDecision: rel != nil,
-		codewords: sd.data,
+		ErrorsCorrected: sd.Corrected, UnusedErrorCorrection: sd.UnusedEC, SoftDecision: rel != nil,
+		codewords: sd.Codewords,
 	}, nil
 }
 

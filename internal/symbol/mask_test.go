@@ -1,4 +1,4 @@
-package qr
+package symbol
 
 import (
 	"math"
@@ -11,7 +11,7 @@ import (
 // a history of the last seven run lengths, the method of Project Nayuki's
 // QR Code generator. packedModules.penalty must agree with it on every grid.
 func referencePenalty(grid [][]bool) int {
-	q := &builder{size: len(grid)}
+	q := &Builder{Size: len(grid)}
 	return q.referencePenaltyScore(grid, math.MaxInt32)
 }
 
@@ -22,9 +22,9 @@ func referencePenalty(grid [][]bool) int {
 // cap is an early-abort threshold: once the partial score reaches cap it can no
 // longer win the mask comparison (scores only grow), so we bail out and return a
 // value >= cap. Pass math.MaxInt32 to force a full, exact computation.
-func (q *builder) referencePenaltyScore(grid [][]bool, cap int) int {
+func (q *Builder) referencePenaltyScore(grid [][]bool, cap int) int {
 	res := 0
-	size := q.size
+	size := q.Size
 	var runHistoryArr [7]int
 	runHistory := runHistoryArr[:]
 	dark := 0
@@ -109,7 +109,7 @@ func (q *builder) referencePenaltyScore(grid [][]bool, cap int) int {
 }
 
 // refFinderPenaltyCountPatterns checks if patterns in runHistory follow the 1:1:3:1:1 finder ratio.
-func (q *builder) refFinderPenaltyCountPatterns(runHistory []int) int {
+func (q *Builder) refFinderPenaltyCountPatterns(runHistory []int) int {
 	n := runHistory[1]
 	core := n > 0 && runHistory[2] == n && runHistory[3] == n*3 && runHistory[4] == n && runHistory[5] == n
 
@@ -124,20 +124,20 @@ func (q *builder) refFinderPenaltyCountPatterns(runHistory []int) int {
 }
 
 // refFinderPenaltyTerminateAndCount finalizes the run history and returns the residual finder penalty.
-func (q *builder) refFinderPenaltyTerminateAndCount(currentRunColor bool, currentRunLen int, runHistory []int) int {
+func (q *Builder) refFinderPenaltyTerminateAndCount(currentRunColor bool, currentRunLen int, runHistory []int) int {
 	if currentRunColor {
 		q.refFinderPenaltyAddHistory(currentRunLen, runHistory)
 		currentRunLen = 0
 	}
-	currentRunLen += q.size
+	currentRunLen += q.Size
 	q.refFinderPenaltyAddHistory(currentRunLen, runHistory)
 	return q.refFinderPenaltyCountPatterns(runHistory)
 }
 
 // refFinderPenaltyAddHistory shifts the run-length history and prepends the current run length.
-func (q *builder) refFinderPenaltyAddHistory(currentRunLen int, runHistory []int) {
+func (q *Builder) refFinderPenaltyAddHistory(currentRunLen int, runHistory []int) {
 	if runHistory[0] == 0 {
-		currentRunLen += q.size
+		currentRunLen += q.Size
 	}
 	// Manual shift instead of copy(): runHistory is always 7 elements, and the
 	// builtin copy lowered to a runtime.memmove call that showed up hot in
@@ -342,17 +342,17 @@ func TestDarkRun(t *testing.T) {
 }
 
 // referenceMask chooses the mask of b's symbol with referencePenalty.
-func referenceMask(b *builder) int {
+func referenceMask(b *Builder) int {
 	best, minPenalty := 0, math.MaxInt32
-	grid := make([][]bool, b.size)
+	grid := make([][]bool, b.Size)
 	for y := range grid {
-		grid[y] = make([]bool, b.size)
+		grid[y] = make([]bool, b.Size)
 	}
 	for m := 0; m < 8; m++ {
-		b.drawFormatBits(m)
+		b.DrawFormatBits(m)
 		for y := range grid {
 			for x := range grid[y] {
-				grid[y][x] = b.modules[y][x] != (maskInvert(m, x, y) && !b.isFunction[y][x])
+				grid[y][x] = b.Modules[y][x] != (maskInvert(m, x, y) && !b.IsFunction[y][x])
 			}
 		}
 		if p := referencePenalty(grid); p < minPenalty {
@@ -362,37 +362,25 @@ func referenceMask(b *builder) int {
 	return best
 }
 
-// unmasked returns a builder holding code before masking.
-func unmasked(code *Code) *builder {
-	b := newBuilder(code.Version(), code.ECC())
-	b.drawFunctionPatterns()
-	for y := 0; y < b.size; y++ {
-		for x := 0; x < b.size; x++ {
-			if !b.isFunction[y][x] {
-				b.modules[y][x] = code.Module(x, y) != maskInvert(code.Mask(), x, y)
-			}
-		}
-	}
-	return b
-}
-
-func TestEncodeChoosesReferenceMask(t *testing.T) {
+func TestChooseBestMaskMatchesReference(t *testing.T) {
 	rng := rand.New(rand.NewSource(5))
-	versions := map[int]bool{}
 	for i := 0; i < 300; i++ {
-		data := make([]byte, rng.Intn(2950))
+		ver, ecc := rng.Intn(MaxVersion)+1, Level(rng.Intn(4))
+		data := make([]byte, NumDataCodewords(ver, ecc))
 		rng.Read(data)
-		code, err := EncodeBytes(data, WithECC(ECC(rng.Intn(4))))
+		b := NewBuilder(ver, ecc)
+		b.DrawFunctionPatterns()
+		raw, err := b.AddECCAndInterleave(data)
 		if err != nil {
-			continue
+			t.Fatal(err)
 		}
-		versions[code.Version()] = true
-		if want := referenceMask(unmasked(code)); code.Mask() != want {
-			t.Fatalf("%d bytes, version %d: mask %d, want %d", len(data), code.Version(), code.Mask(), want)
+		if err := b.DrawCodewords(raw); err != nil {
+			t.Fatal(err)
 		}
-	}
-	if len(versions) < 30 {
-		t.Errorf("only %d versions covered", len(versions))
+		got := b.ChooseBestMask()
+		if want := referenceMask(b); got != want {
+			t.Fatalf("version %d-%d: mask %d, want %d", ver, ecc, got, want)
+		}
 	}
 }
 

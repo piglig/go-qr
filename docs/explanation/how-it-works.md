@@ -23,17 +23,17 @@ text ──► segments ──► bitstream ──► codewords + ECC ──► 
    0xEC and 0x11 up to the version's capacity. If there is room, the error
    correction level is raised: the symbol size is fixed by then, so a higher
    level is free.
-3. **Error correction** (`builder.go`, `internal/reedsolomon`). The data is
+3. **Error correction** (`internal/symbol/builder.go`, `internal/reedsolomon`). The data is
    split into blocks, each extended with Reed–Solomon codewords over GF(2⁸),
    and the blocks are interleaved.
-4. **Layout** (`builder.go`, `layout.go`, `template.go`). Finder, timing
+4. **Layout** (`internal/symbol`: `builder.go`, `layout.go`, `template.go`). Finder, timing
    and alignment patterns and format and version information are drawn,
    then the codewords are placed in the two-column zig-zag defined by the
    standard. The zig-zag is walked once per version into a map of the data
    bit each module carries, cached with the version's other tables, so
    placing the codewords is a pass over the rows that also packs them for
    masking.
-5. **Masking** (`mask.go`, `template.go`). All eight masks are scored with
+5. **Masking** (`internal/symbol`: `mask.go`, `template.go`). All eight masks are scored with
    the ISO penalty rules and the lowest wins. The modules are packed into
    64-bit words, as rows and, transposed, as columns, and the per-version
    mask patterns are cached packed, so applying a mask is an XOR of words.
@@ -158,7 +158,7 @@ image ──► luminance ──► threshold ──► locate ──► fit gri
    reads in the same way. `DecodeContext` and `DecodeAllContext` check
    their context between these stages: before each level, each window
    located again at full resolution and each triple `DecodeAll` decodes.
-8. **Matrix and bitstream** (`decode_matrix.go`, `decode_segments.go`). The
+8. **Matrix and bitstream** (`internal/symbol/matrix.go`, `decode_segments.go`). The
    format information is BCH-corrected, the mask removed, codewords read in
    the placement order, blocks de-interleaved and Reed–Solomon corrected, and
    the segments parsed, applying ECI character sets, GS1 and structured

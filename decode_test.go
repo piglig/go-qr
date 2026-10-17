@@ -397,19 +397,6 @@ func TestShiftJISRoundTrip(t *testing.T) {
 	}
 }
 
-func TestCorrectVersion(t *testing.T) {
-	for v := 7; v <= MaxVersion; v++ {
-		bits := versionBits(v)
-		got, ok := correctVersion(bits ^ 0b100000001000000010) // 3 bit errors
-		if !ok || got != v {
-			t.Fatalf("version %d with 3 errors: got %d, %v", v, got, ok)
-		}
-	}
-	if _, ok := correctVersion(0); ok {
-		t.Error("all-zero bits should not decode to a version")
-	}
-}
-
 // rotateGray rotates about the center with white fill (nearest-neighbor).
 func rotateGray(src *image.RGBA, theta float64) *image.Gray {
 	b := src.Bounds()
@@ -683,5 +670,44 @@ func BenchmarkDecodeFinderTiles(b *testing.B) {
 		if _, err := Decode(img); err == nil {
 			b.Fatal("decoded an image without a code")
 		}
+	}
+}
+
+func TestDecodeReportsErrorCorrection(t *testing.T) {
+	code := mustEncode(t, "https://example.com/error-correction", WithECC(ECCHigh))
+	img, err := code.Image(WithScale(4))
+	if err != nil {
+		t.Fatal(err)
+	}
+	res, err := Decode(img)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.ErrorsCorrected != 0 || res.UnusedErrorCorrection != 1 || res.SoftDecision {
+		t.Errorf("clean symbol: corrected %d, unused %v, soft %v", res.ErrorsCorrected, res.UnusedErrorCorrection, res.SoftDecision)
+	}
+
+	// A light square over the data region damages a few codewords.
+	for y := 60; y < 72; y++ {
+		for x := 60; x < 72; x++ {
+			img.Set(x, y, img.At(0, 0))
+		}
+	}
+	res, err = Decode(img)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.ErrorsCorrected == 0 || res.UnusedErrorCorrection >= 1 || res.UnusedErrorCorrection <= 0 {
+		t.Errorf("damaged symbol: corrected %d, unused %v", res.ErrorsCorrected, res.UnusedErrorCorrection)
+	}
+
+	// The soft attempts are reported.
+	grid := make([][]bool, code.size)
+	for y := range grid {
+		grid[y] = append([]bool(nil), code.modules[y]...)
+	}
+	rel := make([]float32, code.size*code.size)
+	if res, err := decodeGrid(grid, rel); err != nil || !res.SoftDecision {
+		t.Errorf("soft attempt: %v, %v", res, err)
 	}
 }

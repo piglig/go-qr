@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"image"
 	"math"
+
+	"github.com/piglig/go-qr/v2/internal/symbol"
 )
 
 // QualityGrade is a symbol quality grade of ISO/IEC 15415, from GradeA, the
@@ -338,11 +340,12 @@ type codewordMap struct {
 }
 
 func newCodewordMap(ver int, ecl ECC) codewordMap {
+	l := symbol.Level(ecl)
 	return codewordMap{
-		bitAt:    getTemplate(ver).bitAt,
-		block:    codewordBlocks(ver, ecl),
-		blocks:   int(numErrorCorrectionBlocks[ecl][ver]),
-		capacity: int(eccCodeWordsPerBlock[ecl][ver]) - misdecodeProtection(ver, ecl),
+		bitAt:    symbol.BitAt(ver),
+		block:    symbol.CodewordBlocks(ver, l),
+		blocks:   int(symbol.NumErrorCorrectionBlocks[l][ver]),
+		capacity: int(symbol.ECCCodewordsPerBlock[l][ver]) - symbol.MisdecodeProtection(ver, l),
 	}
 }
 
@@ -421,7 +424,7 @@ func finderDamage(margin []float64, dim int) QualityParameter {
 // pixels, of an alignment pattern's center from where the regular grid
 // through the finder patterns' centers puts it.
 func gridNonuniformity(f symbolFrame, ver int, pitch float64) float64 {
-	pos := alignmentPositions(ver)
+	pos := symbol.AlignmentPositions(ver)
 	if len(pos) == 0 || pitch <= 0 {
 		return 0
 	}

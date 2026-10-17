@@ -115,42 +115,6 @@ func TestLogoTooLarge(t *testing.T) {
 	}
 }
 
-func TestCodewordMapMatchesPlacement(t *testing.T) {
-	for _, ver := range []int{1, 2, 7, 14, 27, 40} {
-		code := mustEncode(t, "x", WithVersionRange(ver, ver))
-		read := func(modules [][]bool) []byte {
-			b := newBuilder(ver, code.ECC())
-			b.drawFunctionPatterns()
-			for y := range modules {
-				copy(b.modules[y], modules[y])
-			}
-			return b.readCodewords()
-		}
-		orig := read(code.modules)
-		bitAt := getTemplate(ver).bitAt
-		for _, k := range []int{0, len(orig) / 2, len(orig) - 1} {
-			flipped := make([][]bool, code.size)
-			for y := range flipped {
-				flipped[y] = append([]bool(nil), code.modules[y]...)
-				for x := range flipped[y] {
-					if bit := bitAt[y][x]; bit >= 0 && int(bit)/8 == k {
-						flipped[y][x] = !flipped[y][x]
-					}
-				}
-			}
-			got := read(flipped)
-			for i := range got {
-				if (got[i] != orig[i]) != (i == k) {
-					t.Fatalf("version %d: flipping codeword %d changed codeword %d", ver, k, i)
-				}
-			}
-			if got[k] != ^orig[k] {
-				t.Fatalf("version %d: codeword %d not fully covered by the map", ver, k)
-			}
-		}
-	}
-}
-
 // TestLogoWithinLimitIsReadable renders the largest logo the limit allows
 // at every ECC level and a spread of versions, and decodes it.
 func TestLogoWithinLimitIsReadable(t *testing.T) {
@@ -182,26 +146,6 @@ func TestLogoBoxParity(t *testing.T) {
 			if box%2 != size%2 || box < 3 {
 				t.Fatalf("version %d ratio %v: box %d modules does not center on a %d-module symbol", ver, ratio, box, size)
 			}
-		}
-	}
-}
-
-// TestCorrectableErrors checks the error correction capacity per block
-// against ISO/IEC 18004 Table 9, whose smallest symbols correct fewer
-// errors than half their error correction codewords.
-func TestCorrectableErrors(t *testing.T) {
-	want := map[[2]int]int{
-		{1, int(ECCLow)}: 2, {1, int(ECCMedium)}: 4, {1, int(ECCQuartile)}: 6, {1, int(ECCHigh)}: 8,
-		{2, int(ECCLow)}: 4, {2, int(ECCMedium)}: 8, {2, int(ECCQuartile)}: 11, {2, int(ECCHigh)}: 14,
-		{3, int(ECCLow)}: 7, {3, int(ECCMedium)}: 13, {3, int(ECCQuartile)}: 9, {3, int(ECCHigh)}: 11,
-	}
-	for ver := MinVersion; ver <= MaxVersion; ver++ {
-		for _, ecc := range []ECC{ECCLow, ECCMedium, ECCQuartile, ECCHigh} {
-			n, ok := want[[2]int{ver, int(ecc)}]
-			if !ok {
-				n = int(eccCodeWordsPerBlock[ecc][ver]) / 2
-			}
-			assertEqual(t, n, correctableErrors(ver, ecc), "version %d %v", ver, ecc)
 		}
 	}
 }

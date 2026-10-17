@@ -1,6 +1,10 @@
 package qr
 
-import "math"
+import (
+	"math"
+
+	"github.com/piglig/go-qr/v2/internal/symbol"
+)
 
 // classifyModules decides each module of a dim×dim grid of luminances, row
 // by row, with the function patterns as pilots: modules whose values are
@@ -23,7 +27,7 @@ func classifyModules(vals []float64, dim int, inverted bool) ([][]bool, []float3
 	if ver < MinVersion || ver > MaxVersion || 4*ver+17 != dim {
 		return nil, nil
 	}
-	pilots := getPilots(ver)
+	pilots := symbol.Pilots(ver)
 	n := dim * dim
 	w := newModuleWindows(vals, dim)
 
@@ -51,10 +55,10 @@ func classifyModules(vals []float64, dim int, inverted bool) ([][]bool, []float3
 		copy(label, dark)
 		for _, m := range pilots {
 			v := 0.0
-			if m.dark != inverted {
+			if m.Dark != inverted {
 				v = 1
 			}
-			label[int(m.y)*dim+int(m.x)] = v
+			label[int(m.Y)*dim+int(m.X)] = v
 		}
 		// Darkness of the neighbors, the four sides weighing twice the
 		// corners; outside the symbol is the light quiet zone.

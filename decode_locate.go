@@ -7,6 +7,8 @@ import (
 	"image"
 	"math"
 	"sort"
+
+	"github.com/piglig/go-qr/v2/internal/symbol"
 )
 
 // Robust localization path: handles rotated, tilted and noisy images that the
@@ -1113,35 +1115,13 @@ func (g *symbolGeometry) readVersion(dark func(x, y int) bool) (int, bool) {
 	}
 	// Block 1 sits left of the top-right finder: bit i is module
 	// (size-11+i%3, i/3), offset (i%3-7, i/3-3) from the finder center.
-	if v, ok := correctVersion(sample(g.tr, g.trC, g.trR,
+	if v, ok := symbol.CorrectVersion(sample(g.tr, g.trC, g.trR,
 		func(i int) float64 { return float64(i%3 - 7) },
 		func(i int) float64 { return float64(i/3 - 3) })); ok {
 		return v, true
 	}
 	// Block 2 is its transpose, above the bottom-left finder.
-	return correctVersion(sample(g.bl, g.blC, g.blR,
+	return symbol.CorrectVersion(sample(g.bl, g.blC, g.blR,
 		func(i int) float64 { return float64(i/3 - 3) },
 		func(i int) float64 { return float64(i%3 - 7) }))
-}
-
-// versionBits returns the 18-bit version information codeword: the version
-// followed by its BCH(18,6) remainder (ISO/IEC 18004 Annex D).
-func versionBits(ver int) int {
-	rem := ver
-	for i := 0; i < 12; i++ {
-		rem = (rem << 1) ^ ((rem >> 11) * 0x1F25)
-	}
-	return ver<<12 | rem
-}
-
-// correctVersion returns the version whose codeword is nearest to bits, if it
-// is within the 3-bit correction capacity of the code.
-func correctVersion(bits int) (int, bool) {
-	best, bestDist := 0, 4
-	for v := 7; v <= MaxVersion; v++ {
-		if d := bitCount(versionBits(v) ^ bits); d < bestDist {
-			best, bestDist = v, d
-		}
-	}
-	return best, bestDist <= 3
 }
