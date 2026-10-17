@@ -1,6 +1,7 @@
 package qr
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"image"
@@ -76,6 +77,15 @@ type decodeConfig struct {
 	fastPathOnly  bool
 	maxSymbols    int
 	maxSymbolsSet bool
+	ctx           context.Context // nil for none
+}
+
+// canceled returns the error of c's context once it is done.
+func (c *decodeConfig) canceled() error {
+	if c.ctx == nil {
+		return nil
+	}
+	return c.ctx.Err()
 }
 
 // DecodeOption configures Decode and DecodeAll.
@@ -104,7 +114,18 @@ func WithFastPathOnly() DecodeOption {
 // when a symbol was located but could not be read, and ErrUnsupported for
 // features this decoder does not implement.
 func Decode(img image.Image, opts ...DecodeOption) (*DecodeResult, error) {
-	var cfg decodeConfig
+	return DecodeContext(context.Background(), img, opts...)
+}
+
+// DecodeContext is Decode with a context: when ctx is done before a symbol
+// is read, it stops searching and returns ctx.Err(). It checks ctx between
+// the stages of the search, such as the scales of the image, so it may go
+// on for one stage after ctx is done; at full resolution a stage takes up
+// to about half the time a large image without a symbol does. Use it to
+// bound the time spent on images from untrusted sources, or on a frame of
+// video once a newer one has arrived. Since v2.7.
+func DecodeContext(ctx context.Context, img image.Image, opts ...DecodeOption) (*DecodeResult, error) {
+	cfg := decodeConfig{ctx: ctx}
 	for _, o := range opts {
 		o(&cfg)
 	}
@@ -143,6 +164,9 @@ func locate(res *DecodeResult, at func(u, v float64) (float64, float64), dim int
 // searchImage runs the fast and robust samplers over img, each on the image
 // as is and inverted, and returns the first grid that read decodes.
 func searchImage(img image.Image, cfg decodeConfig, read gridReader) (*DecodeResult, error) {
+	if err := cfg.canceled(); err != nil {
+		return nil, err
+	}
 	b := img.Bounds()
 	w, h := b.Dx(), b.Dy()
 	if w < 21 || h < 21 {
@@ -216,6 +240,9 @@ func searchImage(img image.Image, cfg decodeConfig, read gridReader) (*DecodeRes
 	pyr := newPyramid(l, w, h)
 	var full *thresholdMap // level 0's, also for the inverted image
 	for _, k := range searchOrder(w, h) {
+		if err := cfg.canceled(); err != nil {
+			return nil, err
+		}
 		p := pyr.level(k)
 		tm := hybridThresholds(p.l, p.w, p.h)
 		if k == 0 {
@@ -223,7 +250,7 @@ func searchImage(img image.Image, cfg decodeConfig, read gridReader) (*DecodeRes
 		}
 		// Regions are located again at full resolution only before it
 		// has been searched as a whole.
-		res, err := robustDecode(tm, false, 1<<k, full == nil, l, w, h, read)
+		res, err := robustDecode(cfg.ctx, tm, false, 1<<k, full == nil, l, w, h, read)
 		if err == nil || errors.Is(err, ErrUnsupported) {
 			return res, err
 		}
@@ -231,6 +258,9 @@ func searchImage(img image.Image, cfg decodeConfig, read gridReader) (*DecodeRes
 	}
 
 	// Light symbols on a dark background, at full resolution.
+	if err := cfg.canceled(); err != nil {
+		return nil, err
+	}
 	if !smallImage {
 		if res, err, done := fast(false); done {
 			return res, err
@@ -239,7 +269,10 @@ func searchImage(img image.Image, cfg decodeConfig, read gridReader) (*DecodeRes
 	if res, err, done := fast(true); done {
 		return res, err
 	}
-	res, err := robustDecode(full, true, 1, false, l, w, h, read)
+	if err := cfg.canceled(); err != nil {
+		return nil, err
+	}
+	res, err := robustDecode(cfg.ctx, full, true, 1, false, l, w, h, read)
 	if err == nil || errors.Is(err, ErrUnsupported) {
 		return res, err
 	}

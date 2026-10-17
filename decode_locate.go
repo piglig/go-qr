@@ -1,6 +1,7 @@
 package qr
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"image"
@@ -44,8 +45,9 @@ type finderPattern struct {
 // from the full-resolution luminance l (lw×lh pixels). With refine, set at
 // levels searched before full resolution, finders the level barely
 // resolves are located again in regions at full resolution.
-func robustDecode(tm *thresholdMap, inverted bool, scale int, refine bool, l []uint8, lw, lh int, read gridReader) (*DecodeResult, error) {
-	s := newSymbolSearch(tm, inverted, scale, l, lw, lh, read)
+// It stops between regions when ctx, which may be nil, is done.
+func robustDecode(ctx context.Context, tm *thresholdMap, inverted bool, scale int, refine bool, l []uint8, lw, lh int, read gridReader) (*DecodeResult, error) {
+	s := newSymbolSearch(ctx, tm, inverted, scale, l, lw, lh, read)
 	triples, cands, err := findFindersStep(tm, inverted, darkIn(tm, inverted), s.step())
 	if err != nil && len(cands) < 2 {
 		return nil, err
@@ -58,6 +60,9 @@ func robustDecode(tm *thresholdMap, inverted bool, scale int, refine bool, l []u
 		rerr := s.eachRegion(triples, nil, func(r *DecodeResult) bool { res = r; return false })
 		if res != nil || errors.Is(rerr, ErrUnsupported) {
 			return res, rerr
+		}
+		if cerr := s.canceled(); cerr != nil {
+			return nil, cerr
 		}
 	}
 	return s.decodeTriples(triples, cands, err, true)
@@ -79,6 +84,9 @@ func (s *symbolSearch) eachRegion(triples [][3]finderPattern, skip func([3]finde
 		if failed == maxRegions {
 			break
 		}
+		if cerr := s.canceled(); cerr != nil {
+			return cerr
+		}
 		if skip != nil && skip(t) {
 			continue
 		}
@@ -88,7 +96,7 @@ func (s *symbolSearch) eachRegion(triples [][3]finderPattern, skip func([3]finde
 		}
 		crop := cropLuma(s.l, s.lw, r)
 		tm := hybridThresholds(crop, r.Dx(), r.Dy())
-		res, rerr := robustDecode(tm, s.inverted, 1, false, crop, r.Dx(), r.Dy(), s.read)
+		res, rerr := robustDecode(s.ctx, tm, s.inverted, 1, false, crop, r.Dx(), r.Dy(), s.read)
 		switch {
 		case rerr == nil:
 			for i := range res.Corners {
@@ -179,6 +187,7 @@ const (
 
 // symbolSearch locates and reads symbols at one scale and polarity.
 type symbolSearch struct {
+	ctx      context.Context // nil for none
 	tm       *thresholdMap
 	inverted bool
 	scale    int
@@ -187,8 +196,16 @@ type symbolSearch struct {
 	read     gridReader
 }
 
-func newSymbolSearch(tm *thresholdMap, inverted bool, scale int, l []uint8, lw, lh int, read gridReader) *symbolSearch {
-	return &symbolSearch{tm: tm, inverted: inverted, scale: scale, l: l, lw: lw, lh: lh, read: read}
+func newSymbolSearch(ctx context.Context, tm *thresholdMap, inverted bool, scale int, l []uint8, lw, lh int, read gridReader) *symbolSearch {
+	return &symbolSearch{ctx: ctx, tm: tm, inverted: inverted, scale: scale, l: l, lw: lw, lh: lh, read: read}
+}
+
+// canceled returns the error of s's context once it is done.
+func (s *symbolSearch) canceled() error {
+	if s.ctx == nil {
+		return nil
+	}
+	return s.ctx.Err()
 }
 
 // darkIn returns whether each pixel of tm is dark for a symbol of the given
