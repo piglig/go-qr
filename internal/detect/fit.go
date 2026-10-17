@@ -1,4 +1,4 @@
-package qr
+package detect
 
 import (
 	"math"
@@ -17,7 +17,7 @@ import (
 //     ring; a line fitted to each edge and intersected with its neighbors
 //     gives twelve corners per finder, whose module coordinates are known.
 //     Because the corners come from the shape of each finder, they carry
-//     the local perspective, and no point has to be extrapolated across
+//     the local Perspective, and no point has to be extrapolated across
 //     the symbol.
 //  2. A homography is fitted to the 36 corners by normalized least squares
 //     (DLT). The corners of the top-right and bottom-left finders depend on
@@ -36,11 +36,11 @@ import (
 //
 // The grid is then sampled once.
 
-// gridModel maps module coordinates to image coordinates: a homography plus
+// GridModel maps module coordinates to image coordinates: a homography plus
 // an optional polynomial correction for lens distortion.
-type gridModel struct {
-	h     perspective
-	scale float64 // module coordinates are divided by it in the polynomial
+type GridModel struct {
+	H     Perspective
+	Scale float64 // module coordinates are divided by it in the polynomial
 	px    [polyTerms]float64
 	py    [polyTerms]float64
 	warp  alignmentWarp // local correction measured at the alignment patterns
@@ -54,10 +54,10 @@ func polyBasis(u, v float64) [polyTerms]float64 {
 	return [polyTerms]float64{u * u, u * v, v * v, u * u * u, u * u * v, u * v * v, v * v * v}
 }
 
-func (m *gridModel) apply(u, v float64) (float64, float64) {
-	x, y := m.h.apply(u, v)
-	if m.scale != 0 {
-		b := polyBasis(u/m.scale, v/m.scale)
+func (m *GridModel) Apply(u, v float64) (float64, float64) {
+	x, y := m.H.Apply(u, v)
+	if m.Scale != 0 {
+		b := polyBasis(u/m.Scale, v/m.Scale)
 		for i, t := range b {
 			x += m.px[i] * t
 			y += m.py[i] * t
@@ -119,7 +119,7 @@ const maxWarp = 1.0
 // fewer than minDistortionPoints are found. The finders anchor the fit, so
 // their nodes have none; a pattern not found takes the mean of its
 // neighbors that have one, spreading inward from those found.
-func measureWarp(dark func(x, y int) bool, m *gridModel, pos []int) alignmentWarp {
+func measureWarp(dark func(x, y int) bool, m *GridModel, pos []int) alignmentWarp {
 	n := len(pos)
 	if n < 3 {
 		return alignmentWarp{}
@@ -138,9 +138,9 @@ func measureWarp(dark func(x, y int) bool, m *gridModel, pos []int) alignmentWar
 				continue
 			}
 			u, v := w.nodes[i], w.nodes[j]
-			ex, ey := m.apply(u, v)
-			x1, y1 := m.apply(u+1, v)
-			x2, y2 := m.apply(u, v+1)
+			ex, ey := m.Apply(u, v)
+			x1, y1 := m.Apply(u+1, v)
+			x2, y2 := m.Apply(u, v+1)
 			x, y, ok := searchAlignment(dark, ex, ey, x1-ex, y1-ey, x2-ex, y2-ey, []float64{maxWarp + 0.5})
 			module := math.Min(math.Hypot(x1-ex, y1-ey), math.Hypot(x2-ex, y2-ey))
 			if !ok || math.Hypot(x-ex, y-ey) > maxWarp*module {
@@ -183,15 +183,15 @@ func measureWarp(dark func(x, y int) bool, m *gridModel, pos []int) alignmentWar
 // fitDistortion fits the homography and the polynomial correction to cs,
 // alternating: the homography to the points with the correction removed,
 // then the correction to the residuals of the homography.
-func (m *gridModel) fitDistortion(cs []correspondence, dim int) bool {
-	m.scale = float64(dim)
+func (m *GridModel) fitDistortion(cs []correspondence, dim int) bool {
+	m.Scale = float64(dim)
 	adj := make([]correspondence, len(cs))
 	for iter := 0; iter < 3; iter++ {
 		var ata [polyTerms][polyTerms]float64
 		var atx, aty [polyTerms]float64
 		for _, c := range cs {
-			x, y := m.h.apply(c.u, c.v)
-			b := polyBasis(c.u/m.scale, c.v/m.scale)
+			x, y := m.H.Apply(c.u, c.v)
+			b := polyBasis(c.u/m.Scale, c.v/m.Scale)
 			w := c.weight()
 			for i := range b {
 				for j := range b {
@@ -204,12 +204,12 @@ func (m *gridModel) fitDistortion(cs []correspondence, dim int) bool {
 		px, ok1 := solveN(ata, atx)
 		py, ok2 := solveN(ata, aty)
 		if !ok1 || !ok2 {
-			m.scale = 0
+			m.Scale = 0
 			return false
 		}
 		m.px, m.py = px, py
 		for i, c := range cs {
-			b := polyBasis(c.u/m.scale, c.v/m.scale)
+			b := polyBasis(c.u/m.Scale, c.v/m.Scale)
 			dx, dy := 0.0, 0.0
 			for k, t := range b {
 				dx += px[k] * t
@@ -219,10 +219,10 @@ func (m *gridModel) fitDistortion(cs []correspondence, dim int) bool {
 		}
 		h, ok := fitHomography(adj)
 		if !ok {
-			m.scale = 0
+			m.Scale = 0
 			return false
 		}
-		m.h = h
+		m.H = h
 	}
 	return true
 }
@@ -285,9 +285,9 @@ const alignmentWeight = 3
 // fitHomography fits the homography that maps module coordinates to image
 // coordinates by linear least squares, after normalizing both point sets
 // (Hartley, "In defense of the eight-point algorithm", 1997).
-func fitHomography(cs []correspondence) (perspective, bool) {
+func fitHomography(cs []correspondence) (Perspective, bool) {
 	if len(cs) < 4 {
-		return perspective{}, false
+		return Perspective{}, false
 	}
 	norm := func(get func(c correspondence) (float64, float64)) (mx, my, s float64) {
 		for _, c := range cs {
@@ -310,7 +310,7 @@ func fitHomography(cs []correspondence) (perspective, bool) {
 	mu, mv, su := norm(func(c correspondence) (float64, float64) { return c.u, c.v })
 	mx, my, sx := norm(func(c correspondence) (float64, float64) { return c.x, c.y })
 	if su == 0 || sx == 0 {
-		return perspective{}, false
+		return Perspective{}, false
 	}
 
 	// Normal equations of the 2n×8 system with h33 = 1.
@@ -336,11 +336,11 @@ func fitHomography(cs []correspondence) (perspective, bool) {
 	}
 	h, ok := solve8(ata, atb)
 	if !ok {
-		return perspective{}, false
+		return Perspective{}, false
 	}
-	hn := perspective{h[0], h[1], h[2], h[3], h[4], h[5], h[6], h[7]}
-	toNorm := perspective{a: su, c: -su * mu, e: su, f: -su * mv}
-	fromNorm := perspective{a: 1 / sx, c: mx, e: 1 / sx, f: my}
+	hn := Perspective{h[0], h[1], h[2], h[3], h[4], h[5], h[6], h[7]}
+	toNorm := Perspective{a: su, c: -su * mu, e: su, f: -su * mv}
+	fromNorm := Perspective{a: 1 / sx, c: mx, e: 1 / sx, f: my}
 	return fromNorm.compose(hn.compose(toNorm)), true
 }
 
@@ -390,7 +390,7 @@ type finderCorners struct {
 // traceFinderCorners measures the nested squares of finder f, whose local
 // column and row directions are (cx, cy) and (rx, ry) with module sizes cm
 // and rm along them.
-func traceFinderCorners(dark func(x, y int) bool, f finderPattern, cx, cy, cm, rx, ry, rm float64) finderCorners {
+func traceFinderCorners(dark func(x, y int) bool, f FinderPattern, cx, cy, cm, rx, ry, rm float64) finderCorners {
 	// sides: normal direction, tangent direction and their module sizes,
 	// in the order top (-r), right (+c), bottom (+r), left (-c).
 	type side struct{ nx, ny, nm, tx, ty, tm float64 }
@@ -408,8 +408,8 @@ func traceFinderCorners(dark func(x, y int) bool, f finderPattern, cx, cy, cm, r
 		// Rays from the center block cross all three edges: dark to light
 		// (level 2), light to dark (level 1), dark to light (level 0).
 		for s := -1.0; s <= 1.0; s += 0.25 {
-			x0 := f.x + s*sd.tm*sd.tx
-			y0 := f.y + s*sd.tm*sd.ty
+			x0 := f.X + s*sd.tm*sd.tx
+			y0 := f.Y + s*sd.tm*sd.ty
 			if !dark(int(math.Floor(x0)), int(math.Floor(y0))) {
 				continue
 			}
@@ -421,8 +421,8 @@ func traceFinderCorners(dark func(x, y int) bool, f finderPattern, cx, cy, cm, r
 		// The outer edge is also traced from the dark ring along most of
 		// its length, which steadies its direction.
 		for s := -2.5; s <= 2.5; s += 0.5 {
-			x0 := f.x + 3*sd.nm*sd.nx + s*sd.tm*sd.tx
-			y0 := f.y + 3*sd.nm*sd.ny + s*sd.tm*sd.ty
+			x0 := f.X + 3*sd.nm*sd.nx + s*sd.tm*sd.tx
+			y0 := f.Y + 3*sd.nm*sd.ny + s*sd.tm*sd.ty
 			if !dark(int(math.Floor(x0)), int(math.Floor(y0))) {
 				continue
 			}
@@ -455,8 +455,8 @@ func traceFinderCorners(dark func(x, y int) bool, f finderPattern, cx, cy, cm, r
 			}
 			x, y, ok := lines[level][a].intersect(lines[level][b])
 			// A corner must lie near where the module sizes put it.
-			ex := f.x + cornerSign[k][0]*(3.5-float64(level))*cm*cx + cornerSign[k][1]*(3.5-float64(level))*rm*rx
-			ey := f.y + cornerSign[k][0]*(3.5-float64(level))*cm*cy + cornerSign[k][1]*(3.5-float64(level))*rm*ry
+			ex := f.X + cornerSign[k][0]*(3.5-float64(level))*cm*cx + cornerSign[k][1]*(3.5-float64(level))*rm*rx
+			ey := f.Y + cornerSign[k][0]*(3.5-float64(level))*cm*cy + cornerSign[k][1]*(3.5-float64(level))*rm*ry
 			if ok && math.Hypot(x-ex, y-ey) < 1.5*math.Max(cm, rm) {
 				fc.pt[level][k] = [2]float64{x, y}
 				fc.ok[level][k] = true
@@ -551,13 +551,13 @@ func finderCorrespondences(fc finderCorners, ou, ov float64) []correspondence {
 // contribute for the structural fit; fewer fall back to the finder centers.
 const minFinderCorners = 4
 
-// fitSymbol fits a grid model to the symbol located by g and returns it with
+// FitSymbol fits a grid model to the symbol located by g and returns it with
 // the symbol size and the fraction of timing pattern modules that read back
 // correctly through it. It reports false when the finders' corners cannot
 // be measured, such as with circular finder styles.
-func (g *symbolGeometry) fitSymbol(dark func(x, y int) bool) (*gridModel, int, float64, bool) {
+func (g *SymbolGeometry) FitSymbol(dark func(x, y int) bool) (*GridModel, int, float64, bool) {
 	var fcs [3]finderCorners
-	for i, f := range [3]finderPattern{g.tl, g.tr, g.bl} {
+	for i, f := range [3]FinderPattern{g.tl, g.tr, g.bl} {
 		if g.virtual != i+1 {
 			cm, rm := [3]float64{g.tlC, g.trC, g.blC}[i], [3]float64{g.tlR, g.trR, g.blR}[i]
 			fcs[i] = traceFinderCorners(dark, f, g.cx, g.cy, cm, g.rx, g.ry, rm)
@@ -579,7 +579,7 @@ func (g *symbolGeometry) fitSymbol(dark func(x, y int) bool) (*gridModel, int, f
 			return nil, 0, 0, false
 		}
 	}
-	fit := func(dim int) (perspective, []correspondence, bool) {
+	fit := func(dim int) (Perspective, []correspondence, bool) {
 		d := float64(dim)
 		cs := finderCorrespondences(fcs[0], 0, 0)
 		cs = append(cs, finderCorrespondences(fcs[1], d-7, 0)...)
@@ -587,9 +587,9 @@ func (g *symbolGeometry) fitSymbol(dark func(x, y int) bool) (*gridModel, int, f
 		if g.virtual != 0 {
 			// The inferred finder's center is a guess that the alignment
 			// patterns and timing patterns then correct.
-			f := [3]finderPattern{g.tl, g.tr, g.bl}[g.virtual-1]
+			f := [3]FinderPattern{g.tl, g.tr, g.bl}[g.virtual-1]
 			u, v := [3][2]float64{{3.5, 3.5}, {d - 3.5, 3.5}, {3.5, d - 3.5}}[g.virtual-1][0], [3][2]float64{{3.5, 3.5}, {d - 3.5, 3.5}, {3.5, d - 3.5}}[g.virtual-1][1]
-			cs = append(cs, correspondence{u, v, f.x, f.y, virtualWeight})
+			cs = append(cs, correspondence{u, v, f.X, f.Y, virtualWeight})
 		}
 		h, ok := fitHomography(cs)
 		return h, cs, ok
@@ -598,13 +598,13 @@ func (g *symbolGeometry) fitSymbol(dark func(x, y int) bool) (*gridModel, int, f
 	// Pick the version whose timing patterns read back best, starting
 	// with the estimate: a wrong size puts the timing pattern out of phase
 	// within a few modules, so an estimate that reads back well is right.
-	v0 := (g.dim - 17) / 4
+	v0 := (g.Dim - 17) / 4
 	bestV, bestScore := 0, -1.0
-	var bestH perspective
+	var bestH Perspective
 	var bestCS []correspondence
 	for _, dv := range [5]int{0, -1, 1, -2, 2} {
 		v := v0 + dv
-		if v < MinVersion || v > MaxVersion {
+		if v < symbol.MinVersion || v > symbol.MaxVersion {
 			continue
 		}
 		h, cs, ok := fit(4*v + 17)
@@ -629,7 +629,7 @@ func (g *symbolGeometry) fitSymbol(dark func(x, y int) bool) (*gridModel, int, f
 		}
 	}
 	dim := 4*bestV + 17
-	model := &gridModel{h: bestH}
+	model := &GridModel{H: bestH}
 
 	// Grow the fit with the alignment patterns; a second pass looks again
 	// for those missed, through the homography refitted to the first.
@@ -648,7 +648,7 @@ func (g *symbolGeometry) fitSymbol(dark func(x, y int) bool) (*gridModel, int, f
 					continue
 				}
 				u, v := float64(pos[i])+0.5, float64(pos[j])+0.5
-				if x, y, ok := locateAlignment(dark, model.h, u, v, 2.5); ok {
+				if x, y, ok := locateAlignment(dark, model.H, u, v, 2.5); ok {
 					found[j*n+i] = true
 					cs = append(cs, correspondence{u, v, x, y, alignmentWeight})
 					added = true
@@ -659,7 +659,7 @@ func (g *symbolGeometry) fitSymbol(dark func(x, y int) bool) (*gridModel, int, f
 			break
 		}
 		if h, ok := fitHomography(cs); ok {
-			model.h = h
+			model.H = h
 		}
 	}
 
@@ -701,10 +701,10 @@ func (g *symbolGeometry) fitSymbol(dark func(x, y int) bool) (*gridModel, int, f
 
 // structureScore counts the timing and alignment pattern modules that read
 // back as they must through m.
-func structureScore(dark func(x, y int) bool, m mapper, version int) int {
+func structureScore(dark func(x, y int) bool, m Mapper, version int) int {
 	dim := 4*version + 17
 	isDark := func(u, v float64) bool {
-		x, y := m.apply(u, v)
+		x, y := m.Apply(u, v)
 		return dark(int(math.Floor(x)), int(math.Floor(y)))
 	}
 	n := 0
@@ -754,12 +754,12 @@ func isFinderSlot(i, j, n int) bool {
 // timingScore returns the fraction of timing pattern modules (row and
 // column 6 between the finders) that read as they must: dark at even
 // positions.
-func timingScore(dark func(x, y int) bool, h perspective, dim int) float64 {
+func timingScore(dark func(x, y int) bool, h Perspective, dim int) float64 {
 	ok, total := 0, 0
 	for i := 8; i <= dim-9; i++ {
 		want := i%2 == 0
 		for _, uv := range [2][2]float64{{float64(i) + 0.5, 6.5}, {6.5, float64(i) + 0.5}} {
-			x, y := h.apply(uv[0], uv[1])
+			x, y := h.Apply(uv[0], uv[1])
 			if dark(int(math.Floor(x)), int(math.Floor(y))) == want {
 				ok++
 			}
@@ -771,12 +771,12 @@ func timingScore(dark func(x, y int) bool, h perspective, dim int) float64 {
 
 // readVersionThrough reads the version information blocks through h and
 // returns the first that BCH-corrects to a valid version.
-func readVersionThrough(dark func(x, y int) bool, h perspective, dim int) (int, bool) {
+func readVersionThrough(dark func(x, y int) bool, h Perspective, dim int) (int, bool) {
 	read := func(mod func(i int) (int, int)) (int, bool) {
 		bits := 0
 		for i := 0; i < 18; i++ {
 			c, r := mod(i)
-			x, y := h.apply(float64(c)+0.5, float64(r)+0.5)
+			x, y := h.Apply(float64(c)+0.5, float64(r)+0.5)
 			if dark(int(math.Floor(x)), int(math.Floor(y))) {
 				bits |= 1 << i
 			}
@@ -791,10 +791,10 @@ func readVersionThrough(dark func(x, y int) bool, h perspective, dim int) (int, 
 
 // locateAlignment finds the alignment pattern centered at module (u, v)
 // within radius modules of where h maps it.
-func locateAlignment(dark func(x, y int) bool, h perspective, u, v, radius float64) (float64, float64, bool) {
-	ex, ey := h.apply(u, v)
-	x1, y1 := h.apply(u+1, v)
-	x2, y2 := h.apply(u, v+1)
+func locateAlignment(dark func(x, y int) bool, h Perspective, u, v, radius float64) (float64, float64, bool) {
+	ex, ey := h.Apply(u, v)
+	x1, y1 := h.Apply(u+1, v)
+	x2, y2 := h.Apply(u, v+1)
 	return searchAlignment(dark, ex, ey, x1-ex, y1-ey, x2-ex, y2-ey, []float64{radius})
 }
 
@@ -810,27 +810,27 @@ const minCompletionSupport = 0.7
 // maxCompletionFinders bounds the finders paired for completion.
 const maxCompletionFinders = 5
 
-// completeSymbol infers a missing third finder from pairs of well-supported
+// CompleteSymbol infers a missing third finder from pairs of well-supported
 // candidates and returns the best-fitting symbol. Two finders that share an
 // edge of the symbol leave the third on either side of either of them; two
 // on a diagonal leave it on either side of their midpoint.
-func completeSymbol(dark func(x, y int) bool, cands []finderPattern) (*gridModel, int, float64, bool) {
-	var strong []finderPattern
+func CompleteSymbol(dark func(x, y int) bool, cands []FinderPattern) (*GridModel, int, float64, bool) {
+	var strong []FinderPattern
 	for _, c := range cands {
-		if float64(c.count) >= minCompletionSupport*1.5*c.moduleSize {
+		if float64(c.Count) >= minCompletionSupport*1.5*c.ModuleSize {
 			strong = append(strong, c)
 		}
 	}
-	sort.Slice(strong, func(i, j int) bool { return strong[i].count > strong[j].count })
+	sort.Slice(strong, func(i, j int) bool { return strong[i].Count > strong[j].Count })
 	if len(strong) > maxCompletionFinders {
 		strong = strong[:maxCompletionFinders]
 	}
 	var (
-		best      *gridModel
+		best      *GridModel
 		bestDim   int
 		bestScore = -1.0
 	)
-	try := func(tl, tr, bl finderPattern, virtual finderPattern) {
+	try := func(tl, tr, bl FinderPattern, virtual FinderPattern) {
 		idx := 0
 		switch virtual {
 		case tl:
@@ -840,43 +840,43 @@ func completeSymbol(dark func(x, y int) bool, cands []finderPattern) (*gridModel
 		case bl:
 			idx = 3
 		}
-		g, err := newSymbolGeometryOrdered(dark, tl, tr, bl, idx)
+		g, err := NewSymbolGeometryOrdered(dark, tl, tr, bl, idx)
 		if err != nil {
 			return
 		}
-		if m, d, s, ok := g.fitSymbol(dark); ok && s > bestScore {
+		if m, d, s, ok := g.FitSymbol(dark); ok && s > bestScore {
 			best, bestDim, bestScore = m, d, s
 		}
 	}
 	for i := 0; i < len(strong); i++ {
 		for j := i + 1; j < len(strong); j++ {
 			a, b := strong[i], strong[j]
-			if max(a.moduleSize, b.moduleSize) > 2*min(a.moduleSize, b.moduleSize) {
+			if max(a.ModuleSize, b.ModuleSize) > 2*min(a.ModuleSize, b.ModuleSize) {
 				continue
 			}
-			module := (a.moduleSize + b.moduleSize) / 2
-			dx, dy := b.x-a.x, b.y-a.y
+			module := (a.ModuleSize + b.ModuleSize) / 2
+			dx, dy := b.X-a.X, b.Y-a.Y
 			if math.Hypot(dx, dy) < 14*0.8/math.Sqrt2*module {
 				continue
 			}
 			px, py := -dy, dx // perpendicular, same length
-			v := func(x, y float64) finderPattern {
-				return finderPattern{x: x, y: y, moduleSize: module}
+			v := func(x, y float64) FinderPattern {
+				return FinderPattern{X: x, Y: y, ModuleSize: module}
 			}
 			// a and b share an edge: either is the top-left corner.
-			for _, corner := range [2]finderPattern{a, b} {
+			for _, corner := range [2]FinderPattern{a, b} {
 				other := b
 				if corner == b {
 					other = a
 				}
 				for _, sgn := range [2]float64{1, -1} {
-					c := v(corner.x+sgn*px, corner.y+sgn*py)
+					c := v(corner.X+sgn*px, corner.Y+sgn*py)
 					tl, tr, bl := handed(corner, other, c)
 					try(tl, tr, bl, c)
 				}
 			}
 			// a and b are the top-right and bottom-left finders.
-			mx, my := (a.x+b.x)/2, (a.y+b.y)/2
+			mx, my := (a.X+b.X)/2, (a.Y+b.Y)/2
 			for _, sgn := range [2]float64{1, -1} {
 				c := v(mx+sgn*px/2, my+sgn*py/2)
 				tl, tr, bl := handed(c, a, b)

@@ -74,14 +74,15 @@ All renderers work from `Code.Module(x, y)` and the same `renderConfig`
 image ──► luminance ──► threshold ──► locate ──► fit grid ──► read modules ──► format/version ──► unmask ──► RS correct ──► segments
 ```
 
-1. **Luminance** (`decode.go`). Pixels are converted to 8-bit luminance,
+1. **Luminance** (`internal/detect/image.go`). Pixels are converted to 8-bit luminance,
    compositing transparency over white, with fast paths for the common image
    types. The luminance of gray images and the luma plane of JPEG's YCbCr
    images are used in place.
 2. **Fast path.** For crisp, axis-aligned images, an Otsu threshold
    separates dark from light, the bounding box of dark pixels gives the
    symbol, and the runs across the top-left finder give the module pitch.
-3. **Robust path** (`decode_locate.go`). A ZXing-style hybrid threshold
+3. **Robust path** (`internal/detect/locate.go`; the search over scales and
+   windows is `decode_search.go`). A ZXing-style hybrid threshold
    per 8×8 block against its neighborhood copes with shadows and low
    contrast; a block with no contrast of its own, such as the inside of a
    large module, takes the midpoint of the smallest surrounding window, in
@@ -94,7 +95,7 @@ image ──► luminance ──► threshold ──► locate ──► fit gri
    Module sizes are measured along the symbol's edges, not the image axes,
    so rotation does not distort them. For version 7 and up, the version
    information blocks near the finders give the exact size.
-4. **Structural fit** (`decode_fit.go`). Rays from each finder's center
+4. **Structural fit** (`internal/detect/fit.go`). Rays from each finder's center
    cross the edges of its three nested squares; lines fitted to the edges
    give twelve corners per finder whose module coordinates are known, and
    each finder's shape carries the local perspective. A homography is
@@ -118,7 +119,7 @@ image ──► luminance ──► threshold ──► locate ──► fit gri
    better. The grid is decoded once. Round finder styles, whose edges are
    not straight, fall back to a perspective transform anchored on the
    alignment pattern or the finder edges.
-5. **Module reading** (`decode_gray.go`). Each module's luminance is the
+5. **Module reading** (`internal/detect/gray.go`). Each module's luminance is the
    mean of nine samples over its center, bilinear for modules of three
    pixels or more, and it is dark when darker than the mean of a window of
    modules around it. The window is measured in modules, not pixels, so it
@@ -127,7 +128,7 @@ image ──► luminance ──► threshold ──► locate ──► fit gri
    their modules or more, the grid most likely sits on a symbol whose
    modules glare, blur or damage made hard to tell apart, and it is
    decoded again with soft decisions (`decode_soft.go`,
-   `decode_equalize.go`, *since v2.7*). The function patterns serve as
+   `internal/detect/equalize.go`, *since v2.7*). The function patterns serve as
    pilots, as in a radio receiver: their values are known, so they
    calibrate, over a window around each module, a model of the image,
    luminance = a + b·dark + c·(darkness of the neighbors), whose terms are

@@ -1,13 +1,11 @@
-package qr
+package detect
 
 import (
-	"context"
-	"errors"
 	"fmt"
-	"image"
 	"math"
 	"sort"
 
+	"github.com/piglig/go-qr/v2/internal/errs"
 	"github.com/piglig/go-qr/v2/internal/symbol"
 )
 
@@ -20,7 +18,7 @@ import (
 // patterns before anything is decoded.
 //
 // When the finders' edges cannot be measured, as with round finder styles,
-// the grid is sampled through a perspective transform whose fourth point is
+// the grid is sampled through a Perspective transform whose fourth point is
 // estimated instead, at most two ways, most precise first:
 //
 //  1. the bottom-right alignment pattern (version 2 and up), searched for
@@ -28,322 +26,55 @@ import (
 //  2. the intersection of the outer edges of the top-right and bottom-left
 //     finders, or, when those edges cannot be traced, the parallelogram
 //     completion of the three finder centers, which is exact without
-//     perspective.
+//     Perspective.
 //
 // This fallback is the scheme of ZXing and zxing-cpp.
 
-type finderPattern struct {
-	x, y       float64 // center in image space
-	moduleSize float64 // from horizontal and vertical runs
-	count      int     // number of merged horizontal hits (confidence)
+type FinderPattern struct {
+	X, Y       float64 // center in image space
+	ModuleSize float64 // from horizontal and vertical runs
+	Count      int     // number of merged horizontal hits (confidence)
 }
 
-// robustDecode locates symbols in a binarized image and passes candidate
-// module grids to read until one decodes. It returns the first error
-// otherwise.
-//
-// tm thresholds the image at 1/scale of its resolution, inverted for light
-// symbols on dark; the symbol is located there, and its modules are read
-// from the full-resolution luminance l (lw×lh pixels). With refine, set at
-// levels searched before full resolution, finders the level barely
-// resolves are located again in regions at full resolution.
-// It stops between regions when ctx, which may be nil, is done.
-func robustDecode(ctx context.Context, tm *thresholdMap, inverted bool, scale int, refine bool, l []uint8, lw, lh int, read gridReader) (*DecodeResult, error) {
-	s := newSymbolSearch(ctx, tm, inverted, scale, l, lw, lh, read)
-	triples, cands, err := findFindersStep(tm, inverted, darkIn(tm, inverted), s.step())
-	if err != nil && len(cands) < 2 {
-		return nil, err
-	}
-	// Finders that a coarse level barely resolves are located again at
-	// full resolution first: their fit at this level is too imprecise to
-	// read, and would try every other triple and inferred finder first.
-	if refine && scale > 1 {
-		var res *DecodeResult
-		rerr := s.eachRegion(triples, nil, func(r *DecodeResult) bool { res = r; return false })
-		if res != nil || errors.Is(rerr, ErrUnsupported) {
-			return res, rerr
-		}
-		if cerr := s.canceled(); cerr != nil {
-			return nil, cerr
-		}
-	}
-	return s.decodeTriples(triples, cands, err, true)
-}
-
-// eachRegion locates the symbols of the best triples whose finders a
-// coarse level barely resolves, again at full resolution, each within a
-// window of the image around it, and passes each symbol read to found
-// until it returns false. A coarse level detects a symbol whose modules
-// span a pixel or two there, but cannot locate it precisely enough to read
-// it; locating it again in a window costs the window's pixels instead of
-// the whole image's. Triples for which skip reports true are passed over;
-// after maxRegions windows without a symbol, or windows of searchPixels
-// without one, so are the rest: in texture, finders are found everywhere.
-func (s *symbolSearch) eachRegion(triples [][3]finderPattern, skip func([3]finderPattern) bool, found func(*DecodeResult) bool) error {
-	err := fmt.Errorf("%w: no symbol in the regions of the finders", ErrNotFound)
-	failed, budget := 0, searchPixels // pixels of regions without a symbol left
-	for _, t := range triples {
-		if failed == maxRegions {
-			break
-		}
-		if cerr := s.canceled(); cerr != nil {
-			return cerr
-		}
-		if skip != nil && skip(t) {
-			continue
-		}
-		r, ok := s.region(t)
-		if !ok || r.Dx()*r.Dy() > budget {
-			continue
-		}
-		crop := cropLuma(s.l, s.lw, r)
-		tm := hybridThresholds(crop, r.Dx(), r.Dy())
-		res, rerr := robustDecode(s.ctx, tm, s.inverted, 1, false, crop, r.Dx(), r.Dy(), s.read)
-		switch {
-		case rerr == nil:
-			for i := range res.Corners {
-				res.Corners[i] = res.Corners[i].Add(r.Min)
-			}
-			if res.centers != nil {
-				res.centers.shift(r.Min)
-			}
-			if !found(res) {
-				return nil
-			}
-		case errors.Is(rerr, ErrUnsupported):
-			return rerr
-		default:
-			err = rerr
-			failed++
-			budget -= r.Dx() * r.Dy()
-		}
-	}
-	return err
-}
-
-// region returns the window of the full-resolution image that holds the
-// symbol of finder triple t, found at s's level: the parallelogram the
-// finders span, whichever of them is the corner one, padded by half a
-// finder and the quiet zone. It reports false for finders too large to
-// need it, for finders too far apart to be one symbol's, and for windows
-// over maxRegionPixels.
-func (s *symbolSearch) region(t [3]finderPattern) (image.Rectangle, bool) {
-	module := max(t[0].moduleSize, t[1].moduleSize, t[2].moduleSize)
-	if module >= regionModule {
-		return image.Rectangle{}, false
-	}
-	// Finders whose spacing implies a symbol larger than version 40 are
-	// not one symbol's, as texture shows; perspective and module size
-	// estimates are allowed regionSlack.
-	spacing := max(dist(t[0], t[1]), dist(t[0], t[2]), dist(t[1], t[2]))
-	minModule := min(t[0].moduleSize, t[1].moduleSize, t[2].moduleSize)
-	if spacing/math.Sqrt2/minModule+7 > (4*MaxVersion+17)*regionSlack {
-		return image.Rectangle{}, false
-	}
-	minX, minY, maxX, maxY := math.Inf(1), math.Inf(1), math.Inf(-1), math.Inf(-1)
-	extend := func(x, y float64) {
-		minX, minY, maxX, maxY = min(minX, x), min(minY, y), max(maxX, x), max(maxY, y)
-	}
-	for i, c := range t {
-		a, b := t[(i+1)%3], t[(i+2)%3]
-		extend(c.x, c.y)
-		extend(a.x+b.x-c.x, a.y+b.y-c.y) // the fourth corner, if c is the corner finder
-	}
-	pad := regionPad * module
-	f := float64(s.scale)
-	r := image.Rect(int((minX-pad)*f), int((minY-pad)*f), int(math.Ceil((maxX+pad)*f)), int(math.Ceil((maxY+pad)*f)))
-	r = r.Intersect(image.Rect(0, 0, s.lw, s.lh))
-	if r.Dx() < 21 || r.Dy() < 21 || r.Dx()*r.Dy() > min(maxRegionPixels, s.lw*s.lh/4) {
-		return image.Rectangle{}, false
-	}
-	return r, true
-}
-
-// cropLuma copies the pixels of l, w pixels wide, within r.
-func cropLuma(l []uint8, w int, r image.Rectangle) []uint8 {
-	out := make([]uint8, r.Dx()*r.Dy())
-	for y := 0; y < r.Dy(); y++ {
-		copy(out[y*r.Dx():], l[(r.Min.Y+y)*w+r.Min.X:(r.Min.Y+y)*w+r.Max.X])
-	}
-	return out
-}
-
-// Coarse levels are located again in regions for finders of fewer than
-// regionModule pixels per module there, the regionPad modules around them
-// covering half a finder and the quiet zone, until maxRegions regions per
-// level hold no symbol.
-const (
-	regionModule = 3
-	regionPad    = 8
-	maxRegions   = 3
-)
-
-// A region holds at most maxRegionPixels, as two search levels would, and a
-// quarter of the image; a symbol that needs more has modules large enough
-// at its level to be read there. regionSlack is the margin on the size of
-// a symbol in a region.
-const (
-	maxRegionPixels = 2 * searchPixels
-	regionSlack     = 1.25
-)
-
-// symbolSearch locates and reads symbols at one scale and polarity.
-type symbolSearch struct {
-	ctx      context.Context // nil for none
-	tm       *thresholdMap
-	inverted bool
-	scale    int
-	l        []uint8 // full-resolution luminance, lw×lh
-	lw, lh   int
-	read     gridReader
-}
-
-func newSymbolSearch(ctx context.Context, tm *thresholdMap, inverted bool, scale int, l []uint8, lw, lh int, read gridReader) *symbolSearch {
-	return &symbolSearch{ctx: ctx, tm: tm, inverted: inverted, scale: scale, l: l, lw: lw, lh: lh, read: read}
-}
-
-// canceled returns the error of s's context once it is done.
-func (s *symbolSearch) canceled() error {
-	if s.ctx == nil {
-		return nil
-	}
-	return s.ctx.Err()
-}
-
-// darkIn returns whether each pixel of tm is dark for a symbol of the given
+// DarkIn returns whether each pixel of tm is dark for a symbol of the given
 // polarity; pixels outside tm are light. It is the innermost test of the
 // search, so it captures tm and inverted directly.
-func darkIn(tm *thresholdMap, inverted bool) func(x, y int) bool {
-	return func(x, y int) bool { return tm.dark(x, y) != inverted && x >= 0 && y >= 0 && x < tm.w && y < tm.h }
+func DarkIn(tm *ThresholdMap, inverted bool) func(x, y int) bool {
+	return func(x, y int) bool { return tm.Dark(x, y) != inverted && x >= 0 && y >= 0 && x < tm.W && y < tm.H }
 }
 
-// step returns how many rows apart the finder scan runs, by the pixels of
-// the level it scans: the levels coarser than full resolution are searched
-// first, and the half of a 12-megapixel photo has 3 megapixels.
-func (s *symbolSearch) step() int {
-	return finderRowStep(s.tm.w * s.tm.h)
-}
-
-// readGrid reads and decodes the dim×dim grid that p locates in tm's
-// pixels, and records where it lies at full resolution.
-func (s *symbolSearch) readGrid(p mapper, dim int) (*DecodeResult, error) {
-	if s.scale > 1 {
-		p = scaledMapper{p, float64(s.scale)}
-	}
-	res, err := readSoft(moduleLuma(s.l, s.lw, s.lh, p, dim), dim, s.inverted, s.read)
-	locate(res, p.apply, dim, s.inverted)
-	return res, err
-}
-
-// decodeTriples fits the finder triples, best first, and decodes the grid
-// of the best fit. cands, when not nil, are all finder candidates, from
-// which a lost finder may be inferred; firstErr is returned when nothing
-// could be fitted. When estimate is set and no fit could measure the
-// finders' corners, the grid is estimated from their centers instead.
-func (s *symbolSearch) decodeTriples(triples [][3]finderPattern, cands []finderPattern, firstErr error, estimate bool) (*DecodeResult, error) {
-	dark := darkIn(s.tm, s.inverted)
-	// Fit the best triple with the usual corner assignment. If its timing
-	// patterns do not read back well, the triple may be a false one or its
-	// top-left finder misjudged, which strong perspective causes: the other
-	// assignments and triples are fitted too, and one of them replaces the
-	// first only if its timing patterns read back well. Fitting costs a
-	// small fraction of a decode, and only one grid is decoded.
-	var (
-		model *gridModel
-		dim   int
-		score = -1.0
-		first *symbolGeometry
-	)
-search:
-	for ti, t := range triples {
-		for k := 0; k < 3; k++ {
-			if ti > 0 && k > 0 {
-				break // other assignments only for the strongest triple
-			}
-			g, err := newSymbolGeometryCorner(dark, t, k)
-			if err != nil {
-				if firstErr == nil {
-					firstErr = err
-				}
-				continue
-			}
-			if first == nil {
-				first = g
-			}
-			m, d, sc, ok := g.fitSymbol(dark)
-			if ok && (g == first || sc >= goodTimingScore && sc > score) {
-				model, dim, score = m, d, sc
-			}
-			if score >= goodTimingScore {
-				break search
-			}
-		}
-	}
-	// Structural completion: when no triple's timing patterns read back
-	// well, a finder may be unreadable, covered by glare, damage or the
-	// image edge. Pairs of well-supported finders imply the third, and the
-	// hypotheses are fitted and scored like real triples.
-	if score < goodTimingScore && len(cands) >= 2 {
-		if m, d, sc, ok := completeSymbol(dark, cands); ok && sc > score+completionMargin {
-			model, dim = m, d
-		}
-	}
-	if model != nil {
-		return s.readGrid(model, dim)
-	}
-	if first == nil || !estimate {
-		if firstErr == nil {
-			firstErr = fmt.Errorf("%w: finder corners not measured", ErrNotFound)
-		}
-		return nil, firstErr
-	}
-	// The finders' corners could not be measured, as with circular finder
-	// styles: estimate the fourth point instead.
-	g := first
-	for _, p := range g.transforms(dark) {
-		res, err := s.readGrid(p, g.dim)
-		if err == nil || errors.Is(err, ErrUnsupported) {
-			return res, err
-		}
-		if firstErr == nil {
-			firstErr = err
-		}
-	}
-	return nil, firstErr
-}
-
-// symbolGeometry is a symbol located by its three finder patterns.
-type symbolGeometry struct {
-	tl, tr, bl finderPattern
+// SymbolGeometry is a symbol located by its three finder patterns.
+type SymbolGeometry struct {
+	tl, tr, bl FinderPattern
 	// Unit vectors along the top (TL→TR) and left (TL→BL) edges.
 	cx, cy, rx, ry float64
 	// Module sizes of each finder along the top and left edge directions.
 	// Runs measured along the image axes overestimate the module size by up
 	// to √2 in a rotated symbol, so they are not used for geometry.
 	tlC, tlR, trC, trR, blC, blR float64
-	dim                          int
+	Dim                          int
 	// virtual is 1 + the index (top-left, top-right, bottom-left) of a
 	// finder that was inferred from the other two rather than seen, or 0.
 	virtual int
 }
 
-// completionMargin is how much better an inferred finder's fit must read
+// CompletionMargin is how much better an inferred finder's fit must read
 // back to replace a fit of seen finders: a triple that reads back almost as
 // well usually decodes, and a hypothesis can match by chance.
-const completionMargin = 0.1
+const CompletionMargin = 0.1
 
-// goodTimingScore is the timing pattern agreement at which a fit is accepted
+// GoodTimingScore is the timing pattern agreement at which a fit is accepted
 // without trying other finder assignments.
-const goodTimingScore = 0.9
+const GoodTimingScore = 0.9
 
-func newSymbolGeometry(dark func(x, y int) bool, t [3]finderPattern) (*symbolGeometry, error) {
-	return newSymbolGeometryCorner(dark, t, 0)
+func NewSymbolGeometry(dark func(x, y int) bool, t [3]FinderPattern) (*SymbolGeometry, error) {
+	return NewSymbolGeometryCorner(dark, t, 0)
 }
 
-// newSymbolGeometryCorner locates a symbol from a finder triple. k selects
+// NewSymbolGeometryCorner locates a symbol from a finder triple. k selects
 // the top-left finder: 0 is the vertex of the right angle as orderFinders
 // judges it, 1 and 2 the other two candidates.
-func newSymbolGeometryCorner(dark func(x, y int) bool, t [3]finderPattern, k int) (*symbolGeometry, error) {
+func NewSymbolGeometryCorner(dark func(x, y int) bool, t [3]FinderPattern, k int) (*SymbolGeometry, error) {
 	tl, tr, bl := orderFinders(t[:])
 	switch k {
 	case 1:
@@ -351,22 +82,22 @@ func newSymbolGeometryCorner(dark func(x, y int) bool, t [3]finderPattern, k int
 	case 2:
 		tl, tr, bl = handed(bl, tl, tr)
 	}
-	return newSymbolGeometryOrdered(dark, tl, tr, bl, 0)
+	return NewSymbolGeometryOrdered(dark, tl, tr, bl, 0)
 }
 
-// newSymbolGeometryOrdered locates a symbol from its top-left, top-right and
+// NewSymbolGeometryOrdered locates a symbol from its top-left, top-right and
 // bottom-left finders; virtual marks one of them as inferred, as in
-// symbolGeometry.
-func newSymbolGeometryOrdered(dark func(x, y int) bool, tl, tr, bl finderPattern, virtual int) (*symbolGeometry, error) {
+// SymbolGeometry.
+func NewSymbolGeometryOrdered(dark func(x, y int) bool, tl, tr, bl FinderPattern, virtual int) (*SymbolGeometry, error) {
 	// Most triples tried are rejected, so g is copied to the heap only
 	// once it is accepted, and the errors are not formatted.
-	g := symbolGeometry{tl: tl, tr: tr, bl: bl, virtual: virtual}
-	top, left := dist(tl, tr), dist(tl, bl)
+	g := SymbolGeometry{tl: tl, tr: tr, bl: bl, virtual: virtual}
+	top, left := Dist(tl, tr), Dist(tl, bl)
 	if top == 0 || left == 0 {
 		return nil, errDegenerateTriple
 	}
-	g.cx, g.cy = (tr.x-tl.x)/top, (tr.y-tl.y)/top
-	g.rx, g.ry = (bl.x-tl.x)/left, (bl.y-tl.y)/left
+	g.cx, g.cy = (tr.X-tl.X)/top, (tr.Y-tl.Y)/top
+	g.rx, g.ry = (bl.X-tl.X)/left, (bl.Y-tl.Y)/left
 	g.tlC = finderModuleAlong(dark, tl, g.cx, g.cy)
 	g.trC = finderModuleAlong(dark, tr, g.cx, g.cy)
 	g.blC = finderModuleAlong(dark, bl, g.cx, g.cy)
@@ -384,40 +115,40 @@ func newSymbolGeometryOrdered(dark func(x, y int) bool, tl, tr, bl finderPattern
 		g.blC, g.blR = g.tlC, g.tlR
 	}
 
-	// Finder centers span size-7 modules along each edge. Under perspective
+	// Finder centers span size-7 modules along each edge. Under Perspective
 	// the module size varies along the edge; the mean of the two ends is a
 	// good estimate of the mean over it.
 	raw := (top/((g.tlC+g.trC)/2) + left/((g.tlR+g.blR)/2)) / 2
 	ver := int(math.Round((raw + 7 - 17) / 4))
-	if ver < MinVersion || ver > MaxVersion {
+	if ver < symbol.MinVersion || ver > symbol.MaxVersion {
 		return nil, errTripleVersion
 	}
 	// From version 7 on, the version information next to the top-right and
 	// bottom-left finders gives the exact size; the estimate from finder
-	// spacing can be off by a version under perspective or blur.
+	// spacing can be off by a version under Perspective or blur.
 	if ver >= 7 {
-		if v, ok := g.readVersion(dark); ok {
+		if v, ok := g.ReadVersion(dark); ok {
 			ver = v
 		}
 	}
-	g.dim = 4*ver + 17
+	g.Dim = 4*ver + 17
 	accepted := g
 	return &accepted, nil
 }
 
 var (
-	errDegenerateTriple = fmt.Errorf("%w: degenerate finder triple", ErrNotFound)
-	errTripleVersion    = fmt.Errorf("%w: finder spacing maps to no version", ErrNotFound)
+	errDegenerateTriple = fmt.Errorf("%w: degenerate finder triple", errs.ErrNotFound)
+	errTripleVersion    = fmt.Errorf("%w: finder spacing maps to no version", errs.ErrNotFound)
 )
 
 // finderModuleAlong measures a finder's module size along the unit direction
 // (dx, dy) from the extent of its 7-module width through the center. It
 // falls back to the axis-run estimate when the edges cannot be traced.
-func finderModuleAlong(dark func(x, y int) bool, f finderPattern, dx, dy float64) float64 {
+func finderModuleAlong(dark func(x, y int) bool, f FinderPattern, dx, dy float64) float64 {
 	a, okA := halfFinderLength(dark, f, dx, dy)
 	b, okB := halfFinderLength(dark, f, -dx, -dy)
 	if !okA || !okB {
-		return f.moduleSize
+		return f.ModuleSize
 	}
 	return (a + b) / 7
 }
@@ -425,14 +156,14 @@ func finderModuleAlong(dark func(x, y int) bool, f finderPattern, dx, dy float64
 // halfFinderLength walks from a finder's center along (dx, dy) across the
 // dark center, the light ring and the dark ring, and returns the distance to
 // the outer edge: 3.5 modules.
-func halfFinderLength(dark func(x, y int) bool, f finderPattern, dx, dy float64) (float64, bool) {
+func halfFinderLength(dark func(x, y int) bool, f FinderPattern, dx, dy float64) (float64, bool) {
 	// Step one pixel along the major axis, as a line rasterizer would.
 	step := 1 / math.Max(math.Abs(dx), math.Abs(dy))
 	ux, uy := dx*step, dy*step
-	limit := int(8 * f.moduleSize * math.Sqrt2)
+	limit := int(8 * f.ModuleSize * math.Sqrt2)
 	state := 0 // 0 dark center, 1 light ring, 2 dark ring
 	for i := 1; i <= limit; i++ {
-		d := dark(int(math.Floor(f.x+ux*float64(i))), int(math.Floor(f.y+uy*float64(i))))
+		d := dark(int(math.Floor(f.X+ux*float64(i))), int(math.Floor(f.Y+uy*float64(i))))
 		switch {
 		case state == 0 && !d, state == 1 && d:
 			state++
@@ -445,29 +176,29 @@ func halfFinderLength(dark func(x, y int) bool, f finderPattern, dx, dy float64)
 
 // affine returns the image position of module coordinates (u, v) under the
 // affine transform the finder centers define.
-func (g *symbolGeometry) affine(u, v float64) (float64, float64) {
-	span := float64(g.dim - 7)
+func (g *SymbolGeometry) affine(u, v float64) (float64, float64) {
+	span := float64(g.Dim - 7)
 	su, sv := (u-3.5)/span, (v-3.5)/span
-	return g.tl.x + su*(g.tr.x-g.tl.x) + sv*(g.bl.x-g.tl.x),
-		g.tl.y + su*(g.tr.y-g.tl.y) + sv*(g.bl.y-g.tl.y)
+	return g.tl.X + su*(g.tr.X-g.tl.X) + sv*(g.bl.X-g.tl.X),
+		g.tl.Y + su*(g.tr.Y-g.tl.Y) + sv*(g.bl.Y-g.tl.Y)
 }
 
-// transforms returns the candidate module-to-image transforms, most precise
+// Transforms returns the candidate module-to-image Transforms, most precise
 // first: at most two.
-func (g *symbolGeometry) transforms(dark func(x, y int) bool) []perspective {
-	d := float64(g.dim)
-	finders := func(u4, v4, x4, y4 float64) (perspective, bool) {
-		return quadToQuad(
+func (g *SymbolGeometry) Transforms(dark func(x, y int) bool) []Perspective {
+	d := float64(g.Dim)
+	finders := func(u4, v4, x4, y4 float64) (Perspective, bool) {
+		return QuadToQuad(
 			[4][2]float64{{3.5, 3.5}, {d - 3.5, 3.5}, {u4, v4}, {3.5, d - 3.5}},
-			[4][2]float64{{g.tl.x, g.tl.y}, {g.tr.x, g.tr.y}, {x4, y4}, {g.bl.x, g.bl.y}},
+			[4][2]float64{{g.tl.X, g.tl.Y}, {g.tr.X, g.tr.Y}, {x4, y4}, {g.bl.X, g.bl.Y}},
 		)
 	}
-	var out []perspective
+	var out []Perspective
 
 	px, py := g.affine(d-3.5, d-3.5)
 	parallelogram, okP := finders(d-3.5, d-3.5, px, py)
 
-	var edge perspective
+	var edge Perspective
 	okE := false
 	if x, y, ok := g.edgeCorner(dark); ok {
 		// Reject corners far from the parallelogram estimate: a traced edge
@@ -475,12 +206,12 @@ func (g *symbolGeometry) transforms(dark func(x, y int) bool) []perspective {
 		// a fair fraction of the symbol, so the bound is loose; a corner
 		// that is wrong but within it fails to decode, it does not misread.
 		ax, ay := g.affine(d, d)
-		if math.Hypot(x-ax, y-ay) < 0.5*float64(g.dim)*(g.trC+g.blR)/2 {
+		if math.Hypot(x-ax, y-ay) < 0.5*float64(g.Dim)*(g.trC+g.blR)/2 {
 			edge, okE = finders(d, d, x, y)
 		}
 	}
 
-	if g.dim > 21 {
+	if g.Dim > 21 {
 		guess := parallelogram
 		if okE {
 			guess = edge
@@ -505,7 +236,7 @@ func (g *symbolGeometry) transforms(dark func(x, y int) bool) []perspective {
 // edgeCorner estimates the outer bottom-right corner of the symbol as the
 // intersection of the right edge of the top-right finder and the bottom
 // edge of the bottom-left finder.
-func (g *symbolGeometry) edgeCorner(dark func(x, y int) bool) (float64, float64, bool) {
+func (g *SymbolGeometry) edgeCorner(dark func(x, y int) bool) (float64, float64, bool) {
 	right, ok := traceFinderEdge(dark, g.tr, g.cx, g.cy, g.trC, g.rx, g.ry, g.trR)
 	if !ok {
 		return 0, 0, false
@@ -522,12 +253,12 @@ func (g *symbolGeometry) edgeCorner(dark func(x, y int) bool) (float64, float64,
 // spread along the edge direction (ex, ey) and walks outward to the first
 // light pixel. nm and em are the finder's module sizes along the two
 // directions.
-func traceFinderEdge(dark func(x, y int) bool, f finderPattern, nx, ny, nm, ex, ey, em float64) (line, bool) {
+func traceFinderEdge(dark func(x, y int) bool, f FinderPattern, nx, ny, nm, ex, ey, em float64) (line, bool) {
 	var pts [][2]float64
 	const step = 0.25
 	for s := -2.5; s <= 2.5; s += 0.5 {
-		x := f.x + 3*nm*nx + s*em*ex
-		y := f.y + 3*nm*ny + s*em*ey
+		x := f.X + 3*nm*nx + s*em*ex
+		y := f.Y + 3*nm*ny + s*em*ey
 		if !dark(int(math.Floor(x)), int(math.Floor(y))) {
 			continue
 		}
@@ -547,10 +278,10 @@ func traceFinderEdge(dark func(x, y int) bool, f finderPattern, nx, ny, nm, ex, 
 
 // findAlignment searches for the alignment pattern centered at module
 // (c, c) near where guess maps it, in windows of 4, 8 and 16 modules.
-func findAlignment(dark func(x, y int) bool, guess perspective, c float64) (float64, float64, bool) {
-	ex, ey := guess.apply(c, c)
-	x1, y1 := guess.apply(c+1, c)
-	x2, y2 := guess.apply(c, c+1)
+func findAlignment(dark func(x, y int) bool, guess Perspective, c float64) (float64, float64, bool) {
+	ex, ey := guess.Apply(c, c)
+	x1, y1 := guess.Apply(c+1, c)
+	x2, y2 := guess.Apply(c, c+1)
 	return searchAlignment(dark, ex, ey, x1-ex, y1-ey, x2-ex, y2-ey, []float64{4, 8, 16})
 }
 
@@ -654,40 +385,40 @@ func refineAlignment(dark func(x, y int) bool, x, y, ux, uy, vx, vy float64) (fl
 	return x, y
 }
 
-// mapper maps module coordinates to image coordinates.
-type mapper interface {
-	apply(u, v float64) (float64, float64)
+// Mapper maps module coordinates to image coordinates.
+type Mapper interface {
+	Apply(u, v float64) (float64, float64)
 }
 
-// scaledMapper maps through m, then scales image coordinates by f: from a
+// ScaledMapper maps through m, then scales image coordinates by f: from a
 // downsampled image, where pixel i covers [i·f, (i+1)·f) of the original,
 // to the original.
-type scaledMapper struct {
-	m mapper
-	f float64
+type ScaledMapper struct {
+	Mapper Mapper
+	Scale  float64
 }
 
-func (s scaledMapper) apply(u, v float64) (float64, float64) {
-	x, y := s.m.apply(u, v)
-	return x * s.f, y * s.f
+func (s ScaledMapper) Apply(u, v float64) (float64, float64) {
+	x, y := s.Mapper.Apply(u, v)
+	return x * s.Scale, y * s.Scale
 }
 
-// findFinders scans for finder patterns and returns up to maxFinderTriples
+// FindFinders scans for finder patterns and returns up to maxFinderTriples
 // triples that best fit one symbol, best first. The row scan reads bm
 // directly; dark (bounds-checked) serves the cross checks.
-func findFinders(tm *thresholdMap, inverted bool, dark func(x, y int) bool) ([][3]finderPattern, error) {
-	triples, _, err := findFindersStep(tm, inverted, dark, 1)
+func FindFinders(tm *ThresholdMap, inverted bool, dark func(x, y int) bool) ([][3]FinderPattern, error) {
+	triples, _, err := FindFindersStep(tm, inverted, dark, 1)
 	return triples, err
 }
 
-// finderRowStep returns how many rows apart the finder scan runs in an image
+// FinderRowStep returns how many rows apart the finder scan runs in an image
 // of px pixels. A finder's center block is three modules tall, so every
 // third row still crosses it at 1.5 pixels per module, but foreshortening
 // and tiny modules leave few rows to spare. Scanning costs grow with the
 // image, so small images, which are cheap, are scanned on every row; large
 // photos, whose symbols are rarely that small, every second or third. The
 // coarser scales of the search are small and scanned on every row.
-func finderRowStep(px int) int {
+func FinderRowStep(px int) int {
 	switch {
 	case px >= 4_000_000:
 		return 3
@@ -697,25 +428,25 @@ func finderRowStep(px int) int {
 	return 1
 }
 
-// findFindersStep is findFinders scanning every step-th row; each hit then
+// FindFindersStep is FindFinders scanning every step-th row; each hit then
 // counts for step rows in a candidate's support. It also returns every
 // candidate found.
-func findFindersStep(tm *thresholdMap, inverted bool, dark func(x, y int) bool, step int) ([][3]finderPattern, []finderPattern, error) {
-	h := tm.h
-	idx := finderIndex{w: tm.w, h: tm.h}
+func FindFindersStep(tm *ThresholdMap, inverted bool, dark func(x, y int) bool, step int) ([][3]FinderPattern, []FinderPattern, error) {
+	h := tm.H
+	idx := finderIndex{w: tm.W, h: tm.H}
 
 	add := func(cx, cy, module float64) {
 		if i := idx.find(cx, cy, module); i >= 0 {
 			c := idx.cands[i]
-			n := float64(c.count)
-			c.x = (c.x*n + cx) / (n + 1)
-			c.y = (c.y*n + cy) / (n + 1)
-			c.moduleSize = (c.moduleSize*n + module) / (n + 1)
-			c.count += step
+			n := float64(c.Count)
+			c.X = (c.X*n + cx) / (n + 1)
+			c.Y = (c.Y*n + cy) / (n + 1)
+			c.ModuleSize = (c.ModuleSize*n + module) / (n + 1)
+			c.Count += step
 			idx.set(i, c)
 			return
 		}
-		idx.append(finderPattern{x: cx, y: cy, moduleSize: module, count: step})
+		idx.append(FinderPattern{X: cx, Y: cy, ModuleSize: module, Count: step})
 	}
 
 	// Each scanned row is read as runs of one class, and every five runs
@@ -753,7 +484,7 @@ func findFindersStep(tm *thresholdMap, inverted bool, dark func(x, y int) bool, 
 	}
 
 	cands := idx.cands
-	triples, err := selectFinders(append([]finderPattern(nil), cands...))
+	triples, err := SelectFinders(append([]FinderPattern(nil), cands...))
 	return triples, cands, err
 }
 
@@ -771,7 +502,7 @@ const finderIndexCell = 16
 // candidates are also bucketed in a grid of finderIndexCell-pixel cells.
 type finderIndex struct {
 	w, h   int
-	cands  []finderPattern
+	cands  []FinderPattern
 	gw, gh int
 	head   []int32 // first candidate in each cell, or -1
 	next   []int32 // next candidate in the same cell, or -1
@@ -781,7 +512,7 @@ type finderIndex struct {
 // on both axes, or -1.
 func (f *finderIndex) find(cx, cy, module float64) int {
 	near := func(i int) bool {
-		return math.Abs(f.cands[i].x-cx) < module && math.Abs(f.cands[i].y-cy) < module
+		return math.Abs(f.cands[i].X-cx) < module && math.Abs(f.cands[i].Y-cy) < module
 	}
 	if f.head == nil {
 		for i := range f.cands {
@@ -809,7 +540,7 @@ func (f *finderIndex) find(cx, cy, module float64) int {
 }
 
 // append adds a candidate, building the grid once there are enough.
-func (f *finderIndex) append(c finderPattern) {
+func (f *finderIndex) append(c FinderPattern) {
 	f.cands = append(f.cands, c)
 	if f.head != nil {
 		f.link(len(f.cands) - 1)
@@ -830,7 +561,7 @@ func (f *finderIndex) append(c finderPattern) {
 }
 
 // set replaces candidate i, moving it to the cell of its new position.
-func (f *finderIndex) set(i int, c finderPattern) {
+func (f *finderIndex) set(i int, c FinderPattern) {
 	if f.head == nil {
 		f.cands[i] = c
 		return
@@ -859,7 +590,7 @@ func (f *finderIndex) link(i int) {
 }
 
 func (f *finderIndex) cellOf(i int) int {
-	return f.cell(f.cands[i].y, f.gh)*f.gw + f.cell(f.cands[i].x, f.gw)
+	return f.cell(f.cands[i].Y, f.gh)*f.gw + f.cell(f.cands[i].X, f.gw)
 }
 
 // cell returns the cell of image coordinate v, clamped to [0, n). Clamping
@@ -878,36 +609,36 @@ func (f *finderIndex) cell(v float64, n int) int {
 // maxFinderTriples bounds how many finder triples are fitted per image.
 const maxFinderTriples = 3
 
-// selectFinders returns up to maxFinderTriples candidate triples that look
+// SelectFinders returns up to maxFinderTriples candidate triples that look
 // most like the finders of one symbol, best first: similar module sizes,
 // placed at the corners of a roughly right isosceles triangle at least 14
 // modules on a side. Data modules can mimic the 1:1:3:1:1 pattern, and the
 // strongest candidates alone are not reliable in large symbols.
-func selectFinders(cands []finderPattern) ([][3]finderPattern, error) {
+func SelectFinders(cands []FinderPattern) ([][3]FinderPattern, error) {
 	if len(cands) < 3 {
-		return nil, fmt.Errorf("%w: found %d finder patterns", ErrNotFound, len(cands))
+		return nil, fmt.Errorf("%w: found %d finder patterns", errs.ErrNotFound, len(cands))
 	}
-	sort.Slice(cands, func(i, j int) bool { return cands[i].count > cands[j].count })
+	sort.Slice(cands, func(i, j int) bool { return cands[i].Count > cands[j].Count })
 	if len(cands) > maxFinderCandidates {
 		cands = cands[:maxFinderCandidates]
 	}
 
 	type scored struct {
-		t     [3]finderPattern
+		t     [3]FinderPattern
 		score float64
 	}
 	var best []scored
 	for i := 0; i < len(cands); i++ {
 		for j := i + 1; j < len(cands); j++ {
 			for k := j + 1; k < len(cands); k++ {
-				s := finderTripleScore(cands[i], cands[j], cands[k])
+				s := FinderTripleScore(cands[i], cands[j], cands[k])
 				if math.IsInf(s, 1) || len(best) == maxFinderTriples && s >= best[len(best)-1].score {
 					continue
 				}
 				n := sort.Search(len(best), func(x int) bool { return best[x].score > s })
 				best = append(best, scored{})
 				copy(best[n+1:], best[n:])
-				best[n] = scored{[3]finderPattern{cands[i], cands[j], cands[k]}, s}
+				best[n] = scored{[3]FinderPattern{cands[i], cands[j], cands[k]}, s}
 				if len(best) > maxFinderTriples {
 					best = best[:maxFinderTriples]
 				}
@@ -915,9 +646,9 @@ func selectFinders(cands []finderPattern) ([][3]finderPattern, error) {
 		}
 	}
 	if len(best) == 0 {
-		return nil, fmt.Errorf("%w: no three finder patterns form a symbol", ErrNotFound)
+		return nil, fmt.Errorf("%w: no three finder patterns form a symbol", errs.ErrNotFound)
 	}
-	out := make([][3]finderPattern, len(best))
+	out := make([][3]FinderPattern, len(best))
 	for i, b := range best {
 		out[i] = b.t
 	}
@@ -927,24 +658,24 @@ func selectFinders(cands []finderPattern) ([][3]finderPattern, error) {
 // maxFinderCandidates bounds the O(n³) triple search.
 const maxFinderCandidates = 16
 
-// finderTripleScore rates how well three candidates fit one symbol; lower is
+// FinderTripleScore rates how well three candidates fit one symbol; lower is
 // better and +Inf rejects the triple.
-func finderTripleScore(a, b, c finderPattern) float64 {
-	lo := min(a.moduleSize, b.moduleSize, c.moduleSize)
-	hi := max(a.moduleSize, b.moduleSize, c.moduleSize)
+func FinderTripleScore(a, b, c FinderPattern) float64 {
+	lo := min(a.ModuleSize, b.ModuleSize, c.ModuleSize)
+	hi := max(a.ModuleSize, b.ModuleSize, c.ModuleSize)
 	// Perspective makes the nearer finders larger and the triangle less
 	// regular; the tolerances allow about 50 degrees of tilt, and the
 	// triple is verified by decoding it.
 	if hi > 2*lo {
 		return math.Inf(1)
 	}
-	d := []float64{dist(a, b), dist(b, c), dist(a, c)}
+	d := []float64{Dist(a, b), Dist(b, c), Dist(a, c)}
 	sort.Float64s(d)
 	leg1, leg2, hyp := d[0], d[1], d[2]
-	module := (a.moduleSize + b.moduleSize + c.moduleSize) / 3
+	module := (a.ModuleSize + b.ModuleSize + c.ModuleSize) / 3
 	// module comes from axis-aligned runs, which overestimate it by up to √2
 	// in a rotated symbol.
-	if legModules := leg1 / module; legModules < 14*0.8/math.Sqrt2 || legModules > (4*MaxVersion+10)*1.2 {
+	if legModules := leg1 / module; legModules < 14*0.8/math.Sqrt2 || legModules > (4*symbol.MaxVersion+10)*1.2 {
 		return math.Inf(1)
 	}
 	isosceles := (leg2 - leg1) / leg2
@@ -955,10 +686,10 @@ func finderTripleScore(a, b, c finderPattern) float64 {
 	// A finder's center block is three modules tall, so the row scan hits a
 	// real finder on about three times its module size in rows; data that
 	// happens to read 1:1:3:1:1 on a row or two is penalized up to 1, more
-	// than any shape term, since perspective distorts shapes but not this.
+	// than any shape term, since Perspective distorts shapes but not this.
 	support := 0.0
-	for _, f := range [3]finderPattern{a, b, c} {
-		support = math.Max(support, 1-math.Min(1, float64(f.count)/(1.5*f.moduleSize)))
+	for _, f := range [3]FinderPattern{a, b, c} {
+		support = math.Max(support, 1-math.Min(1, float64(f.Count)/(1.5*f.ModuleSize)))
 	}
 	return isosceles + right + (hi-lo)/hi + support
 }
@@ -1055,13 +786,13 @@ func crossCheck(dark func(x, y int) bool, cx, cy, dx, dy, maxCount, originalTota
 // orderFinders identifies which of the three patterns is top-left, top-right,
 // and bottom-left. The top-left is the vertex of the right angle (opposite the
 // longest edge); handedness picks TR vs BL.
-func orderFinders(p []finderPattern) (tl, tr, bl finderPattern) {
-	d01 := dist(p[0], p[1])
-	d12 := dist(p[1], p[2])
-	d02 := dist(p[0], p[2])
+func orderFinders(p []FinderPattern) (tl, tr, bl FinderPattern) {
+	d01 := Dist(p[0], p[1])
+	d12 := Dist(p[1], p[2])
+	d02 := Dist(p[0], p[2])
 
 	// vertex = point not on the longest (hypotenuse) edge
-	var a, c finderPattern
+	var a, c FinderPattern
 	switch {
 	case d12 >= d01 && d12 >= d02:
 		tl, a, c = p[0], p[1], p[2]
@@ -1073,7 +804,7 @@ func orderFinders(p []finderPattern) (tl, tr, bl finderPattern) {
 
 	// cross product (a-tl) x (c-tl); in image (y-down) coords a positive cross
 	// means a is to the right (top-right) and c is below (bottom-left).
-	cross := (a.x-tl.x)*(c.y-tl.y) - (a.y-tl.y)*(c.x-tl.x)
+	cross := (a.X-tl.X)*(c.Y-tl.Y) - (a.Y-tl.Y)*(c.X-tl.X)
 	if cross >= 0 {
 		tr, bl = a, c
 	} else {
@@ -1084,29 +815,29 @@ func orderFinders(p []finderPattern) (tl, tr, bl finderPattern) {
 
 // handed returns tl with the other two ordered as top-right and bottom-left
 // by the sign of their cross product, as orderFinders does.
-func handed(tl, a, c finderPattern) (finderPattern, finderPattern, finderPattern) {
-	if (a.x-tl.x)*(c.y-tl.y)-(a.y-tl.y)*(c.x-tl.x) >= 0 {
+func handed(tl, a, c FinderPattern) (FinderPattern, FinderPattern, FinderPattern) {
+	if (a.X-tl.X)*(c.Y-tl.Y)-(a.Y-tl.Y)*(c.X-tl.X) >= 0 {
 		return tl, a, c
 	}
 	return tl, c, a
 }
 
-func dist(a, b finderPattern) float64 {
-	dx := a.x - b.x
-	dy := a.y - b.y
+func Dist(a, b FinderPattern) float64 {
+	dx := a.X - b.X
+	dy := a.Y - b.Y
 	return math.Sqrt(dx*dx + dy*dy)
 }
 
-// readVersion reads the two 18-bit version information blocks by sampling
+// ReadVersion reads the two 18-bit version information blocks by sampling
 // relative to the finder beside each one, using that finder's module sizes,
 // so the result does not depend on the estimated dimension. It returns the
 // first block that BCH-corrects to a valid version.
-func (g *symbolGeometry) readVersion(dark func(x, y int) bool) (int, bool) {
-	sample := func(f finderPattern, cm, rm float64, du, dv func(i int) float64) int {
+func (g *SymbolGeometry) ReadVersion(dark func(x, y int) bool) (int, bool) {
+	sample := func(f FinderPattern, cm, rm float64, du, dv func(i int) float64) int {
 		bits := 0
 		for i := 0; i < 18; i++ {
-			px := f.x + du(i)*cm*g.cx + dv(i)*rm*g.rx
-			py := f.y + du(i)*cm*g.cy + dv(i)*rm*g.ry
+			px := f.X + du(i)*cm*g.cx + dv(i)*rm*g.rx
+			py := f.Y + du(i)*cm*g.cy + dv(i)*rm*g.ry
 			if dark(int(math.Floor(px)), int(math.Floor(py))) {
 				bits |= 1 << i
 			}

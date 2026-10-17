@@ -21,6 +21,7 @@ what a change needs before it can be merged.
 | `/` | `github.com/piglig/go-qr/v2` | The library. No dependencies outside the standard library. |
 | `payload/` | same | Structured payload builders and parser. |
 | `internal/symbol/` | same | The structure of a symbol that the encoder and decoder share: capacity tables, function patterns, codeword placement, masks, format and version information, and reading a module grid back into codewords. |
+| `internal/detect/` | same | Image analysis for the decoder: luminance and thresholds, the scale pyramid, finder detection, fitting the module grid, and reading module values. |
 | `internal/reedsolomon/` | same | GF(2⁸) Reed–Solomon encoding and correction. |
 | `internal/errs/` | same | The sentinel errors, which the root package re-exports. |
 | `tools/` | `github.com/piglig/go-qr/tools` | The `generator` CLI, `verify` helpers and the `bench` comparisons with other libraries. |

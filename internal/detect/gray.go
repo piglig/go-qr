@@ -1,4 +1,4 @@
-package qr
+package detect
 
 import "math"
 
@@ -20,14 +20,14 @@ import "math"
 //     mean tracks the local midpoint between dark and light under uneven
 //     lighting, at any scale.
 
-// moduleLuma returns the mean luminance of each module of a dim×dim grid
+// ModuleLuma returns the mean luminance of each module of a dim×dim grid
 // located by p, row-major.
-func moduleLuma(l []uint8, w, h int, p mapper, dim int) []float64 {
+func ModuleLuma(l []uint8, w, h int, p Mapper, dim int) []float64 {
 	// Interpolation averages out sensor and compression noise in large
 	// modules, but blends neighbors into modules of a pixel or two.
 	c := float64(dim) / 2
-	x0, y0 := p.apply(c, c)
-	x1, y1 := p.apply(c+1, c)
+	x0, y0 := p.Apply(c, c)
+	x1, y1 := p.Apply(c+1, c)
 	nearest := math.Hypot(x1-x0, y1-y0) < nearestBelow
 	vals := make([]float64, dim*dim)
 	offsets := [3]float64{0.35, 0.5, 0.65}
@@ -36,12 +36,12 @@ func moduleLuma(l []uint8, w, h int, p mapper, dim int) []float64 {
 			s := 0.0
 			for _, ov := range offsets {
 				for _, ou := range offsets {
-					x, y := p.apply(float64(c)+ou, float64(r)+ov)
+					x, y := p.Apply(float64(c)+ou, float64(r)+ov)
 					if nearest {
 						xi, yi := min(max(int(math.Floor(x)), 0), w-1), min(max(int(math.Floor(y)), 0), h-1)
 						s += float64(l[yi*w+xi])
 					} else {
-						s += lumaAt(l, w, h, x, y)
+						s += LumaAt(l, w, h, x, y)
 					}
 				}
 			}
@@ -55,9 +55,9 @@ func moduleLuma(l []uint8, w, h int, p mapper, dim int) []float64 {
 // sampled at the nearest pixel rather than interpolated.
 const nearestBelow = 3
 
-// lumaAt samples luminance bilinearly at image coordinates (x, y), clamping
+// LumaAt samples luminance bilinearly at image coordinates (x, y), clamping
 // to the image.
-func lumaAt(l []uint8, w, h int, x, y float64) float64 {
+func LumaAt(l []uint8, w, h int, x, y float64) float64 {
 	x -= 0.5
 	y -= 0.5
 	fx0, fy0 := math.Floor(x), math.Floor(y)
@@ -70,9 +70,9 @@ func lumaAt(l []uint8, w, h int, x, y float64) float64 {
 	return (a*(1-fx)+b*fx)*(1-fy) + (c*(1-fx)+d*fx)*fy
 }
 
-// thresholdModules classifies module luminances against the mean of a
+// ThresholdModules classifies module luminances against the mean of a
 // window of modules around each one. inverted reads light modules as dark.
-func thresholdModules(vals []float64, dim int, inverted bool) [][]bool {
+func ThresholdModules(vals []float64, dim int, inverted bool) [][]bool {
 	// Summed-area table over the module grid.
 	n := dim + 1
 	sat := make([]float64, n*n)
@@ -99,14 +99,14 @@ func thresholdModules(vals []float64, dim int, inverted bool) [][]bool {
 	return modules
 }
 
-// moduleWindows gives the mean luminance of the window of modules around
+// ModuleWindows gives the mean luminance of the window of modules around
 // each module of a dim×dim grid, through a summed-area table.
-type moduleWindows struct {
+type ModuleWindows struct {
 	sat         []float64
 	dim, radius int
 }
 
-func newModuleWindows(vals []float64, dim int) moduleWindows {
+func NewModuleWindows(vals []float64, dim int) ModuleWindows {
 	n := dim + 1
 	sat := make([]float64, n*n)
 	for r := 0; r < dim; r++ {
@@ -116,16 +116,16 @@ func newModuleWindows(vals []float64, dim int) moduleWindows {
 			sat[(r+1)*n+c+1] = sat[r*n+c+1] + row
 		}
 	}
-	return moduleWindows{sat, dim, max(moduleWindowMin, dim/8)}
+	return ModuleWindows{sat, dim, max(moduleWindowMin, dim/8)}
 }
 
 // bounds returns the window around module (r, c), rows r0 to r1-1 and
 // columns c0 to c1-1.
-func (w moduleWindows) bounds(r, c int) (r0, c0, r1, c1 int) {
+func (w ModuleWindows) bounds(r, c int) (r0, c0, r1, c1 int) {
 	return max(0, r-w.radius), max(0, c-w.radius), min(w.dim, r+w.radius+1), min(w.dim, c+w.radius+1)
 }
 
-func (w moduleWindows) mean(r, c int) float64 {
+func (w ModuleWindows) mean(r, c int) float64 {
 	r0, c0, r1, c1 := w.bounds(r, c)
 	n := w.dim + 1
 	sum := w.sat[r1*n+c1] - w.sat[r0*n+c1] - w.sat[r1*n+c0] + w.sat[r0*n+c0]
@@ -137,9 +137,9 @@ func (w moduleWindows) mean(r, c int) float64 {
 // the light around them.
 const moduleWindowMin = 3
 
-// readModules reads the dim×dim grid located by p from luminance.
-func readModules(l []uint8, w, h int, p mapper, dim int, inverted bool) [][]bool {
-	return thresholdModules(moduleLuma(l, w, h, p, dim), dim, inverted)
+// ReadModules reads the dim×dim grid located by p from luminance.
+func ReadModules(l []uint8, w, h int, p Mapper, dim int, inverted bool) [][]bool {
+	return ThresholdModules(ModuleLuma(l, w, h, p, dim), dim, inverted)
 }
 
 // rangePyramid holds, for k = 1, 2, ..., the darkest and lightest values in
@@ -225,7 +225,7 @@ func newRangePyramid(bw, bh int, at func(i int) (lo, hi uint8)) *rangePyramid {
 	return p
 }
 
-// contrast returns the range of the smallest window, over the pyramid
+// contrast returns the range of the smallest window, over the Pyramid
 // levels, around block (bx, by) whose range exceeds minRange.
 func (p *rangePyramid) contrast(bx, by, minRange int) (int, int, bool) {
 	for k, lv := range p.levels {
@@ -235,4 +235,27 @@ func (p *rangePyramid) contrast(bx, by, minRange int) (int, int, bool) {
 		}
 	}
 	return 0, 0, false
+}
+
+// ThresholdReliability returns how far each module's luminance lies from
+// the mean it is thresholded at, relative to the mean distance over the
+// grid.
+func ThresholdReliability(vals []float64, dim int) []float32 {
+	w := NewModuleWindows(vals, dim)
+	rel := make([]float32, dim*dim)
+	sum := 0.0
+	for r := 0; r < dim; r++ {
+		for c := 0; c < dim; c++ {
+			d := math.Abs(vals[r*dim+c] - w.mean(r, c))
+			rel[r*dim+c] = float32(d)
+			sum += d
+		}
+	}
+	if sum > 0 {
+		scale := float32(float64(len(rel)) / sum)
+		for i := range rel {
+			rel[i] *= scale
+		}
+	}
+	return rel
 }

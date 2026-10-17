@@ -7,6 +7,8 @@ import (
 	"image/draw"
 	"math"
 	"testing"
+
+	"github.com/piglig/go-qr/v2/internal/detect"
 )
 
 // symbolBox returns the outer corners of a symbol rendered at scale s with
@@ -86,10 +88,10 @@ func TestDecodeCornersPerspective(t *testing.T) {
 	w := float64(img.Bounds().Dx())
 	q := [4][2]float64{{0.08 * w, 0.1 * w}, {0.92 * w, 0.04 * w}, {0.96 * w, 0.96 * w}, {0.04 * w, 0.9 * w}}
 	warped := warpPerspective(img, q, int(w), int(w))
-	p, _ := quadToQuad([4][2]float64{{0, 0}, {w, 0}, {w, w}, {0, w}}, q)
+	p, _ := detect.QuadToQuad([4][2]float64{{0, 0}, {w, 0}, {w, w}, {0, w}}, q)
 	var want [4][2]float64
 	for i, c := range symbolBox(code, 6, defaultQuietZone) {
-		want[i][0], want[i][1] = p.apply(c[0], c[1])
+		want[i][0], want[i][1] = p.Apply(c[0], c[1])
 	}
 	assertCorners(t, want, mustDecode(t, warped).Corners, 2)
 }
@@ -128,9 +130,9 @@ func TestDecodeCornersCoarseScale(t *testing.T) {
 	code := mustEncode(t, "coarse")
 	img := rotateGray(mustImage(t, code, WithScale(12)), 0.2)
 	w, h := img.Bounds().Dx(), img.Bounds().Dy()
-	l := toLuma(img)
-	small, sw, sh := halve(l, w, h)
-	res, err := robustDecode(context.Background(), hybridThresholds(small, sw, sh), false, 2, false, l, w, h, decodeGrid)
+	l := detect.ToLuma(img)
+	small, sw, sh := detect.Halve(l, w, h)
+	res, err := robustDecode(context.Background(), detect.HybridThresholds(small, sw, sh), false, 2, false, l, w, h, decodeGrid)
 	if err != nil {
 		t.Fatal(err)
 	}

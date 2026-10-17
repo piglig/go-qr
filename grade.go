@@ -5,6 +5,7 @@ import (
 	"image"
 	"math"
 
+	"github.com/piglig/go-qr/v2/internal/detect"
 	"github.com/piglig/go-qr/v2/internal/symbol"
 )
 
@@ -99,7 +100,7 @@ type Quality struct {
 // of 0.6 modules; and one image counts, where a verifier calibrates its
 // light and averages several. Axial and grid nonuniformity assume the
 // image looks squarely at the symbol, as a verifier's camera does:
-// perspective lowers them. Modules should span 5 pixels or more.
+// detect.Perspective lowers them. Modules should span 5 pixels or more.
 //
 // The error is that of Decode, or wraps ErrDecodeFailed when only soft
 // decisions read the symbol. Since v2.7.
@@ -126,7 +127,7 @@ func Grade(img image.Image, opts ...DecodeOption) (*Quality, error) {
 		return nil, fmt.Errorf("%w: re-encode the symbol: %v", ErrDecodeFailed, err)
 	}
 	b := img.Bounds()
-	q := grade(toLuma(img), b.Dx(), b.Dy(), res, want)
+	q := grade(detect.ToLuma(img), b.Dx(), b.Dy(), res, want)
 	for i := range res.Corners {
 		res.Corners[i] = res.Corners[i].Add(b.Min)
 	}
@@ -250,7 +251,7 @@ func grade(l []uint8, w, h int, res *DecodeResult, want *Code) *Quality {
 			for _, o := range disc {
 				px, py := cx+o[0]*ux+o[1]*vx, cy+o[0]*uy+o[1]*vy
 				if px >= 0 && py >= 0 && px <= float64(w-1) && py <= float64(h-1) {
-					sum += srgbLinear[uint8(math.Round(lumaAt(l, w, h, px, py)))]
+					sum += srgbLinear[uint8(math.Round(detect.LumaAt(l, w, h, px, py)))]
 					k++
 				}
 			}

@@ -11,6 +11,8 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/piglig/go-qr/v2/internal/detect"
 )
 
 // decodeText decodes img and returns the text, failing the test on error.
@@ -100,9 +102,9 @@ func TestRSCorrectsErrors(t *testing.T) {
 	const text = "ERROR CORRECTION TEST 123"
 	img := mustImage(t, mustEncode(t, text, WithECC(ECCHigh)), WithScale(8))
 	w, h := img.Bounds().Dx(), img.Bounds().Dy()
-	l := toLuma(img)
-	t0, _, _ := otsuThreshold(l)
-	modules, _, err := fastSample(l, w, h, t0, false)
+	l := detect.ToLuma(img)
+	t0, _, _ := detect.OtsuThreshold(l)
+	modules, _, err := detect.FastSample(l, w, h, t0, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -459,17 +461,17 @@ func TestReadVersion(t *testing.T) {
 		code := mustEncode(t, strings.Repeat("v", n), WithECC(ECCLow))
 		img := rotateGray(mustImage(t, code, WithScale(4), WithQuietZone(10)), 0.1)
 		w, h := img.Bounds().Dx(), img.Bounds().Dy()
-		tm := hybridThresholds(toLuma(img), w, h)
-		finders, err := findFinders(tm, false, tm.dark)
-		dark := tm.dark
+		tm := detect.HybridThresholds(detect.ToLuma(img), w, h)
+		finders, err := detect.FindFinders(tm, false, tm.Dark)
+		dark := tm.Dark
 		if err != nil {
 			t.Fatal(err)
 		}
-		g, err := newSymbolGeometry(dark, finders[0])
+		g, err := detect.NewSymbolGeometry(dark, finders[0])
 		if err != nil {
 			t.Fatal(err)
 		}
-		v, ok := g.readVersion(dark)
+		v, ok := g.ReadVersion(dark)
 		if !ok || v != code.Version() {
 			t.Errorf("version %d: readVersion = %d, %v", code.Version(), v, ok)
 		}
@@ -520,7 +522,7 @@ func TestDecodeIgnoresStrayFinder(t *testing.T) {
 func TestDecodeFlatImageFailsFast(t *testing.T) {
 	flat := image.NewGray(image.Rect(0, 0, 50, 50))
 	for i := range flat.Pix {
-		flat.Pix[i] = 128 + uint8(i%10) // range 9 < minContrast
+		flat.Pix[i] = 128 + uint8(i%10) // range 9 < detect.MinContrast
 	}
 	if _, err := Decode(flat); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("error = %v, want ErrNotFound", err)
