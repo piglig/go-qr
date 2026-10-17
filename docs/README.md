@@ -25,8 +25,8 @@ Using the library:
 - [Styling](guides/styling.md): module and finder shapes, finder colors and
   gradients.
 - [Decoding](guides/decoding.md): reading codes from images and photos,
-  every code in an image, the result fields, text encodings and grading
-  print quality.
+  every code in an image, the result fields, text encodings, scanning
+  video and grading print quality.
 - [Payloads](guides/payloads.md): Wi-Fi, contacts, calendar events, 2FA, SEPA
   payments and more, and parsing them back.
 - [Batch processing](guides/batch.md): generating many codes concurrently.

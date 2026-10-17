@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `WithoutInverted` makes `Decode` and `DecodeAll` skip the search for
+  light symbols on a dark background, which they make last. It saves 28%
+  of the time on images of texture without a code, from VGA to
+  12 megapixels, which is most frames of video in which a code is looked
+  for. The decoding guide has a section on scanning video.
+
 - `DecodeContext` and `DecodeAllContext` stop searching when a context is
   done and return its error; `DecodeAllContext` also returns the symbols
   read so far. They check the context between the stages of the search,
