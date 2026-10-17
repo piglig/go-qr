@@ -1,8 +1,8 @@
-package qr
+package symbol
 
-// numRawDataModules returns the number of raw data modules (bits available
+// NumRawDataModules returns the number of raw data modules (bits available
 // for data + ECC codewords, divided by 8 elsewhere) for a QR code version.
-func numRawDataModules(ver int) int {
+func NumRawDataModules(ver int) int {
 	// Total modules in the size×size grid.
 	size := ver*4 + 17
 	res := size * size
@@ -28,13 +28,13 @@ func numRawDataModules(ver int) int {
 	return res
 }
 
-// codewordBlocks returns the error correction block of each codeword of a
+// CodewordBlocks returns the error correction block of each codeword of a
 // symbol of a version and level, in placement order: the inverse of the
 // interleaving in addEccAndInterLeave.
-func codewordBlocks(ver int, ecc ECC) []int {
-	numBlocks := int(numErrorCorrectionBlocks[ecc][ver])
-	eccLen := int(eccCodeWordsPerBlock[ecc][ver])
-	raw := numRawDataModules(ver) / 8
+func CodewordBlocks(ver int, ecc Level) []int {
+	numBlocks := int(NumErrorCorrectionBlocks[ecc][ver])
+	eccLen := int(ECCCodewordsPerBlock[ecc][ver])
+	raw := NumRawDataModules(ver) / 8
 	numShort := numBlocks - raw%numBlocks
 	shortLen := raw / numBlocks
 	blockOf := make([]int, 0, raw)

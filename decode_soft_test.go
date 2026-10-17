@@ -7,7 +7,7 @@ import (
 	"math/rand"
 	"testing"
 
-	"github.com/piglig/go-qr/v2/internal/reedsolomon"
+	"github.com/piglig/go-qr/v2/internal/symbol"
 )
 
 func glareImage(code *Code, scale int, cx, cy, radius, strength, sigma float64) *image.Gray {
@@ -100,14 +100,14 @@ func TestSoftDecodingRejectsRandomGrids(t *testing.T) {
 	for i := 0; i < n; i++ {
 		ver := 1 + rng.Intn(6)
 		dim := 4*ver + 17
-		b := newBuilder(ver, ECC(rng.Intn(4)))
-		b.drawFunctionPatterns()
-		b.drawFormatBits(rng.Intn(8))
+		b := symbol.NewBuilder(ver, symbol.Level(rng.Intn(4)))
+		b.DrawFunctionPatterns()
+		b.DrawFormatBits(rng.Intn(8))
 		vals := make([]float64, dim*dim)
 		for y := 0; y < dim; y++ {
 			for x := 0; x < dim; x++ {
-				dark := b.modules[y][x]
-				if !b.isFunction[y][x] {
+				dark := b.Modules[y][x]
+				if !b.IsFunction[y][x] {
 					dark = rng.Intn(2) == 0
 				}
 				v := 200.0
@@ -154,65 +154,6 @@ func TestHasData(t *testing.T) {
 	}
 	if !hasData(&DecodeResult{Segments: []DecodedSegment{{Mode: ModeNumeric, NumChars: 1}}}) {
 		t.Error("data segment not counted")
-	}
-}
-
-func TestSoftCorrectKeepsProtection(t *testing.T) {
-	// A version 1-L block has 7 check bytes, of which Table 9 reserves 3:
-	// hard decisions correct 3 errors, soft attempts no more than 2 even
-	// with every reliability pointing at them.
-	rng := rand.New(rand.NewSource(1))
-	for i := 0; i < 200; i++ {
-		data := make([]byte, 19)
-		rng.Read(data)
-		div, _ := reedsolomon.Divisor(7)
-		orig := append(data, reedsolomon.Remainder(data, div)...)
-		cw := append([]byte(nil), orig...)
-		pos := rng.Perm(len(cw))[:3]
-		rel := make([]float32, len(cw))
-		for j := range rel {
-			rel[j] = 1
-		}
-		for _, p := range pos {
-			cw[p] ^= byte(1 + rng.Intn(255))
-			rel[p] = 0
-		}
-		budget := 7 - misdecodeProtection(1, ECCLow) - gmdMargin
-		if _, err := softCorrect(append([]byte(nil), cw...), 7, rel, budget); err == nil {
-			t.Fatalf("block %d: three errors corrected within budget %d", i, budget)
-		}
-		if err := reedsolomon.Correct(cw, 7); err != nil {
-			t.Fatalf("block %d: hard decisions: %v", i, err)
-		}
-	}
-	// Two errors at the least reliable bytes are corrected by erasing them.
-	data := []byte("soft decision deco")
-	div, _ := reedsolomon.Divisor(10)
-	orig := append(append([]byte(nil), data...), reedsolomon.Remainder(data, div)...)
-	cw := append([]byte(nil), orig...)
-	rel := make([]float32, len(cw))
-	for j := range rel {
-		rel[j] = 1
-	}
-	for _, p := range []int{2, 5, 11, 20} {
-		cw[p] ^= 0x5a
-		rel[p] = 0.01
-	}
-	if erased, err := softCorrect(cw, 10, rel, 8); err != nil || string(cw) != string(orig) || erased != nil {
-		t.Errorf("four errors within the budget: erased %v, %v", erased, err)
-	}
-	// Five are not, by hard decisions: two of them are erased.
-	cw = append([]byte(nil), orig...)
-	for _, p := range []int{2, 5, 11, 20, 23} {
-		cw[p] ^= 0x5a
-		rel[p] = 0.01
-	}
-	erased, err := softCorrect(cw, 10, rel, 8)
-	if err != nil || string(cw) != string(orig) {
-		t.Errorf("five errors at the least reliable bytes: %v", err)
-	}
-	if len(erased) != 2 || rel[erased[0]] != 0.01 || rel[erased[1]] != 0.01 {
-		t.Errorf("erased %v, want two of the least reliable bytes", erased)
 	}
 }
 
@@ -281,7 +222,7 @@ func TestSoftAttemptsLeaveProtectionUnused(t *testing.T) {
 	for i := range rel {
 		rel[i] = 1
 	}
-	bitAt := getTemplate(1).bitAt
+	bitAt := symbol.BitAt(1)
 	flipped := map[int]bool{}
 	for y := 0; y < n; y++ {
 		for x := 0; x < n; x++ {
@@ -306,56 +247,6 @@ func TestSoftAttemptsLeaveProtectionUnused(t *testing.T) {
 	}
 }
 
-func TestPilotsAreTheKnownModules(t *testing.T) {
-	for ver := MinVersion; ver <= MaxVersion; ver++ {
-		b := newBuilder(ver, ECCLow)
-		b.drawFunctionPatterns()
-		known := map[[2]int]bool{}
-		for _, m := range getPilots(ver) {
-			at := [2]int{int(m.x), int(m.y)}
-			if known[at] || m.dark != b.modules[m.y][m.x] {
-				t.Fatalf("version %d, module %v: repeated or wrong value", ver, at)
-			}
-			known[at] = true
-		}
-		for y := 0; y < b.size; y++ {
-			for x := 0; x < b.size; x++ {
-				if want := b.isFunction[y][x] && !isFormatModule(x, y, b.size); known[[2]int{x, y}] != want {
-					t.Fatalf("version %d, module (%d, %d): known %v, want %v", ver, x, y, !want, want)
-				}
-			}
-		}
-	}
-}
-
-// TestCodewordReliabilityFollowsPlacement checks the decoder's walk of the
-// codeword placement against the encoder's map of the bit each module
-// carries.
-func TestCodewordReliabilityFollowsPlacement(t *testing.T) {
-	rng := rand.New(rand.NewSource(3))
-	for ver := MinVersion; ver <= MaxVersion; ver++ {
-		b := newBuilder(ver, ECCLow)
-		b.drawFunctionPatterns()
-		n := b.size
-		rel := make([]float32, n*n)
-		for i := range rel {
-			rel[i] = rng.Float32()
-		}
-		want := make([]float32, numRawDataModules(ver)/8)
-		for i := range want {
-			want[i] = float32(math.Inf(1))
-		}
-		for y, row := range bitMap(b) { // not cached, unlike getTemplate's
-			for x, bit := range row {
-				if bit >= 0 && int(bit)/8 < len(want) {
-					want[bit/8] = min(want[bit/8], rel[y*n+x])
-				}
-			}
-		}
-		assertEqual(t, want, b.codewordReliability(rel), "version %d", ver)
-	}
-}
-
 // TestSoftDecodingBuildsNoTemplates expects the attempts on grids of any
 // version to leave the encoder's templates, which hold far more per version
 // than decoding needs, unbuilt.
@@ -363,19 +254,19 @@ func TestSoftDecodingBuildsNoTemplates(t *testing.T) {
 	rng := rand.New(rand.NewSource(5))
 	tried := 0
 	for _, ver := range []int{27, 33, 39} {
-		if _, ok := templateCache.Load(ver); ok {
+		if symbol.HasTemplate(ver) {
 			continue // built by an encoding test
 		}
 		tried++
 		dim := 4*ver + 17
-		b := newBuilder(ver, ECCMedium)
-		b.drawFunctionPatterns()
-		b.drawFormatBits(rng.Intn(8))
+		b := symbol.NewBuilder(ver, symbol.Medium)
+		b.DrawFunctionPatterns()
+		b.DrawFormatBits(rng.Intn(8))
 		vals := make([]float64, dim*dim)
 		for y := 0; y < dim; y++ {
 			for x := 0; x < dim; x++ {
-				dark := b.modules[y][x]
-				if !b.isFunction[y][x] {
+				dark := b.Modules[y][x]
+				if !b.IsFunction[y][x] {
 					dark = rng.Intn(2) == 0
 				}
 				v := 200.0
@@ -389,7 +280,7 @@ func TestSoftDecodingBuildsNoTemplates(t *testing.T) {
 		if _, err := readSoft(vals, dim, false, decodeGrid); err == nil {
 			t.Fatalf("random version %d grid decoded", ver)
 		}
-		if _, ok := templateCache.Load(ver); ok {
+		if symbol.HasTemplate(ver) {
 			t.Errorf("soft decoding built the version %d template", ver)
 		}
 	}

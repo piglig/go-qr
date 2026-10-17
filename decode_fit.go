@@ -3,6 +3,8 @@ package qr
 import (
 	"math"
 	"sort"
+
+	"github.com/piglig/go-qr/v2/internal/symbol"
 )
 
 // Structural fit: the robust path's geometry model.
@@ -631,7 +633,7 @@ func (g *symbolGeometry) fitSymbol(dark func(x, y int) bool) (*gridModel, int, f
 
 	// Grow the fit with the alignment patterns; a second pass looks again
 	// for those missed, through the homography refitted to the first.
-	pos := alignmentPositions(bestV)
+	pos := symbol.AlignmentPositions(bestV)
 	if len(pos) == 0 {
 		return model, dim, bestScore, true
 	}
@@ -715,7 +717,7 @@ func structureScore(dark func(x, y int) bool, m mapper, version int) int {
 			n++
 		}
 	}
-	pos := alignmentPositions(version)
+	pos := symbol.AlignmentPositions(version)
 	for j := range pos {
 		for i := range pos {
 			if isFinderSlot(i, j, len(pos)) {
@@ -779,7 +781,7 @@ func readVersionThrough(dark func(x, y int) bool, h perspective, dim int) (int, 
 				bits |= 1 << i
 			}
 		}
-		return correctVersion(bits)
+		return symbol.CorrectVersion(bits)
 	}
 	if v, ok := read(func(i int) (int, int) { return dim - 11 + i%3, i / 3 }); ok {
 		return v, true

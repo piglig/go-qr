@@ -1,6 +1,10 @@
 package qr
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/piglig/go-qr/v2/internal/symbol"
+)
 
 // ECC is an error correction level. Higher levels recover from more damage at
 // the cost of capacity.
@@ -30,36 +34,12 @@ func (e ECC) String() string {
 
 func (e ECC) valid() bool { return ECCLow <= e && e <= ECCHigh }
 
-// formatBits returns the 2-bit ECC indicator used in the format information.
-func (e ECC) formatBits() int { return eccFormatBits[e] }
-
-// eccFormatBits maps an ECC level to its format indicator (ISO/IEC 18004
-// Table 12). The mapping is an involution, so it also decodes.
-var eccFormatBits = [...]int{1, 0, 3, 2}
-
 // MinVersion and MaxVersion bound the QR Code Model 2 versions (symbol sizes
 // 21×21 to 177×177 modules).
 const (
-	MinVersion = 1
-	MaxVersion = 40
+	MinVersion = symbol.MinVersion
+	MaxVersion = symbol.MaxVersion
 )
-
-var eccCodeWordsPerBlock = [4][41]int8{
-	// Version: (note that index 0 is for padding, and is set to an illegal value)
-	//0,  1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40    Error correction level
-	{-1, 7, 10, 15, 20, 26, 18, 20, 24, 30, 18, 20, 24, 26, 30, 22, 24, 28, 30, 28, 28, 28, 28, 30, 30, 26, 28, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30},  // ECCLow
-	{-1, 10, 16, 26, 18, 24, 16, 18, 22, 22, 26, 30, 22, 22, 24, 24, 28, 28, 26, 26, 26, 26, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28}, // ECCMedium
-	{-1, 13, 22, 18, 26, 18, 24, 18, 22, 20, 24, 28, 26, 24, 20, 30, 24, 28, 28, 26, 30, 28, 30, 30, 30, 30, 28, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30}, // ECCQuartile
-	{-1, 17, 28, 22, 16, 22, 28, 26, 26, 24, 28, 24, 28, 22, 24, 24, 30, 28, 28, 26, 28, 30, 24, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30}, // ECCHigh
-}
-var numErrorCorrectionBlocks = [4][41]int8{
-	// Version: (note that index 0 is for padding, and is set to an illegal value)
-	//0, 1, 2, 3, 4, 5, 6, 7, 8, 9,10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40    Error correction level
-	{-1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 4, 4, 4, 4, 4, 6, 6, 6, 6, 7, 8, 8, 9, 9, 10, 12, 12, 12, 13, 14, 15, 16, 17, 18, 19, 19, 20, 21, 22, 24, 25},              // ECCLow
-	{-1, 1, 1, 1, 2, 2, 4, 4, 4, 5, 5, 5, 8, 9, 9, 10, 10, 11, 13, 14, 16, 17, 17, 18, 20, 21, 23, 25, 26, 28, 29, 31, 33, 35, 37, 38, 40, 43, 45, 47, 49},     // ECCMedium
-	{-1, 1, 1, 2, 2, 4, 4, 6, 6, 8, 8, 8, 10, 12, 16, 12, 17, 16, 18, 21, 20, 23, 23, 25, 27, 29, 34, 34, 35, 38, 40, 43, 45, 48, 51, 53, 56, 59, 62, 65, 68},  // ECCQuartile
-	{-1, 1, 1, 2, 4, 4, 4, 5, 6, 8, 8, 11, 11, 16, 16, 18, 16, 19, 21, 25, 25, 25, 34, 30, 32, 35, 37, 40, 42, 45, 48, 51, 54, 57, 60, 63, 66, 70, 74, 77, 81}, // ECCHigh
-}
 
 // Code is an immutable QR Code symbol. Create one with Encode, EncodeBytes or
 // EncodeSegments; query it with Size and Module; render it with the Write*
@@ -76,26 +56,27 @@ type Code struct {
 // and ECC level. mask selects the mask pattern; -1 chooses the lowest-penalty
 // mask.
 func newCode(ver int, ecc ECC, dataCodewords []byte, mask int) (*Code, error) {
-	b := newBuilder(ver, ecc)
-	b.drawFunctionPatterns()
+	b := symbol.NewBuilder(ver, symbol.Level(ecc))
+	b.DrawFunctionPatterns()
 
-	allCodewords, err := b.addEccAndInterLeave(dataCodewords)
+	allCodewords, err := b.AddECCAndInterleave(dataCodewords)
 	if err != nil {
 		return nil, err
 	}
-	if err := b.drawCodewords(allCodewords); err != nil {
+	if err := b.DrawCodewords(allCodewords); err != nil {
 		return nil, err
 	}
 
 	if mask == -1 {
-		mask = b.chooseBestMask()
+		mask = b.ChooseBestMask()
 	}
-	if err := b.applyMask(mask); err != nil {
+	if err := b.ApplyMask(mask); err != nil {
 		return nil, err
 	}
-	b.drawFormatBits(mask)
+	b.DrawFormatBits(mask)
 
-	return b.toCode(mask), nil
+	// The module grid is handed over; the builder is not used after.
+	return &Code{version: ver, size: b.Size, ecc: ecc, mask: mask, modules: b.Modules}, nil
 }
 
 // Size returns the side length of the symbol in modules (4*Version()+17). It
@@ -116,9 +97,4 @@ func (c *Code) Mask() int { return c.mask }
 // symbol report false (light), which matches the quiet zone.
 func (c *Code) Module(x, y int) bool {
 	return 0 <= x && x < c.size && 0 <= y && y < c.size && c.modules[y][x]
-}
-
-// getBit returns the i-th bit (LSB-first) of x.
-func getBit(x, i int) bool {
-	return (x>>uint(i))&1 != 0
 }

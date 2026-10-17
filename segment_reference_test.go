@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 	"unicode/utf8"
+
+	"github.com/piglig/go-qr/v2/internal/symbol"
 )
 
 // The segmentation of v2.6, kept as the reference the faster one must
@@ -36,7 +38,7 @@ func referenceOptimalSegments(text string, c encodeConfig, extraBits int) ([]Seg
 		if ver == c.minVer || ver == 10 || ver == 27 {
 			segs = splitSegments(text, runes, referenceCharModes(runes, ver, c.gs1), c.gs1)
 		}
-		capacityBits := numDataCodewords(ver, c.ecc) * 8
+		capacityBits := symbol.NumDataCodewords(ver, symbol.Level(c.ecc)) * 8
 		usedBits := totalBits(segs, ver)
 		if usedBits != -1 && usedBits+extraBits <= capacityBits {
 			return segs, nil
@@ -202,7 +204,7 @@ func TestOptimalSegmentsMatchesReference(t *testing.T) {
 		if !sameSegments(got, want) {
 			t.Fatalf("%d chars, v%d-%d: segments differ", len([]rune(text)), minV, maxV)
 		}
-		if minV < 10 && maxV >= 10 && minSegmentBits(minCharBits([]rune(text), c.gs1), minV)+extra > numDataCodewords(9, c.ecc)*8 {
+		if minV < 10 && maxV >= 10 && minSegmentBits(minCharBits([]rune(text), c.gs1), minV)+extra > symbol.NumDataCodewords(9, symbol.Level(c.ecc))*8 {
 			skipped++
 		}
 	}

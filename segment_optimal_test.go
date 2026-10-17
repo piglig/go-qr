@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+
+	"github.com/piglig/go-qr/v2/internal/symbol"
 )
 
 func TestOptimalSegments(t *testing.T) {
@@ -250,7 +252,7 @@ func TestOptimalSegmentsCapacityAtEveryVersion(t *testing.T) {
 			t.Run(fmt.Sprintf("ecc%d/version%d", ecl, version), func(t *testing.T) {
 				// Lowercase ASCII requires byte mode. Choose the largest byte
 				// payload fitting this version, accounting for its segment header.
-				capacity := numDataCodewords(version, ecl) * 8
+				capacity := symbol.NumDataCodewords(version, symbol.Level(ecl)) * 8
 				n := (capacity - 4 - ModeByte.charCountBits(version)) / 8
 				text := strings.Repeat("a", n)
 				segs, err := optSegs(text, ecl, MinVersion, version)

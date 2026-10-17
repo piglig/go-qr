@@ -1,24 +1,25 @@
-package qr
+package symbol
 
 import (
 	"fmt"
 	"math"
 
+	"github.com/piglig/go-qr/v2/internal/errs"
 	"github.com/piglig/go-qr/v2/internal/reedsolomon"
 )
 
-// builder is the mutable scaffold used to lay out a QR matrix. It owns the
-// module grid plus the function-module map (isFunction) that drives codeword
-// placement and masking. The encoder drives a builder to completion and then
-// freezes it into an immutable Code; the decoder reuses a builder purely to
-// rebuild the function map and undo masking. Keeping this state off Code means
-// the returned value is immutable and carries no build-time scratch.
-type builder struct {
-	version    int
-	size       int
-	ecc        ECC
-	modules    [][]bool // dark/light state of every module
-	isFunction [][]bool // true where a module belongs to a function pattern
+// Builder is the mutable scaffold used to lay out a QR matrix. It owns the
+// module grid plus the function-module map (IsFunction) that drives codeword
+// placement and masking. The encoder drives a Builder to completion and then
+// hands its modules to an immutable qr.Code; the decoder reuses a Builder
+// purely to rebuild the function map and undo masking. Keeping this state off
+// the Code means the code is immutable and carries no build-time scratch.
+type Builder struct {
+	Version    int
+	Size       int
+	ECC        Level
+	Modules    [][]bool // dark/light state of every module
+	IsFunction [][]bool // true where a module belongs to a function pattern
 
 	// packed holds four lines per row for mask selection: the modules by
 	// row, which drawCodewords packs, then by column, then the same for the
@@ -26,53 +27,41 @@ type builder struct {
 	packed []moduleLine
 }
 
-// newBuilder allocates a blank builder for the given version and ECC level.
-func newBuilder(version int, ecl ECC) *builder {
+// NewBuilder allocates a blank Builder for the given version and ECC level.
+func NewBuilder(version int, ecl Level) *Builder {
 	size := version*4 + 17
-	b := &builder{version: version, size: size, ecc: ecl}
+	b := &Builder{Version: version, Size: size, ECC: ecl}
 	// One backing allocation per grid; rows alias into it.
-	b.modules = make([][]bool, size)
-	b.isFunction = make([][]bool, size)
+	b.Modules = make([][]bool, size)
+	b.IsFunction = make([][]bool, size)
 	modBacking := make([]bool, size*size)
 	fnBacking := make([]bool, size*size)
 	for i := 0; i < size; i++ {
-		b.modules[i] = modBacking[i*size : (i+1)*size]
-		b.isFunction[i] = fnBacking[i*size : (i+1)*size]
+		b.Modules[i] = modBacking[i*size : (i+1)*size]
+		b.IsFunction[i] = fnBacking[i*size : (i+1)*size]
 	}
 	return b
 }
 
-// toCode freezes the builder into an immutable Code with the chosen mask.
-// The module grid is handed over directly; the builder must not be used after.
-func (q *builder) toCode(mask int) *Code {
-	return &Code{
-		version: q.version,
-		size:    q.size,
-		ecc:     q.ecc,
-		mask:    mask,
-		modules: q.modules,
-	}
-}
-
-// chooseBestMask scores all eight mask patterns and returns the one with the
+// ChooseBestMask scores all eight mask patterns and returns the one with the
 // lowest penalty. It does not mutate the module grid (masking is scored
 // out-of-place); the caller applies the winning mask afterwards.
-func (q *builder) chooseBestMask() int {
+func (q *Builder) ChooseBestMask() int {
 	minPenalty := math.MaxInt32
 	best := 0
-	n, lines := q.size, q.packed
+	n, lines := q.Size, q.packed
 	modules := packedModules{size: n, rows: lines[:n:n], cols: lines[n : 2*n : 2*n]}
 	masked := packedModules{size: n, rows: lines[2*n : 3*n : 3*n], cols: lines[3*n:]}
 	modules.transposeRows()
 	// Version-invariant mask patterns, built once per version and reused across
 	// all encodes of that version (e.g. a batch of similar payloads).
-	tmpl := getTemplate(q.version)
+	tmpl := getTemplate(q.Version)
 	for i := 0; i < 8; i++ {
-		q.drawFormatBits(i)
+		q.DrawFormatBits(i)
 		// The format bits all lie in row 8 and column 8.
-		for k := 0; k < q.size; k++ {
-			modules.set(k, 8, q.modules[8][k])
-			modules.set(8, k, q.modules[k][8])
+		for k := 0; k < q.Size; k++ {
+			modules.set(k, 8, q.Modules[8][k])
+			modules.set(8, k, q.Modules[k][8])
 		}
 		masked.xor(&modules, &tmpl.maskPatterns[i])
 		penalty := masked.penalty(minPenalty)
@@ -85,23 +74,23 @@ func (q *builder) chooseBestMask() int {
 }
 
 // setFunctionModule paints a module and marks it as part of a function pattern.
-func (q *builder) setFunctionModule(x, y int, isDark bool) {
-	q.modules[y][x] = isDark
-	q.isFunction[y][x] = true
+func (q *Builder) setFunctionModule(x, y int, isDark bool) {
+	q.Modules[y][x] = isDark
+	q.IsFunction[y][x] = true
 }
 
 // addEccAndInterLeave appends Reed-Solomon ECC bytes to the raw data and
 // interleaves the result according to the block layout for the QR version and
 // ECC level.
-func (q *builder) addEccAndInterLeave(data []byte) ([]byte, error) {
-	numDataCodewords := numDataCodewords(q.version, q.ecc)
-	if len(data) != numDataCodewords {
-		return nil, fmt.Errorf("%w: data length %d != expected %d", ErrInvalidArgument, len(data), numDataCodewords)
+func (q *Builder) AddECCAndInterleave(data []byte) ([]byte, error) {
+	NumDataCodewords := NumDataCodewords(q.Version, q.ECC)
+	if len(data) != NumDataCodewords {
+		return nil, fmt.Errorf("%w: data length %d != expected %d", errs.ErrInvalidArgument, len(data), NumDataCodewords)
 	}
 
-	numBlocks := numErrorCorrectionBlocks[q.ecc][q.version]
-	blockEccLen := eccCodeWordsPerBlock[q.ecc][q.version]
-	rawCodewords := numRawDataModules(q.version) / 8
+	numBlocks := NumErrorCorrectionBlocks[q.ECC][q.Version]
+	blockEccLen := ECCCodewordsPerBlock[q.ECC][q.Version]
+	rawCodewords := NumRawDataModules(q.Version) / 8
 
 	numShortBlocks := int(numBlocks) - rawCodewords%int(numBlocks)
 	shortBlockLen := rawCodewords / int(numBlocks)
@@ -109,7 +98,7 @@ func (q *builder) addEccAndInterLeave(data []byte) ([]byte, error) {
 	blocks := make([][]byte, numBlocks)
 	rsDiv, err := reedsolomon.Divisor(int(blockEccLen))
 	if err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrInvalidArgument, err)
+		return nil, fmt.Errorf("%w: %v", errs.ErrInvalidArgument, err)
 	}
 	for i, k := 0, 0; i < int(numBlocks); i++ {
 		index := 1
@@ -145,15 +134,15 @@ func (q *builder) addEccAndInterLeave(data []byte) ([]byte, error) {
 // in the zig-zag order of the standard. The version's template records the
 // data bit of each module, so the modules are filled row by row, and each
 // row is packed into q.packed for mask selection as it is filled.
-func (q *builder) drawCodewords(data []byte) error {
-	numRawDataModules := numRawDataModules(q.version) / 8
-	if len(data) != numRawDataModules {
-		return fmt.Errorf("%w: codeword length mismatch", ErrInvalidArgument)
+func (q *Builder) DrawCodewords(data []byte) error {
+	n := NumRawDataModules(q.Version) / 8
+	if len(data) != n {
+		return fmt.Errorf("%w: codeword length mismatch", errs.ErrInvalidArgument)
 	}
 
-	tmpl := getTemplate(q.version)
-	q.packed = make([]moduleLine, 4*q.size)
-	for y, row := range q.modules {
+	tmpl := getTemplate(q.Version)
+	q.packed = make([]moduleLine, 4*q.Size)
+	for y, row := range q.Modules {
 		bitAt := tmpl.bitAt[y][:len(row)]
 		line := tmpl.functionRows[y]
 		for w := 0; w*64 < len(row); w++ {
@@ -175,7 +164,7 @@ func (q *builder) drawCodewords(data []byte) error {
 }
 
 // drawAlignmentPattern draws an alignment pattern centered at (x, y).
-func (q *builder) drawAlignmentPattern(x, y int) {
+func (q *Builder) drawAlignmentPattern(x, y int) {
 	for dy := -2; dy <= 2; dy++ {
 		for dx := -2; dx <= 2; dx++ {
 			q.setFunctionModule(x+dx, y+dy, max(abs(dx), abs(dy)) != 1)
@@ -184,12 +173,12 @@ func (q *builder) drawAlignmentPattern(x, y int) {
 }
 
 // drawFinderPattern draws a finder pattern centered at (x, y).
-func (q *builder) drawFinderPattern(x, y int) {
+func (q *Builder) drawFinderPattern(x, y int) {
 	for dy := -4; dy <= 4; dy++ {
 		for dx := -4; dx <= 4; dx++ {
 			dist := max(abs(dx), abs(dy))
 			xx, yy := x+dx, y+dy
-			if 0 <= xx && xx < q.size && 0 <= yy && yy < q.size {
+			if 0 <= xx && xx < q.Size && 0 <= yy && yy < q.Size {
 				q.setFunctionModule(xx, yy, dist != 2 && dist != 4)
 			}
 		}
@@ -197,16 +186,16 @@ func (q *builder) drawFinderPattern(x, y int) {
 }
 
 // drawVersion encodes version information; only emitted for version >= 7.
-func (q *builder) drawVersion() {
-	if q.version < 7 {
+func (q *Builder) drawVersion() {
+	if q.Version < 7 {
 		return
 	}
 
-	bits := versionBits(q.version)
+	bits := VersionBits(q.Version)
 
 	for i := 0; i < 18; i++ {
 		bit := getBit(bits, i)
-		a := q.size - 11 + i%3
+		a := q.Size - 11 + i%3
 		b := i / 3
 		q.setFunctionModule(a, b, bit)
 		q.setFunctionModule(b, a, bit)
@@ -215,17 +204,17 @@ func (q *builder) drawVersion() {
 
 // drawFunctionPatterns draws all static patterns: finders, timing patterns,
 // alignment patterns, format/version info placeholders.
-func (q *builder) drawFunctionPatterns() {
+func (q *Builder) DrawFunctionPatterns() {
 	// Timing patterns
-	for i := 0; i < q.size; i++ {
+	for i := 0; i < q.Size; i++ {
 		q.setFunctionModule(6, i, i%2 == 0)
 		q.setFunctionModule(i, 6, i%2 == 0)
 	}
 
 	// Finder patterns
 	q.drawFinderPattern(3, 3)
-	q.drawFinderPattern(q.size-4, 3)
-	q.drawFinderPattern(3, q.size-4)
+	q.drawFinderPattern(q.Size-4, 3)
+	q.drawFinderPattern(3, q.Size-4)
 
 	// Alignment patterns
 	alignPatPos := q.getAlignmentPatternPositions()
@@ -238,21 +227,21 @@ func (q *builder) drawFunctionPatterns() {
 		}
 	}
 
-	q.drawFormatBits(0)
+	q.DrawFormatBits(0)
 	q.drawVersion()
 }
 
 // getAlignmentPatternPositions returns the alignment pattern center coordinates
 // for the QR Code version. For version 1 the result is empty.
-func (q *builder) getAlignmentPatternPositions() []int {
-	return alignmentPositions(q.version)
+func (q *Builder) getAlignmentPatternPositions() []int {
+	return AlignmentPositions(q.Version)
 }
 
-// alignmentPositions returns the row and column coordinates of the
+// AlignmentPositions returns the row and column coordinates of the
 // alignment pattern centers of a version (ISO/IEC 18004 Annex E); patterns
 // sit at every combination except the three finder corners. Version 1 has
 // none.
-func alignmentPositions(version int) []int {
+func AlignmentPositions(version int) []int {
 	if version == 1 {
 		return []int{}
 	}
@@ -276,8 +265,8 @@ func alignmentPositions(version int) []int {
 }
 
 // drawFormatBits encodes the ECC level and mask number into the format bits.
-func (q *builder) drawFormatBits(msk int) {
-	data := q.ecc.formatBits()<<3 | msk
+func (q *Builder) DrawFormatBits(msk int) {
+	data := FormatBits(q.ECC)<<3 | msk
 	rem := data
 	for i := 0; i < 10; i++ {
 		rem = (rem << 1) ^ ((rem >> 9) * 0x537)
@@ -297,11 +286,11 @@ func (q *builder) drawFormatBits(msk int) {
 	}
 
 	for i := 0; i < 8; i++ {
-		q.setFunctionModule(q.size-1-i, 8, getBit(bits, i))
+		q.setFunctionModule(q.Size-1-i, 8, getBit(bits, i))
 	}
 
 	for i := 8; i < 15; i++ {
-		q.setFunctionModule(8, q.size-15+i, getBit(bits, i))
+		q.setFunctionModule(8, q.Size-15+i, getBit(bits, i))
 	}
-	q.setFunctionModule(8, q.size-8, true)
+	q.setFunctionModule(8, q.Size-8, true)
 }

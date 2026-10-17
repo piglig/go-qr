@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"fmt"
 	"image/color"
+
+	"github.com/piglig/go-qr/v2/internal/symbol"
 )
 
 // minSymbolContrast is the smallest luminance difference between the light
@@ -42,7 +44,7 @@ func (c *Code) Verify(opts ...RenderOption) error {
 	if err != nil {
 		return err
 	}
-	want, err := decodeMatrix(c.modules, nil)
+	want, err := symbol.ReadMatrix(c.modules, nil)
 	if err != nil {
 		return fmt.Errorf("%w: the symbol's own modules do not decode: %v", ErrUnreadable, err)
 	}
@@ -52,16 +54,16 @@ func (c *Code) Verify(opts ...RenderOption) error {
 		if rel != nil {
 			return nil, fmt.Errorf("%w: only soft decoding reads it", ErrDecodeFailed)
 		}
-		sd, err := decodeMatrix(grid, nil)
+		sd, err := symbol.ReadMatrix(grid, nil)
 		if err != nil {
 			return nil, err
 		}
-		return &DecodeResult{Version: sd.ver, ECC: sd.ecc, Mask: sd.mask, codewords: sd.data}, nil
+		return &DecodeResult{Version: sd.Version, ECC: ECC(sd.ECC), Mask: sd.Mask, codewords: sd.Codewords}, nil
 	})
 	if err != nil {
 		return fmt.Errorf("%w: %v", ErrUnreadable, err)
 	}
-	if !bytes.Equal(got.codewords, want.data) {
+	if !bytes.Equal(got.codewords, want.Codewords) {
 		return fmt.Errorf("%w: rendering decodes to different data", ErrUnreadable)
 	}
 	return nil

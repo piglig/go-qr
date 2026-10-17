@@ -20,7 +20,9 @@ what a change needs before it can be merged.
 | --- | --- | --- |
 | `/` | `github.com/piglig/go-qr/v2` | The library. No dependencies outside the standard library. |
 | `payload/` | same | Structured payload builders and parser. |
+| `internal/symbol/` | same | The structure of a symbol that the encoder and decoder share: capacity tables, function patterns, codeword placement, masks, format and version information, and reading a module grid back into codewords. |
 | `internal/reedsolomon/` | same | GF(2⁸) Reed–Solomon encoding and correction. |
+| `internal/errs/` | same | The sentinel errors, which the root package re-exports. |
 | `tools/` | `github.com/piglig/go-qr/tools` | The `generator` CLI, `verify` helpers and the `bench` comparisons with other libraries. |
 | `demo/` | `github.com/piglig/go-qr/demo` | The WebAssembly playground published to GitHub Pages. |
 | `mcp/` | `github.com/piglig/go-qr/mcp` | The `go-qr-mcp` Model Context Protocol server for AI assistants. Needs Go 1.25 or later. |
@@ -80,7 +82,7 @@ git diff testdata/golden
 ### Fuzzing
 
 Every encoder, renderer, decoder and parser entry point has a fuzz target
-(`FuzzEncode`, `FuzzEncodeStructured`, `FuzzMaskPenalty`, `FuzzRender`,
+(`FuzzEncode`, `FuzzEncodeStructured`, `symbol.FuzzMaskPenalty`, `FuzzRender`,
 `FuzzDecodeRoundTrip`, `FuzzDecodeNoPanic`, `FuzzDecodeAllRoundTrip`,
 `FuzzDecodeAllNoPanic`, `FuzzGrade`, `payload.FuzzParse`,
 `payload.FuzzStringParse`, `reedsolomon.FuzzCorrectErasures`). CI runs each

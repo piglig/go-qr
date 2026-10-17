@@ -3,6 +3,8 @@ package qr
 import (
 	"errors"
 	"fmt"
+
+	"github.com/piglig/go-qr/v2/internal/symbol"
 )
 
 // EncodeOption configures Encode, EncodeBytes and EncodeSegments.
@@ -217,13 +219,13 @@ func encodeSegments(segs []Segment, c encodeConfig) (*Code, error) {
 	ecc := c.ecc
 	if c.boost {
 		for _, e := range []ECC{ECCMedium, ECCQuartile, ECCHigh} {
-			if e > ecc && usedBits <= numDataCodewords(ver, e)*8 {
+			if e > ecc && usedBits <= symbol.NumDataCodewords(ver, symbol.Level(e))*8 {
 				ecc = e
 			}
 		}
 	}
 
-	capacityBits := numDataCodewords(ver, ecc) * 8
+	capacityBits := symbol.NumDataCodewords(ver, symbol.Level(ecc)) * 8
 	var bb bitBuffer
 	bb.grow(capacityBits)
 	for _, s := range segs {
@@ -245,7 +247,7 @@ func encodeSegments(segs []Segment, c encodeConfig) (*Code, error) {
 // capacity at level ecc holds segs, along with the number of bits used.
 func fitVersion(segs []Segment, ecc ECC, minVer, maxVer int) (ver, usedBits int, err error) {
 	for ver = minVer; ; ver++ {
-		capacityBits := numDataCodewords(ver, ecc) * 8
+		capacityBits := symbol.NumDataCodewords(ver, symbol.Level(ecc)) * 8
 		usedBits = totalBits(segs, ver)
 		if usedBits != -1 && usedBits <= capacityBits {
 			return ver, usedBits, nil
@@ -258,11 +260,4 @@ func fitVersion(segs []Segment, ecc ECC, minVer, maxVer int) (ver, usedBits int,
 				ErrDataTooLong, usedBits, capacityBits, ver, ecc)
 		}
 	}
-}
-
-// numDataCodewords returns the number of data (non-ECC) codewords in a symbol
-// of the given version and ECC level.
-func numDataCodewords(ver int, ecc ECC) int {
-	return numRawDataModules(ver)/8 -
-		int(eccCodeWordsPerBlock[ecc][ver])*int(numErrorCorrectionBlocks[ecc][ver])
 }

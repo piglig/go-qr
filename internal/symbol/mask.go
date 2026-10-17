@@ -1,8 +1,10 @@
-package qr
+package symbol
 
 import (
 	"fmt"
 	"math/bits"
+
+	"github.com/piglig/go-qr/v2/internal/errs"
 )
 
 // penaltyN1 - N4 are constants used in QR Code masking penalty rules.
@@ -37,15 +39,15 @@ func maskInvert(msk, x, y int) bool {
 }
 
 // applyMask applies the chosen mask pattern to the QR code in place.
-func (q *builder) applyMask(msk int) error {
+func (q *Builder) ApplyMask(msk int) error {
 	if msk < 0 || msk > 7 {
-		return fmt.Errorf("%w: mask %d out of range [0,7]", ErrInvalidArgument, msk)
+		return fmt.Errorf("%w: mask %d out of range [0,7]", errs.ErrInvalidArgument, msk)
 	}
 
-	for y := 0; y < q.size; y++ {
-		for x := 0; x < q.size; x++ {
+	for y := 0; y < q.Size; y++ {
+		for x := 0; x < q.Size; x++ {
 			invert := maskInvert(msk, x, y)
-			q.modules[y][x] = q.modules[y][x] != (invert && !q.isFunction[y][x])
+			q.Modules[y][x] = q.Modules[y][x] != (invert && !q.IsFunction[y][x])
 		}
 	}
 	return nil
