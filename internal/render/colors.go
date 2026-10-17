@@ -1,14 +1,14 @@
-package qr
+package render
 
 import (
 	"fmt"
 	"image/color"
 )
 
-// colorToSVG formats a color.Color as an SVG-compatible string.
+// ColorToSVG formats a color.Color as an SVG-compatible string.
 // Opaque colors return #RRGGBB; translucent colors return rgba(r,g,b,a)
 // (broadly supported, unlike 8-digit hex which is SVG 2 only).
-func colorToSVG(c color.Color) string {
+func ColorToSVG(c color.Color) string {
 	r, g, b, a := c.RGBA()
 	if a == 0xffff {
 		return fmt.Sprintf("#%02X%02X%02X", r>>8, g>>8, b>>8)

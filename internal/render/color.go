@@ -1,4 +1,4 @@
-package qr
+package render
 
 import (
 	"fmt"
@@ -7,36 +7,21 @@ import (
 	"image/color"
 	"math"
 	"strings"
+
+	"github.com/piglig/go-qr/v2/internal/errs"
 )
 
-// WithFinderColor sets the colors of the three finder patterns: the outer
-// ring and the center. By default they use the foreground, or the gradient.
-// Readers need them to contrast with the background as much as the data;
-// Code.Verify checks it.
-func WithFinderColor(ring, center color.Color) RenderOption {
-	return func(c *renderConfig) { c.finderRing, c.finderCenter, c.finderColorSet = ring, center, true }
+type Gradient struct {
+	From, To color.Color
+	Angle    float64 // degrees
 }
 
-// WithGradient paints the dark modules with a linear gradient from one
-// color to another, replacing the foreground. angle is in degrees: 0 runs
-// left to right, 90 top to bottom. Finder patterns follow the gradient
-// unless WithFinderColor is given. Keep both colors dark against the
-// background; Code.Verify checks the contrast of each end.
-func WithGradient(from, to color.Color, angle float64) RenderOption {
-	return func(c *renderConfig) { c.gradient = &gradientConfig{from: from, to: to, angle: angle} }
-}
-
-type gradientConfig struct {
-	from, to color.Color
-	angle    float64 // degrees
-}
-
-func (g *gradientConfig) validate() error {
+func (g *Gradient) Validate() error {
 	switch {
-	case g.from == nil || g.to == nil:
-		return fmt.Errorf("%w: nil gradient color", ErrInvalidArgument)
-	case math.IsNaN(g.angle) || math.IsInf(g.angle, 0):
-		return fmt.Errorf("%w: gradient angle %v", ErrInvalidArgument, g.angle)
+	case g.From == nil || g.To == nil:
+		return fmt.Errorf("%w: nil gradient color", errs.ErrInvalidArgument)
+	case math.IsNaN(g.Angle) || math.IsInf(g.Angle, 0):
+		return fmt.Errorf("%w: gradient angle %v", errs.ErrInvalidArgument, g.Angle)
 	}
 	return nil
 }
@@ -44,17 +29,17 @@ func (g *gradientConfig) validate() error {
 // axis returns the gradient's start point and the vector to its end over a
 // side×side image: the line through the center along the angle, long enough
 // that the gradient spans every corner.
-func (g *gradientConfig) axis(side float64) (x0, y0, dx, dy float64) {
-	sin, cos := math.Sincos(g.angle * math.Pi / 180)
+func (g *Gradient) axis(side float64) (x0, y0, dx, dy float64) {
+	sin, cos := math.Sincos(g.Angle * math.Pi / 180)
 	half := (math.Abs(cos) + math.Abs(sin)) * side / 2
 	return side/2 - cos*half, side/2 - sin*half, 2 * cos * half, 2 * sin * half
 }
 
 // field returns the gradient over a side×side image, with its axis computed
 // once rather than per pixel.
-func (g *gradientConfig) field(side int) gradientField {
+func (g *Gradient) field(side int) gradientField {
 	x0, y0, dx, dy := g.axis(float64(side))
-	return gradientField{x0, y0, dx, dy, dx*dx + dy*dy, rgba(g.from), rgba(g.to)}
+	return gradientField{x0, y0, dx, dy, dx*dx + dy*dy, rgba(g.From), rgba(g.To)}
 }
 
 // gradientField is a gradient laid over an image.
@@ -70,19 +55,19 @@ func (f *gradientField) at(x, y int) color.RGBA {
 	return lerpRGBA(f.from, f.to, uint32(t*255+0.5))
 }
 
-// id returns an element id that differs between gradients, so several SVGs
+// ID returns an element ID that differs between gradients, so several SVGs
 // inlined in one HTML page do not resolve each other's gradients.
-func (g *gradientConfig) id() string {
+func (g *Gradient) ID() string {
 	h := fnv.New32a()
-	fmt.Fprintf(h, "%v|%v|%v", rgba(g.from), rgba(g.to), g.angle)
+	fmt.Fprintf(h, "%v|%v|%v", rgba(g.From), rgba(g.To), g.Angle)
 	return fmt.Sprintf("qr-gradient-%08x", h.Sum32())
 }
 
 // writeSVGDef writes the <linearGradient> element for a side×side image.
-func (g *gradientConfig) writeSVGDef(sb *strings.Builder, side int) {
+func (g *Gradient) writeSVGDef(sb *strings.Builder, side int) {
 	x0, y0, dx, dy := g.axis(float64(side))
 	var p svgPath
-	sb.WriteString("\t<defs><linearGradient id=\"" + g.id() + "\" gradientUnits=\"userSpaceOnUse\" x1=\"")
+	sb.WriteString("\t<defs><linearGradient id=\"" + g.ID() + "\" gradientUnits=\"userSpaceOnUse\" x1=\"")
 	for i, v := range []float64{x0, y0, x0 + dx, y0 + dy} {
 		p.b = p.b[:0]
 		p.num(v)
@@ -91,8 +76,8 @@ func (g *gradientConfig) writeSVGDef(sb *strings.Builder, side int) {
 			sb.WriteString([]string{"\" y1=\"", "\" x2=\"", "\" y2=\""}[i])
 		}
 	}
-	sb.WriteString("\"><stop offset=\"0\" stop-color=\"" + colorToSVG(g.from) + "\"/><stop offset=\"1\" stop-color=\"" +
-		colorToSVG(g.to) + "\"/></linearGradient></defs>\n")
+	sb.WriteString("\"><stop offset=\"0\" stop-color=\"" + ColorToSVG(g.From) + "\"/><stop offset=\"1\" stop-color=\"" +
+		ColorToSVG(g.To) + "\"/></linearGradient></defs>\n")
 }
 
 // lerpRGBA blends a toward b by t/255.
@@ -107,34 +92,34 @@ func lerpRGBA(a, b color.RGBA, t uint32) color.RGBA {
 }
 
 // multicolor reports whether dark modules use more than one color.
-func (c *renderConfig) multicolor() bool {
-	return c.gradient != nil || c.finderColorSet
+func (c *Config) multicolor() bool {
+	return c.Gradient != nil || c.FinderColorSet
 }
 
-// darkColors returns every color dark modules are painted with.
-func (c *renderConfig) darkColors() []color.Color {
+// DarkColors returns every color dark modules are painted with.
+func (c *Config) DarkColors() []color.Color {
 	var out []color.Color
-	if c.gradient != nil {
-		out = append(out, c.gradient.from, c.gradient.to)
+	if c.Gradient != nil {
+		out = append(out, c.Gradient.From, c.Gradient.To)
 	} else {
-		out = append(out, c.fg)
+		out = append(out, c.FG)
 	}
-	if c.finderColorSet {
-		out = append(out, c.finderRing, c.finderCenter)
+	if c.FinderColorSet {
+		out = append(out, c.FinderRing, c.FinderCenter)
 	}
 	return out
 }
 
 // svgFills returns the fill attribute values for data modules, finder rings
 // and finder centers.
-func (c *renderConfig) svgFills() (data, ring, center string) {
-	data = colorToSVG(c.fg)
-	if c.gradient != nil {
-		data = "url(#" + c.gradient.id() + ")"
+func (c *Config) svgFills() (data, ring, center string) {
+	data = ColorToSVG(c.FG)
+	if c.Gradient != nil {
+		data = "url(#" + c.Gradient.ID() + ")"
 	}
 	ring, center = data, data
-	if c.finderColorSet {
-		ring, center = colorToSVG(c.finderRing), colorToSVG(c.finderCenter)
+	if c.FinderColorSet {
+		ring, center = ColorToSVG(c.FinderRing), ColorToSVG(c.FinderCenter)
 	}
 	return data, ring, center
 }
@@ -143,19 +128,19 @@ func (c *renderConfig) svgFills() (data, ring, center string) {
 // gradient into a new RGBA image. Module cells and finder parts do not
 // overlap, so each pixel is the background blended toward its own color by
 // its coverage.
-func paintColored(code *Code, c *renderConfig, side int) *image.RGBA {
+func paintColored(code *Symbol, c *Config, side int) *image.RGBA {
 	img := image.NewRGBA(image.Rect(0, 0, side, side))
-	bg := rgba(c.bg)
+	bg := rgba(c.BG)
 	for i := 0; i < len(img.Pix); i += 4 {
 		img.Pix[i], img.Pix[i+1], img.Pix[i+2], img.Pix[i+3] = bg.R, bg.G, bg.B, bg.A
 	}
-	fg := rgba(c.fg)
+	fg := rgba(c.FG)
 	var grad gradientField
-	if c.gradient != nil {
-		grad = c.gradient.field(side)
+	if c.Gradient != nil {
+		grad = c.Gradient.field(side)
 	}
 	dataColor := func(x, y int) color.RGBA {
-		if c.gradient != nil {
+		if c.Gradient != nil {
 			return grad.at(x, y)
 		}
 		return fg
@@ -173,30 +158,30 @@ func paintColored(code *Code, c *renderConfig, side int) *image.RGBA {
 		}
 	}
 
-	s, size, qz := c.scale, code.Size(), c.quietZone
+	s, size, qz := c.Scale, code.Size(), c.QuietZone
 	for y := 0; y < size; y++ {
 		for x := 0; x < size; x++ {
 			if !code.Module(x, y) {
 				continue
 			}
-			if _, _, ok := finderOrigin(x, y, size); ok {
+			if _, _, ok := FinderOrigin(x, y, size); ok {
 				continue
 			}
 			corners := 0
-			if c.moduleShape == ModuleRounded {
+			if c.ModuleShape == ModuleRounded {
 				corners = roundedCorners(code, x, y)
 			}
-			paint(moduleTile(c.moduleShape, corners, s), s, (x+qz)*s, (y+qz)*s, dataColor)
+			paint(moduleTile(c.ModuleShape, corners, s), s, (x+qz)*s, (y+qz)*s, dataColor)
 		}
 	}
 
 	ringColor, centerColor := dataColor, dataColor
-	if c.finderColorSet {
-		ring, center := rgba(c.finderRing), rgba(c.finderCenter)
+	if c.FinderColorSet {
+		ring, center := rgba(c.FinderRing), rgba(c.FinderCenter)
 		ringColor = func(int, int) color.RGBA { return ring }
 		centerColor = func(int, int) color.RGBA { return center }
 	}
-	ringTile, centerTile := finderPartTiles(c.finderShape, s)
+	ringTile, centerTile := finderPartTiles(c.FinderShape, s)
 	for _, o := range [3][2]int{{0, 0}, {size - 7, 0}, {0, size - 7}} {
 		paint(ringTile, 7*s, (o[0]+qz)*s, (o[1]+qz)*s, ringColor)
 		paint(centerTile, 7*s, (o[0]+qz)*s, (o[1]+qz)*s, centerColor)

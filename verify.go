@@ -6,6 +6,7 @@ import (
 	"image/color"
 
 	"github.com/piglig/go-qr/v2/internal/detect"
+	"github.com/piglig/go-qr/v2/internal/render"
 	"github.com/piglig/go-qr/v2/internal/symbol"
 )
 
@@ -31,13 +32,13 @@ func (c *Code) Verify(opts ...RenderOption) error {
 	if err != nil {
 		return err
 	}
-	bg := luminanceOverWhite(cfg.bg)
-	for _, dark := range cfg.darkColors() {
+	bg := luminanceOverWhite(cfg.BG)
+	for _, dark := range cfg.DarkColors() {
 		switch contrast := bg - luminanceOverWhite(dark); {
 		case contrast < 0:
-			return fmt.Errorf("%w: dark color %s is lighter than the background; many scanners cannot read inverted codes", ErrUnreadable, colorToSVG(dark))
+			return fmt.Errorf("%w: dark color %s is lighter than the background; many scanners cannot read inverted codes", ErrUnreadable, render.ColorToSVG(dark))
 		case contrast < minSymbolContrast:
-			return fmt.Errorf("%w: contrast of %s is %.0f%%, below the %.0f%% scanners need", ErrUnreadable, colorToSVG(dark), contrast*100, minSymbolContrast*100)
+			return fmt.Errorf("%w: contrast of %s is %.0f%%, below the %.0f%% scanners need", ErrUnreadable, render.ColorToSVG(dark), contrast*100, minSymbolContrast*100)
 		}
 	}
 

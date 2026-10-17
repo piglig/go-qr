@@ -1,74 +1,11 @@
-package qr
+package render
 
 import (
-	"bytes"
 	"fmt"
 	"io"
 	"strconv"
 	"strings"
 )
-
-// WriteSVG writes the symbol as an SVG document to w. The dark modules are
-// drawn as a single path whose outlines trace each connected region, with
-// fill-rule="evenodd" punching out the holes, which keeps the output compact.
-func (c *Code) WriteSVG(w io.Writer, opts ...RenderOption) error {
-	cfg, err := newRenderConfig(opts)
-	if err != nil {
-		return err
-	}
-	side, err := cfg.sidePixels(c)
-	if err != nil {
-		return err
-	}
-	if err := cfg.checkLogo(c); err != nil {
-		return err
-	}
-
-	var sb strings.Builder
-	sb.Grow(1024)
-	if cfg.xmlHeader {
-		sb.WriteString("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n")
-		sb.WriteString("<!DOCTYPE svg PUBLIC \"-//W3C//DTD SVG 1.1//EN\" \"http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd\">\n")
-	}
-	sideStr := strconv.Itoa(side)
-	sb.WriteString(`<svg xmlns="http://www.w3.org/2000/svg" version="1.1" width="` + sideStr + `" height="` + sideStr +
-		`" viewBox="0 0 ` + sideStr + " " + sideStr + "\" stroke=\"none\">\n")
-	if !colorIsTransparent(cfg.bg) {
-		sb.WriteString("\t<rect width=\"" + sideStr + "\" height=\"" + sideStr + "\" fill=\"" + colorToSVG(cfg.bg) + "\"/>\n")
-	}
-	if cfg.gradient != nil {
-		cfg.gradient.writeSVGDef(&sb, side)
-	}
-	if cfg.shaped() || cfg.finderColorSet {
-		c.writeStyledSVGBody(&sb, &cfg)
-	} else {
-		// Plain squares in one fill: a single outline of every dark region.
-		fill, _, _ := cfg.svgFills()
-		sb.WriteString("\t<path d=\"")
-		c.assembleBorderGraph().writePath(&sb, cfg.quietZone, cfg.scale)
-		sb.WriteString("\" fill=\"" + fill + "\" fill-rule=\"evenodd\"/>\n")
-	}
-	if cfg.logo != nil {
-		if err := cfg.logo.writeSVG(&sb, c.Size(), &cfg); err != nil {
-			return err
-		}
-	}
-	sb.WriteString("</svg>\n")
-
-	if _, err := io.WriteString(w, sb.String()); err != nil {
-		return fmt.Errorf("qr: write SVG: %w", err)
-	}
-	return nil
-}
-
-// SVG returns the symbol encoded as an SVG document.
-func (c *Code) SVG(opts ...RenderOption) ([]byte, error) {
-	var buf bytes.Buffer
-	if err := c.WriteSVG(&buf, opts...); err != nil {
-		return nil, err
-	}
-	return buf.Bytes(), nil
-}
 
 // node represents one node of the svg path creating the QR code.
 // x,y are the grid coordinates of the node in the QR code.
@@ -212,7 +149,7 @@ func writeInt(sb *strings.Builder, v int) {
 
 // assembleBorderGraph builds the border graph of all connected filled regions
 // in the QR code. Borders between two adjacent filled modules are omitted.
-func (c *Code) assembleBorderGraph() *borderGraph {
+func assembleBorderGraph(c *Symbol) *borderGraph {
 	n := c.Size()
 	g := newBorderGraph(n)
 	for y := 0; y < n; y++ {
@@ -252,4 +189,51 @@ func (c *Code) assembleBorderGraph() *borderGraph {
 		}
 	}
 	return g
+}
+
+// WriteSVG writes the symbol as an SVG document to w: the dark modules as a
+// single path whose outlines trace each connected region, with
+// fill-rule="evenodd" punching out the holes. The caller has checked the
+// logo's error correction budget.
+func WriteSVG(w io.Writer, c *Symbol, cfg *Config) error {
+	side, err := cfg.SidePixels(c)
+	if err != nil {
+		return err
+	}
+
+	var sb strings.Builder
+	sb.Grow(1024)
+	if cfg.XMLHeader {
+		sb.WriteString("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n")
+		sb.WriteString("<!DOCTYPE svg PUBLIC \"-//W3C//DTD SVG 1.1//EN\" \"http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd\">\n")
+	}
+	sideStr := strconv.Itoa(side)
+	sb.WriteString(`<svg xmlns="http://www.w3.org/2000/svg" version="1.1" width="` + sideStr + `" height="` + sideStr +
+		`" viewBox="0 0 ` + sideStr + " " + sideStr + "\" stroke=\"none\">\n")
+	if !colorIsTransparent(cfg.BG) {
+		sb.WriteString("\t<rect width=\"" + sideStr + "\" height=\"" + sideStr + "\" fill=\"" + ColorToSVG(cfg.BG) + "\"/>\n")
+	}
+	if cfg.Gradient != nil {
+		cfg.Gradient.writeSVGDef(&sb, side)
+	}
+	if cfg.shaped() || cfg.FinderColorSet {
+		writeStyledSVGBody(c, &sb, cfg)
+	} else {
+		// Plain squares in one fill: a single outline of every dark region.
+		fill, _, _ := cfg.svgFills()
+		sb.WriteString("\t<path d=\"")
+		assembleBorderGraph(c).writePath(&sb, cfg.QuietZone, cfg.Scale)
+		sb.WriteString("\" fill=\"" + fill + "\" fill-rule=\"evenodd\"/>\n")
+	}
+	if cfg.Logo != nil {
+		if err := cfg.Logo.writeSVG(&sb, c.Size(), cfg); err != nil {
+			return err
+		}
+	}
+	sb.WriteString("</svg>\n")
+
+	if _, err := io.WriteString(w, sb.String()); err != nil {
+		return fmt.Errorf("qr: write SVG: %w", err)
+	}
+	return nil
 }

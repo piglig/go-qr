@@ -2,13 +2,17 @@ package qr
 
 import (
 	"bytes"
+	"encoding/binary"
 	"errors"
 	"image"
 	"image/color"
 	"image/png"
 	"math"
 	"strings"
+	"sync"
 	"testing"
+
+	"github.com/piglig/go-qr/v2/internal/render"
 )
 
 type badWriter struct{}
@@ -156,7 +160,8 @@ func TestRasterSizeLimit(t *testing.T) {
 	}{{127, true}, {128, false}} {
 		cfg, err := newRenderConfig([]RenderOption{WithQuietZone(54), WithScale(tt.scale)})
 		assertNoError(t, err)
-		_, err = cfg.rasterSide(code)
+		sym := code.symbol()
+		_, err = cfg.RasterSide(&sym)
 		assertEqual(t, tt.ok, err == nil, "scale %d: %v", tt.scale, err)
 	}
 }
@@ -196,13 +201,6 @@ func TestSVGTransparentBackgroundOmitsRect(t *testing.T) {
 	if strings.Contains(string(data), "<rect") {
 		t.Error("transparent background still emits a <rect>")
 	}
-}
-
-func TestColorToSVG(t *testing.T) {
-	assertEqual(t, "#1A2B3C", colorToSVG(color.RGBA{R: 0x1a, G: 0x2b, B: 0x3c, A: 0xff}))
-	assertTrue(t, strings.HasPrefix(colorToSVG(color.NRGBA{R: 10, G: 20, B: 30, A: 128}), "rgba("))
-	assertTrue(t, colorIsTransparent(color.Transparent))
-	assertFalse(t, colorIsTransparent(color.Black))
 }
 
 func TestWriteText(t *testing.T) {
@@ -263,6 +261,447 @@ func BenchmarkSVG(b *testing.B) {
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
 		if _, err := code.SVG(); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+// rgba converts c to 8-bit alpha-premultiplied RGBA.
+func rgba(c color.Color) color.RGBA {
+	return color.RGBAModel.Convert(c).(color.RGBA)
+}
+
+var (
+	navy = color.RGBA{R: 0x1a, G: 0x23, B: 0x7e, A: 0xff}
+	teal = color.RGBA{G: 0x69, B: 0x5c, A: 0xff}
+)
+
+func TestColorOptionValidation(t *testing.T) {
+	code := mustEncode(t, "x")
+	for name, opts := range map[string][]RenderOption{
+		"nil ring":       {WithFinderColor(nil, color.Black)},
+		"nil center":     {WithFinderColor(color.Black, nil)},
+		"nil from":       {WithGradient(nil, color.Black, 0)},
+		"nil to":         {WithGradient(color.Black, nil, 0)},
+		"NaN angle":      {WithGradient(color.Black, color.Black, math.NaN())},
+		"infinite angle": {WithGradient(color.Black, color.Black, math.Inf(1))},
+	} {
+		if _, err := code.Image(opts...); !errors.Is(err, ErrInvalidArgument) {
+			t.Errorf("%s: error = %v, want ErrInvalidArgument", name, err)
+		}
+	}
+}
+
+func TestFinderColors(t *testing.T) {
+	code := mustEncode(t, "finder colors", WithECC(ECCQuartile))
+	img, err := code.Image(WithFinderColor(red, navy), WithScale(10), WithQuietZone(2))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, o := range [3][2]int{{0, 0}, {code.Size() - 7, 0}, {0, code.Size() - 7}} {
+		assertTrue(t, sameColor(moduleAt(img, o[0], o[1]+3, 10, 2), red), "ring at %v", o)
+		assertTrue(t, sameColor(moduleAt(img, o[0]+3, o[1]+3, 10, 2), navy), "center at %v", o)
+	}
+	// Data modules keep the foreground.
+	for y := 9; y < code.Size()-9; y++ {
+		for x := 9; x < code.Size()-9; x++ {
+			if code.Module(x, y) {
+				assertTrue(t, sameColor(moduleAt(img, x, y, 10, 2), color.Black))
+				return
+			}
+		}
+	}
+}
+
+func TestGradient(t *testing.T) {
+	code := mustEncode(t, "gradient", WithECC(ECCQuartile))
+	img, err := code.Image(WithGradient(navy, teal, 0), WithScale(10), WithQuietZone(0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Left to right: the left finder is near navy, the right one near teal.
+	left := rgba(moduleAt(img, 3, 3, 10, 0))
+	right := rgba(moduleAt(img, code.Size()-4, 3, 10, 0))
+	if absDiff(left.B, navy.B) > 20 || absDiff(right.B, teal.B) > 20 || left.B <= right.B {
+		t.Errorf("gradient ends: left %v, right %v", left, right)
+	}
+	// Finder colors override the gradient.
+	img, _ = code.Image(WithGradient(navy, teal, 0), WithFinderColor(red, red), WithScale(10), WithQuietZone(0))
+	assertTrue(t, sameColor(moduleAt(img, code.Size()-4, 3, 10, 0), red))
+}
+
+func absDiff(a, b uint8) int {
+	if a > b {
+		return int(a - b)
+	}
+	return int(b - a)
+}
+
+func TestColoredPNG(t *testing.T) {
+	code := mustEncode(t, "colored png")
+	opts := []RenderOption{WithGradient(navy, teal, 30), WithFinderColor(red, navy)}
+	data, err := code.PNG(opts...)
+	if err != nil {
+		t.Fatal(err)
+	}
+	img, err := png.Decode(bytes.NewReader(data))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := img.(*image.Paletted); ok {
+		t.Fatal("multicolor PNG was written as a paletted image")
+	}
+	want, _ := code.Image(opts...)
+	for y := 0; y < want.Bounds().Dy(); y += 7 {
+		for x := 0; x < want.Bounds().Dx(); x += 7 {
+			if !sameColor(img.At(x, y), want.At(x, y)) {
+				t.Fatalf("pixel (%d,%d) differs from Image", x, y)
+			}
+		}
+	}
+}
+
+func TestColoredSVG(t *testing.T) {
+	code := mustEncode(t, "hi", WithECC(ECCLow))
+	g := &render.Gradient{From: navy, To: teal, Angle: 45}
+
+	// A gradient alone keeps the single outline path.
+	data, err := code.SVG(WithGradient(navy, teal, 45))
+	if err != nil {
+		t.Fatal(err)
+	}
+	svg := string(data)
+	assertEqual(t, 1, strings.Count(svg, "<path"))
+	assertContains(t, svg, `<linearGradient id="`+g.ID()+`" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="290" y2="290">`)
+	assertContains(t, svg, `fill="url(#`+g.ID()+`)" fill-rule="evenodd"`)
+
+	data, err = code.SVG(WithGradient(navy, teal, 45), WithFinderColor(red, color.Black))
+	if err != nil {
+		t.Fatal(err)
+	}
+	svg = string(data)
+	assertEqual(t, 3, strings.Count(svg, `fill="#FF0000" fill-rule="evenodd"`))
+	assertEqual(t, 3, strings.Count(svg, `fill="#000000"/>`))
+	assertEqual(t, 1, strings.Count(svg, `fill="url(#`+g.ID()+`)"`))
+}
+
+func TestVerifyColors(t *testing.T) {
+	code := mustEncode(t, "https://example.com", WithECC(ECCHigh))
+	yellow := color.RGBA{R: 0xff, G: 0xeb, B: 0x3b, A: 0xff}
+	pink := color.RGBA{R: 0xf8, G: 0xbb, B: 0xd0, A: 0xff}
+	for name, tc := range map[string]struct {
+		opts []RenderOption
+		want error
+	}{
+		"dark gradient":         {[]RenderOption{WithGradient(navy, teal, 45), WithModuleShape(ModuleRounded)}, nil},
+		"finder colors":         {[]RenderOption{WithFinderColor(red, navy), WithFinderShape(FinderCircle)}, nil},
+		"gradient to yellow":    {[]RenderOption{WithGradient(navy, yellow, 0)}, ErrUnreadable},
+		"pale finder ring":      {[]RenderOption{WithFinderColor(pink, color.Black)}, ErrUnreadable},
+		"pale center, gradient": {[]RenderOption{WithGradient(navy, teal, 0), WithFinderColor(color.Black, pink)}, ErrUnreadable},
+	} {
+		err := code.Verify(tc.opts...)
+		if tc.want == nil && err != nil || tc.want != nil && !errors.Is(err, tc.want) {
+			t.Errorf("%s: Verify = %v, want %v", name, err, tc.want)
+		}
+	}
+}
+
+func BenchmarkColoredPNG(b *testing.B) {
+	code, _ := Encode("https://github.com/piglig/go-qr?ref=bench&v=1")
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		if _, err := code.PNG(WithGradient(navy, teal, 45), WithModuleShape(ModuleRounded)); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+// paintPaletted renders code into a two-color paletted image. png.Encode of
+// it is the reference writeTwoColorPNG matches byte for byte.
+func paintPaletted(code *Code, c *renderConfig, side int) *image.Paletted {
+	img := image.NewPaletted(image.Rect(0, 0, side, side), color.Palette{c.BG, c.FG})
+	for y := 0; y < side; y++ {
+		for x := 0; x < side; x++ {
+			if code.Module(x/c.Scale-c.QuietZone, y/c.Scale-c.QuietZone) {
+				img.Pix[y*img.Stride+x] = 1
+			}
+		}
+	}
+	return img
+}
+
+// referencePNG is the PNG png.Encode writes for code with opts.
+func referencePNG(t *testing.T, code *Code, opts ...RenderOption) []byte {
+	t.Helper()
+	cfg, err := newRenderConfig(opts)
+	assertNoError(t, err)
+	sym := code.symbol()
+	side, err := cfg.RasterSide(&sym)
+	assertNoError(t, err)
+	var buf bytes.Buffer
+	assertNoError(t, png.Encode(&buf, paintPaletted(code, &cfg, side)))
+	return buf.Bytes()
+}
+
+// idatChunks counts the IDAT chunks of a PNG.
+func idatChunks(t *testing.T, b []byte) int {
+	t.Helper()
+	n := 0
+	for i := 8; i+8 <= len(b); {
+		length := int(binary.BigEndian.Uint32(b[i:]))
+		if string(b[i+4:i+8]) == "IDAT" {
+			n++
+		}
+		i += 12 + length
+	}
+	return n
+}
+
+func TestPNGMatchesStandardEncoder(t *testing.T) {
+	small, _ := Encode("https://github.com/piglig/go-qr")
+	large, _ := EncodeBytes(bytes.Repeat([]byte{0x5a, 0xc3, 0x17}, 900), WithECC(ECCLow), WithVersionRange(40, 40))
+	gray := color.Gray16{Y: 0x8000}
+	tests := map[string]struct {
+		code *Code
+		opts []RenderOption
+	}{
+		"default":             {small, nil},
+		"scale 1":             {small, []RenderOption{WithScale(1)}},
+		"scale 3":             {small, []RenderOption{WithScale(3)}},
+		"scale 8":             {small, []RenderOption{WithScale(8)}},
+		"scale 13":            {small, []RenderOption{WithScale(13), WithQuietZone(1)}},
+		"no quiet zone":       {small, []RenderOption{WithQuietZone(0), WithScale(5)}},
+		"wide quiet zone":     {small, []RenderOption{WithQuietZone(11), WithScale(2)}},
+		"colors":              {small, []RenderOption{WithForeground(color.RGBA{R: 0x1a, G: 0x23, B: 0x7e, A: 0xff}), WithBackground(color.NRGBA{R: 0xff, G: 0xf8, B: 0xe1, A: 0xff})}},
+		"16-bit colors":       {small, []RenderOption{WithForeground(gray), WithBackground(color.White)}},
+		"same colors":         {small, []RenderOption{WithForeground(color.Black), WithBackground(color.Black)}},
+		"transparent bg":      {small, []RenderOption{WithBackground(color.Transparent)}},
+		"translucent fg":      {small, []RenderOption{WithForeground(color.NRGBA{A: 0x80})}},
+		"both translucent":    {small, []RenderOption{WithForeground(color.NRGBA{R: 9, A: 0x40}), WithBackground(color.NRGBA{G: 9, A: 0xc0})}},
+		"version 40":          {large, []RenderOption{WithScale(9)}},
+		"several IDAT chunks": {large, []RenderOption{WithScale(37)}},
+		"version 40 scale 1":  {large, []RenderOption{WithScale(1), WithQuietZone(0)}},
+	}
+	multipleIDAT := false
+	for name, tc := range tests {
+		got, err := tc.code.PNG(tc.opts...)
+		assertNoError(t, err)
+		want := referencePNG(t, tc.code, tc.opts...)
+		if !bytes.Equal(got, want) {
+			t.Errorf("%s: PNG differs from png.Encode: %d bytes, want %d", name, len(got), len(want))
+		}
+		if idatChunks(t, want) > 1 {
+			multipleIDAT = true
+		}
+	}
+	if large.Version() != 40 {
+		t.Errorf("large code is version %d, want 40", large.Version())
+	}
+	if !multipleIDAT {
+		t.Error("no test case splits its data into several IDAT chunks")
+	}
+}
+
+func TestPNGConcurrent(t *testing.T) {
+	code, _ := Encode("concurrent")
+	want := referencePNG(t, code)
+	var wg sync.WaitGroup
+	for i := 0; i < 8; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for j := 0; j < 20; j++ {
+				if got, err := code.PNG(); err != nil || !bytes.Equal(got, want) {
+					t.Errorf("concurrent PNG differs or failed: %v", err)
+					return
+				}
+			}
+		}()
+	}
+	wg.Wait()
+}
+
+// limitWriter fails once n bytes have been written.
+type limitWriter struct{ n int }
+
+func (w *limitWriter) Write(b []byte) (int, error) {
+	if len(b) > w.n {
+		k := w.n
+		w.n = 0
+		return k, errors.New("disk full")
+	}
+	w.n -= len(b)
+	return len(b), nil
+}
+
+func TestWritePNGWriterErrors(t *testing.T) {
+	code, _ := Encode("https://github.com/piglig/go-qr")
+	full, _ := code.PNG()
+	for n := 0; n < len(full); n++ {
+		err := code.WritePNG(&limitWriter{n: n})
+		if err == nil || !strings.Contains(err.Error(), "disk full") {
+			t.Fatalf("writer failing after %d of %d bytes: error = %v", n, len(full), err)
+		}
+	}
+	// The writer pool still produces correct output after failed writes.
+	again, _ := code.PNG()
+	if !bytes.Equal(again, full) {
+		t.Error("PNG differs after failed writes")
+	}
+}
+
+var allStyles = func() [][]RenderOption {
+	var out [][]RenderOption
+	for _, ms := range []ModuleShape{ModuleSquare, ModuleDot, ModuleRounded} {
+		for _, fs := range []FinderShape{FinderSquare, FinderRounded, FinderCircle} {
+			out = append(out, []RenderOption{WithModuleShape(ms), WithFinderShape(fs)})
+		}
+	}
+	return out
+}()
+
+func TestStyleOptionValidation(t *testing.T) {
+	code := mustEncode(t, "x")
+	for _, opts := range [][]RenderOption{
+		{WithModuleShape(ModuleShape(9))},
+		{WithModuleShape(ModuleShape(-1))},
+		{WithFinderShape(FinderShape(9))},
+	} {
+		if _, err := code.PNG(opts...); !errors.Is(err, ErrInvalidArgument) {
+			t.Errorf("PNG error = %v, want ErrInvalidArgument", err)
+		}
+		if _, err := code.SVG(opts...); !errors.Is(err, ErrInvalidArgument) {
+			t.Errorf("SVG error = %v, want ErrInvalidArgument", err)
+		}
+	}
+}
+
+// TestStyledModuleCenters checks that every module center keeps its color
+// in every style, since that is what readers sample.
+func TestStyledModuleCenters(t *testing.T) {
+	code := mustEncode(t, "styled centers 0123456789", WithECC(ECCQuartile))
+	for i, opts := range allStyles {
+		img, err := code.Image(append(opts, WithScale(10), WithQuietZone(2))...)
+		if err != nil {
+			t.Fatal(err)
+		}
+		isDark := func(x, y int) bool {
+			r, _, _, _ := moduleAt(img, x, y, 10, 2).RGBA()
+			return r < 0x8000
+		}
+		for y := -2; y < code.Size()+2; y++ {
+			for x := -2; x < code.Size()+2; x++ {
+				if _, _, ok := render.FinderOrigin(x, y, code.Size()); ok {
+					continue // corners of round finders are light by design
+				}
+				if isDark(x, y) != code.Module(x, y) {
+					t.Fatalf("style %d: module (%d,%d) center dark=%v, want %v", i, x, y, isDark(x, y), code.Module(x, y))
+				}
+			}
+		}
+		// The row and column through each finder center read 1:1:3:1:1.
+		for _, o := range [3][2]int{{0, 0}, {code.Size() - 7, 0}, {0, code.Size() - 7}} {
+			for k, want := range []bool{true, false, true, true, true, false, true} {
+				if isDark(o[0]+k, o[1]+3) != want || isDark(o[0]+3, o[1]+k) != want {
+					t.Fatalf("style %d: finder at %v is not 1:1:3:1:1 through its center", i, o)
+				}
+			}
+		}
+	}
+}
+
+func TestStyledAntiAliasing(t *testing.T) {
+	code := mustEncode(t, "anti-aliased")
+	img, err := code.Image(WithModuleShape(ModuleDot), WithScale(10))
+	if err != nil {
+		t.Fatal(err)
+	}
+	gray := 0
+	for i := 0; i < len(img.Pix); i += 4 {
+		if v := img.Pix[i]; v > 0 && v < 255 {
+			gray++
+		}
+	}
+	if gray == 0 {
+		t.Fatal("dot edges are not anti-aliased")
+	}
+}
+
+func TestStyledPNG(t *testing.T) {
+	code := mustEncode(t, "x")
+	data, err := code.PNG(WithModuleShape(ModuleDot))
+	if err != nil {
+		t.Fatal(err)
+	}
+	img, err := png.Decode(bytes.NewReader(data))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Anti-aliased edges need the blended colors of a 256-entry palette.
+	if p, ok := img.(*image.Paletted); !ok || len(p.Palette) != 256 {
+		t.Fatalf("styled PNG decoded as %T, want a 256-color paletted image", img)
+	}
+	// It matches Image pixel for pixel.
+	want, _ := code.Image(WithModuleShape(ModuleDot))
+	for y := 0; y < want.Bounds().Dy(); y++ {
+		for x := 0; x < want.Bounds().Dx(); x++ {
+			if !sameColor(img.At(x, y), want.At(x, y)) {
+				t.Fatalf("pixel (%d,%d) = %v, Image has %v", x, y, img.At(x, y), want.At(x, y))
+			}
+		}
+	}
+}
+
+// TestStylesAreReadable renders every style combination at several
+// versions, ECC levels and scales and decodes it.
+func TestStylesAreReadable(t *testing.T) {
+	for i, opts := range allStyles {
+		for _, ecc := range []ECC{ECCLow, ECCHigh} {
+			for _, ver := range []int{1, 7, 25, 40} {
+				code := mustEncode(t, "styled", WithECC(ecc), WithoutECCBoost(), WithVersionRange(ver, ver))
+				for _, scale := range []int{3, 8} {
+					if err := code.Verify(append(opts, WithScale(scale))...); err != nil {
+						t.Errorf("style %d version %d %v scale %d: %v", i, ver, ecc, scale, err)
+					}
+				}
+			}
+		}
+	}
+}
+
+func TestStyledSVG(t *testing.T) {
+	code := mustEncode(t, "hi", WithECC(ECCLow))
+	plain, _ := code.SVG()
+	square, _ := code.SVG(WithModuleShape(ModuleSquare), WithFinderShape(FinderSquare))
+	assertEqual(t, plain, square)
+
+	data, err := code.SVG(WithModuleShape(ModuleDot), WithFinderShape(FinderCircle), WithScale(10))
+	if err != nil {
+		t.Fatal(err)
+	}
+	svg := string(data)
+	// One data path plus a ring and a center per finder.
+	assertEqual(t, 7, strings.Count(svg, "<path"))
+	assertEqual(t, 3, strings.Count(svg, `fill-rule="evenodd"`))
+	assertContains(t, svg, "a4,4 0 1,0 8,0") // a dot of radius 0.4 module
+	assertContains(t, svg, "a35,35 0 0,1")   // the circular finder ring
+}
+
+func BenchmarkStyledPNG(b *testing.B) {
+	code, _ := Encode("https://github.com/piglig/go-qr?ref=bench&v=1")
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		if _, err := code.PNG(WithModuleShape(ModuleRounded), WithFinderShape(FinderRounded)); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func BenchmarkStyledSVG(b *testing.B) {
+	code, _ := Encode("https://github.com/piglig/go-qr?ref=bench&v=1")
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		if _, err := code.SVG(WithModuleShape(ModuleRounded), WithFinderShape(FinderRounded)); err != nil {
 			b.Fatal(err)
 		}
 	}

@@ -17,7 +17,7 @@ func (c *Code) WriteText(w io.Writer, opts ...RenderOption) error {
 	if err != nil {
 		return err
 	}
-	if _, err := io.WriteString(w, c.text(cfg.quietZone)); err != nil {
+	if _, err := io.WriteString(w, c.text(cfg.QuietZone)); err != nil {
 		return fmt.Errorf("qr: write text: %w", err)
 	}
 	return nil

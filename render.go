@@ -1,29 +1,21 @@
 package qr
 
 import (
+	"bytes"
 	"fmt"
 	"image"
 	"image/color"
-	"math"
+	"io"
+
+	"github.com/piglig/go-qr/v2/internal/render"
 )
 
 // RenderOption configures the rendering methods of Code.
 type RenderOption func(*renderConfig)
 
-type renderConfig struct {
-	scale     int
-	quietZone int
-	fg, bg    color.Color
-	logo      *logoConfig
-	xmlHeader bool
-
-	moduleShape ModuleShape
-	finderShape FinderShape
-
-	finderRing, finderCenter color.Color
-	finderColorSet           bool
-	gradient                 *gradientConfig
-}
+// renderConfig is the configuration the options build; package render
+// draws from it.
+type renderConfig = render.Config
 
 const (
 	defaultScale     = 10
@@ -31,31 +23,31 @@ const (
 )
 
 func newRenderConfig(opts []RenderOption) (renderConfig, error) {
-	c := renderConfig{scale: defaultScale, quietZone: defaultQuietZone, fg: color.Black, bg: color.White}
+	c := renderConfig{Scale: defaultScale, QuietZone: defaultQuietZone, FG: color.Black, BG: color.White}
 	for _, o := range opts {
 		o(&c)
 	}
 	switch {
-	case c.scale < 1:
-		return c, fmt.Errorf("%w: scale %d must be at least 1", ErrInvalidArgument, c.scale)
-	case c.quietZone < 0:
-		return c, fmt.Errorf("%w: quiet zone %d must not be negative", ErrInvalidArgument, c.quietZone)
-	case c.fg == nil || c.bg == nil:
+	case c.Scale < 1:
+		return c, fmt.Errorf("%w: scale %d must be at least 1", ErrInvalidArgument, c.Scale)
+	case c.QuietZone < 0:
+		return c, fmt.Errorf("%w: quiet zone %d must not be negative", ErrInvalidArgument, c.QuietZone)
+	case c.FG == nil || c.BG == nil:
 		return c, fmt.Errorf("%w: nil color", ErrInvalidArgument)
-	case !c.moduleShape.valid():
-		return c, fmt.Errorf("%w: unknown module shape %d", ErrInvalidArgument, c.moduleShape)
-	case !c.finderShape.valid():
-		return c, fmt.Errorf("%w: unknown finder shape %d", ErrInvalidArgument, c.finderShape)
-	case c.finderColorSet && (c.finderRing == nil || c.finderCenter == nil):
+	case !ModuleShape(c.ModuleShape).valid():
+		return c, fmt.Errorf("%w: unknown module shape %d", ErrInvalidArgument, c.ModuleShape)
+	case !FinderShape(c.FinderShape).valid():
+		return c, fmt.Errorf("%w: unknown finder shape %d", ErrInvalidArgument, c.FinderShape)
+	case c.FinderColorSet && (c.FinderRing == nil || c.FinderCenter == nil):
 		return c, fmt.Errorf("%w: nil finder color", ErrInvalidArgument)
 	}
-	if c.gradient != nil {
-		if err := c.gradient.validate(); err != nil {
+	if c.Gradient != nil {
+		if err := c.Gradient.Validate(); err != nil {
 			return c, err
 		}
 	}
-	if c.logo != nil {
-		if err := c.logo.validateOptions(); err != nil {
+	if c.Logo != nil {
+		if err := validateLogoOptions(c.Logo); err != nil {
 			return c, err
 		}
 	}
@@ -67,108 +59,181 @@ func newRenderConfig(opts []RenderOption) (renderConfig, error) {
 // with ErrInvalidArgument when the image, quiet zone included, would be
 // more than 16384 pixels on a side.
 func WithScale(n int) RenderOption {
-	return func(c *renderConfig) { c.scale = n }
+	return func(c *renderConfig) { c.Scale = n }
 }
 
 // WithQuietZone sets the width of the light margin around the symbol, in
 // modules. ISO/IEC 18004 requires 4 (the default); many readers cope with 2.
 func WithQuietZone(modules int) RenderOption {
-	return func(c *renderConfig) { c.quietZone = modules }
+	return func(c *renderConfig) { c.QuietZone = modules }
 }
 
 // WithForeground sets the color of dark modules. The default is black.
 // Readers need strong contrast between foreground and background.
 func WithForeground(c color.Color) RenderOption {
-	return func(rc *renderConfig) { rc.fg = c }
+	return func(rc *renderConfig) { rc.FG = c }
 }
 
 // WithBackground sets the color of light modules and the quiet zone. The
 // default is white. A fully transparent background is allowed; SVG output
 // then omits the background rectangle.
 func WithBackground(c color.Color) RenderOption {
-	return func(rc *renderConfig) { rc.bg = c }
+	return func(rc *renderConfig) { rc.BG = c }
 }
 
 // WithSVGXMLHeader adds an XML declaration and DOCTYPE to SVG output, for
 // tools that require a standalone document.
 func WithSVGXMLHeader() RenderOption {
-	return func(c *renderConfig) { c.xmlHeader = true }
+	return func(c *renderConfig) { c.XMLHeader = true }
 }
 
-// sidePixels returns the rendered image side, quiet zone included, or an
-// error if it would overflow.
-func (c *renderConfig) sidePixels(code *Code) (int, error) {
-	modules := int64(code.Size()) + 2*int64(c.quietZone)
-	side := modules * int64(c.scale)
-	if side > math.MaxInt32 {
-		return 0, fmt.Errorf("%w: image side %d exceeds the maximum", ErrInvalidArgument, side)
-	}
-	return int(side), nil
-}
-
-// maxRasterSide bounds the side of PNG and Image output, in pixels: an
-// RGBA image of this side takes 1 GiB. Without a bound, a scale taken from
-// a request could make a server allocate any amount of memory.
-const maxRasterSide = 16384
-
-// rasterSide is sidePixels for output whose pixels are allocated.
-func (c *renderConfig) rasterSide(code *Code) (int, error) {
-	side, err := c.sidePixels(code)
-	if err != nil {
-		return 0, err
-	}
-	if side > maxRasterSide {
-		return 0, fmt.Errorf("%w: image side %d pixels exceeds the maximum of %d", ErrInvalidArgument, side, maxRasterSide)
-	}
-	return side, nil
-}
-
-// checkLogo reports whether the configured logo, if any, fits the error
+// checkLogo reports whether the logo of c, if any, fits the error
 // correction budget of code.
-func (c *renderConfig) checkLogo(code *Code) error {
-	if c.logo == nil {
+func checkLogo(c *renderConfig, code *Code) error {
+	if c.Logo == nil {
 		return nil
 	}
-	return c.logo.validate(code)
+	return validateLogo(c.Logo, code)
 }
 
-// rgba converts a color to 8-bit alpha-premultiplied RGBA once, so the
-// painters can write pixel bytes directly.
-func rgba(c color.Color) color.RGBA {
-	return color.RGBAModel.Convert(c).(color.RGBA)
+// symbol returns the modules of c for package render.
+func (c *Code) symbol() render.Symbol { return render.Symbol{N: c.size, Modules: c.modules} }
+
+// ModuleShape is the shape drawn for each dark module outside the finder
+// patterns.
+type ModuleShape int
+
+const (
+	// ModuleSquare fills the whole module; it is the default.
+	ModuleSquare ModuleShape = iota
+	// ModuleDot draws a circle 0.8 modules across.
+	ModuleDot
+	// ModuleRounded rounds every corner whose two neighbors are light, so
+	// runs of dark modules merge into smooth shapes and isolated modules
+	// become circles.
+	ModuleRounded
+)
+
+func (s ModuleShape) valid() bool { return ModuleSquare <= s && s <= ModuleRounded }
+
+// FinderShape is the shape of the three finder patterns in the corners.
+type FinderShape int
+
+const (
+	// FinderSquare draws the standard square ring and center; it is the
+	// default.
+	FinderSquare FinderShape = iota
+	// FinderRounded rounds the ring and the center.
+	FinderRounded
+	// FinderCircle draws a circular ring around a round center.
+	FinderCircle
+)
+
+func (s FinderShape) valid() bool { return FinderSquare <= s && s <= FinderCircle }
+
+// WithModuleShape sets the shape of the dark modules. Readers sample module
+// centers, so every shape keeps the center dark; check unusual styles with
+// Code.Verify before publishing. Text output ignores it.
+func WithModuleShape(s ModuleShape) RenderOption {
+	return func(c *renderConfig) { c.ModuleShape = render.ModuleShape(s) }
 }
 
-// moduleRow fills row with one value per pixel for module row y of code,
-// quiet zone included: dark pixels get fg and light pixels get bg.
-func moduleRow[T any](row []T, code *Code, c *renderConfig, y int, fg, bg T) {
-	px := 0
-	for mx := -c.quietZone; mx < code.Size()+c.quietZone; mx++ {
-		v := bg
-		if code.Module(mx, y) {
-			v = fg
+// WithFinderShape sets the shape of the three finder patterns. Every shape
+// keeps the 1:1:3:1:1 proportions that readers look for along the rows and
+// columns through the center. Text output ignores it.
+func WithFinderShape(s FinderShape) RenderOption {
+	return func(c *renderConfig) { c.FinderShape = render.FinderShape(s) }
+}
+
+// WithFinderColor sets the colors of the three finder patterns: the outer
+// ring and the center. By default they use the foreground, or the gradient.
+// Readers need them to contrast with the background as much as the data;
+// Code.Verify checks it.
+func WithFinderColor(ring, center color.Color) RenderOption {
+	return func(c *renderConfig) { c.FinderRing, c.FinderCenter, c.FinderColorSet = ring, center, true }
+}
+
+// WithGradient paints the dark modules with a linear gradient from one
+// color to another, replacing the foreground. angle is in degrees: 0 runs
+// left to right, 90 top to bottom. Finder patterns follow the gradient
+// unless WithFinderColor is given. Keep both colors dark against the
+// background; Code.Verify checks the contrast of each end.
+func WithGradient(from, to color.Color, angle float64) RenderOption {
+	return func(c *renderConfig) { c.Gradient = &render.Gradient{From: from, To: to, Angle: angle} }
+}
+
+// Image renders the symbol, quiet zone and logo into a new RGBA image. Use it
+// to compose the code with other graphics before encoding.
+func (c *Code) Image(opts ...RenderOption) (*image.RGBA, error) {
+	cfg, err := newRenderConfig(opts)
+	if err != nil {
+		return nil, err
+	}
+	return c.renderRGBA(&cfg)
+}
+
+// renderRGBA checks the image size and the logo, and renders.
+func (c *Code) renderRGBA(cfg *renderConfig) (*image.RGBA, error) {
+	sym := c.symbol()
+	if _, err := cfg.RasterSide(&sym); err != nil {
+		return nil, err
+	}
+	if err := checkLogo(cfg, c); err != nil {
+		return nil, err
+	}
+	return render.RGBA(&sym, cfg)
+}
+
+// WritePNG writes the symbol as a PNG image to w.
+func (c *Code) WritePNG(w io.Writer, opts ...RenderOption) error {
+	cfg, err := newRenderConfig(opts)
+	if err != nil {
+		return err
+	}
+	sym := c.symbol()
+	if cfg.Logo != nil {
+		if _, err := cfg.RasterSide(&sym); err != nil {
+			return err
 		}
-		for i := 0; i < c.scale; i++ {
-			row[px] = v
-			px++
+		if err := checkLogo(&cfg, c); err != nil {
+			return err
 		}
 	}
+	return render.WritePNG(w, &sym, &cfg)
 }
 
-// paintRGBA renders code into a new RGBA image without any logo.
-func paintRGBA(code *Code, c *renderConfig, side int) *image.RGBA {
-	img := image.NewRGBA(image.Rect(0, 0, side, side))
-	fg, bg := rgba(c.fg), rgba(c.bg)
-	row := make([]color.RGBA, side)
-	for my := -c.quietZone; my < code.Size()+c.quietZone; my++ {
-		moduleRow(row, code, c, my, fg, bg)
-		y0 := (my + c.quietZone) * c.scale
-		line := img.Pix[y0*img.Stride : y0*img.Stride+side*4]
-		for x, p := range row {
-			line[4*x], line[4*x+1], line[4*x+2], line[4*x+3] = p.R, p.G, p.B, p.A
-		}
-		for dy := 1; dy < c.scale; dy++ {
-			copy(img.Pix[(y0+dy)*img.Stride:], line)
-		}
+// PNG returns the symbol encoded as a PNG image.
+func (c *Code) PNG(opts ...RenderOption) ([]byte, error) {
+	var buf bytes.Buffer
+	if err := c.WritePNG(&buf, opts...); err != nil {
+		return nil, err
 	}
-	return img
+	return buf.Bytes(), nil
+}
+
+// WriteSVG writes the symbol as an SVG document to w. The dark modules are
+// drawn as a single path whose outlines trace each connected region, with
+// fill-rule="evenodd" punching out the holes, which keeps the output compact.
+func (c *Code) WriteSVG(w io.Writer, opts ...RenderOption) error {
+	cfg, err := newRenderConfig(opts)
+	if err != nil {
+		return err
+	}
+	sym := c.symbol()
+	if _, err := cfg.SidePixels(&sym); err != nil {
+		return err
+	}
+	if err := checkLogo(&cfg, c); err != nil {
+		return err
+	}
+	return render.WriteSVG(w, &sym, &cfg)
+}
+
+// SVG returns the symbol encoded as an SVG document.
+func (c *Code) SVG(opts ...RenderOption) ([]byte, error) {
+	var buf bytes.Buffer
+	if err := c.WriteSVG(&buf, opts...); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
 }
