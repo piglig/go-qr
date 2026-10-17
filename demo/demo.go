@@ -82,7 +82,21 @@ type DecodeResponse struct {
 	GS1      bool      `json:"gs1,omitempty"`
 	Segments []Segment `json:"segments,omitempty"`
 	Payload  string    `json:"payload,omitempty"` // payload type, such as "WiFi"
-	Error    string    `json:"error,omitempty"`
+	// ErrorsCorrected, UnusedEC and Soft report the error correction used.
+	ErrorsCorrected int     `json:"errorsCorrected"`
+	UnusedEC        float64 `json:"unusedEC"`
+	Soft            bool    `json:"soft,omitempty"`
+	// Quality is the print quality grade, for images other than camera
+	// frames.
+	Quality *Quality `json:"quality,omitempty"`
+	Error   string   `json:"error,omitempty"`
+}
+
+// Quality is the grade of a symbol and of each of its parameters.
+type Quality struct {
+	Grade           string      `json:"grade"`
+	Parameters      [][2]string `json:"parameters"` // name and grade
+	PixelsPerModule float64     `json:"pixelsPerModule"`
 }
 
 var (
@@ -308,29 +322,58 @@ func decodeDataURL(s string) (image.Image, error) {
 }
 
 // decodeRGBA reads a QR Code from non-premultiplied RGBA pixels, as returned
-// by a canvas's getImageData.
-func decodeRGBA(pix []byte, w, h int) DecodeResponse {
+// by a canvas's getImageData. A frame of the camera is searched for dark
+// codes on light only, and not graded.
+func decodeRGBA(pix []byte, w, h int, frame bool) DecodeResponse {
 	if w <= 0 || h <= 0 || len(pix) != w*h*4 {
 		return DecodeResponse{Error: fmt.Sprintf("bad image data: %d bytes for %dx%d", len(pix), w, h)}
 	}
 	img := &image.NRGBA{Pix: pix, Stride: 4 * w, Rect: image.Rect(0, 0, w, h)}
-	res, err := qr.Decode(img)
+	var opts []qr.DecodeOption
+	if frame {
+		opts = append(opts, qr.WithoutInverted())
+	}
+	res, err := qr.Decode(img, opts...)
 	if err != nil {
 		return DecodeResponse{Error: strings.TrimPrefix(err.Error(), "qr: ")}
 	}
 	out := DecodeResponse{
-		Text:     res.Text,
-		Version:  res.Version,
-		ECC:      res.ECC.String(),
-		Mask:     res.Mask,
-		Mirrored: res.Mirrored,
-		GS1:      res.GS1,
-		Segments: segments(res),
+		Text:            res.Text,
+		Version:         res.Version,
+		ECC:             res.ECC.String(),
+		Mask:            res.Mask,
+		Mirrored:        res.Mirrored,
+		GS1:             res.GS1,
+		Segments:        segments(res),
+		ErrorsCorrected: res.ErrorsCorrected,
+		UnusedEC:        res.UnusedErrorCorrection,
+		Soft:            res.SoftDecision,
 	}
 	if p, err := payload.Parse(res.Text); err == nil {
 		out.Payload = reflect.TypeOf(p).Name()
 	}
+	if !frame {
+		if q, err := qr.Grade(img); err == nil {
+			out.Quality = quality(q)
+		}
+	}
 	return out
+}
+
+func quality(q *qr.Quality) *Quality {
+	return &Quality{
+		Grade: q.Grade.String(),
+		Parameters: [][2]string{
+			{"Symbol contrast", q.SymbolContrast.Grade.String()},
+			{"Modulation", q.Modulation.Grade.String()},
+			{"Reflectance margin", q.ReflectanceMargin.Grade.String()},
+			{"Fixed pattern damage", q.FixedPatternDamage.Grade.String()},
+			{"Axial nonuniformity", q.AxialNonuniformity.Grade.String()},
+			{"Grid nonuniformity", q.GridNonuniformity.Grade.String()},
+			{"Unused error correction", q.UnusedErrorCorrection.Grade.String()},
+		},
+		PixelsPerModule: q.PixelsPerModule,
+	}
 }
 
 func segments(res *qr.DecodeResult) []Segment {
