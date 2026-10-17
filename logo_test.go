@@ -9,6 +9,8 @@ import (
 	"image/png"
 	"strings"
 	"testing"
+
+	"github.com/piglig/go-qr/v2/internal/render"
 )
 
 func makeTestLogo(w, h int, c color.Color) image.Image {
@@ -32,7 +34,7 @@ func TestLogoImageIsCentered(t *testing.T) {
 	side := img.Bounds().Dx()
 	assertTrue(t, sameColor(img.At(side/2, side/2), red), "center is not the logo")
 
-	box, inner := (&logoConfig{ratio: 0.2}).rects(code.Size(), &renderConfig{scale: scale, quietZone: qz})
+	box, inner := (&render.Logo{Ratio: 0.2}).Rects(code.Size(), &renderConfig{Scale: scale, QuietZone: qz})
 	assertEqual(t, side-box.Max.X, box.Min.X, "logo box is not horizontally centered")
 	assertEqual(t, side-box.Max.Y, box.Min.Y, "logo box is not vertically centered")
 	assertTrue(t, sameColor(img.At(box.Min.X, box.Min.Y), color.White), "pad is not the background color")
@@ -44,7 +46,7 @@ func TestLogoPadUsesBackground(t *testing.T) {
 	bg := color.RGBA{R: 0x20, G: 0x40, B: 0x60, A: 0xff}
 	img, err := code.Image(WithBackground(bg), WithForeground(color.White), WithLogo(makeTestLogo(4, 4, red), 0.2))
 	assertNoError(t, err)
-	box, _ := (&logoConfig{ratio: 0.2}).rects(code.Size(), &renderConfig{scale: defaultScale, quietZone: defaultQuietZone})
+	box, _ := (&render.Logo{Ratio: 0.2}).Rects(code.Size(), &renderConfig{Scale: defaultScale, QuietZone: defaultQuietZone})
 	assertTrue(t, sameColor(img.At(box.Min.X, box.Min.Y), bg))
 }
 
@@ -124,7 +126,7 @@ func TestLogoWithinLimitIsReadable(t *testing.T) {
 			code := mustEncode(t, "a", WithECC(ecc), WithoutECCBoost(), WithVersionRange(ver, ver))
 			best := 0.0
 			for r := 0.01; r < 0.99; r += 0.01 {
-				if (&logoConfig{img: logo, ratio: r}).validate(code) == nil {
+				if validateLogo(&render.Logo{Img: logo, Ratio: r}, code) == nil {
 					best = r
 				}
 			}
@@ -133,18 +135,6 @@ func TestLogoWithinLimitIsReadable(t *testing.T) {
 			}
 			if err := code.Verify(WithLogo(logo, best), WithScale(3)); err != nil {
 				t.Errorf("version %d %v, ratio %.2f: %v", ver, ecc, best, err)
-			}
-		}
-	}
-}
-
-func TestLogoBoxParity(t *testing.T) {
-	for ver := MinVersion; ver <= MaxVersion; ver++ {
-		size := 4*ver + 17
-		for _, ratio := range []float64{0.01, 0.15, 0.2, 0.33} {
-			box := (&logoConfig{ratio: ratio}).boxModules(size)
-			if box%2 != size%2 || box < 3 {
-				t.Fatalf("version %d ratio %v: box %d modules does not center on a %d-module symbol", ver, ratio, box, size)
 			}
 		}
 	}

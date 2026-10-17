@@ -1,8 +1,7 @@
-package qr
+package render
 
 import (
 	"bufio"
-	"bytes"
 	"compress/zlib"
 	"encoding/binary"
 	"fmt"
@@ -14,22 +13,11 @@ import (
 	"sync"
 )
 
-// Image renders the symbol, quiet zone and logo into a new RGBA image. Use it
-// to compose the code with other graphics before encoding.
-func (c *Code) Image(opts ...RenderOption) (*image.RGBA, error) {
-	cfg, err := newRenderConfig(opts)
+// RGBA renders the symbol, quiet zone and logo into a new RGBA image. The
+// caller has checked the logo's error correction budget.
+func RGBA(c *Symbol, cfg *Config) (*image.RGBA, error) {
+	side, err := cfg.RasterSide(c)
 	if err != nil {
-		return nil, err
-	}
-	return c.renderRGBA(&cfg)
-}
-
-func (c *Code) renderRGBA(cfg *renderConfig) (*image.RGBA, error) {
-	side, err := cfg.rasterSide(c)
-	if err != nil {
-		return nil, err
-	}
-	if err := cfg.checkLogo(c); err != nil {
 		return nil, err
 	}
 	var img *image.RGBA
@@ -41,51 +29,10 @@ func (c *Code) renderRGBA(cfg *renderConfig) (*image.RGBA, error) {
 	default:
 		img = paintRGBA(c, cfg, side)
 	}
-	if cfg.logo != nil {
-		cfg.logo.overlay(img, c.Size(), cfg)
+	if cfg.Logo != nil {
+		cfg.Logo.overlay(img, c.Size(), cfg)
 	}
 	return img, nil
-}
-
-// WritePNG writes the symbol as a PNG image to w.
-func (c *Code) WritePNG(w io.Writer, opts ...RenderOption) error {
-	cfg, err := newRenderConfig(opts)
-	if err != nil {
-		return err
-	}
-
-	var img image.Image
-	if cfg.logo != nil || cfg.multicolor() {
-		if img, err = c.renderRGBA(&cfg); err != nil {
-			return err
-		}
-	} else {
-		side, err := cfg.rasterSide(c)
-		if err != nil {
-			return err
-		}
-		if !cfg.styled() {
-			if err := writeTwoColorPNG(w, c, &cfg, side); err != nil {
-				return fmt.Errorf("qr: write PNG: %w", err)
-			}
-			return nil
-		}
-		img = paintStyledPaletted(c, &cfg, side)
-	}
-
-	if err := png.Encode(w, img); err != nil {
-		return fmt.Errorf("qr: write PNG: %w", err)
-	}
-	return nil
-}
-
-// PNG returns the symbol encoded as a PNG image.
-func (c *Code) PNG(opts ...RenderOption) ([]byte, error) {
-	var buf bytes.Buffer
-	if err := c.WritePNG(&buf, opts...); err != nil {
-		return nil, err
-	}
-	return buf.Bytes(), nil
 }
 
 // writeTwoColorPNG writes the plain symbol as a 1-bit paletted PNG, without
@@ -94,7 +41,7 @@ func (c *Code) PNG(opts ...RenderOption) ([]byte, error) {
 // filter, compressed at the default level and split into IDAT chunks of 32 KiB.
 // png.Encode reads such an image one pixel at a time through ColorIndexAt,
 // which made it most of the cost of PNG.
-func writeTwoColorPNG(w io.Writer, code *Code, c *renderConfig, side int) error {
+func writeTwoColorPNG(w io.Writer, code *Symbol, c *Config, side int) error {
 	pw := pngWriter{w: w}
 	pw.raw([]byte{0x89, 'P', 'N', 'G', 0x0d, 0x0a, 0x1a, 0x0a}) // signature
 
@@ -108,7 +55,7 @@ func writeTwoColorPNG(w io.Writer, code *Code, c *renderConfig, side int) error 
 	var plte [6]byte
 	var trns [2]byte
 	last := -1
-	for i, col := range [2]color.Color{c.bg, c.fg} {
+	for i, col := range [2]color.Color{c.BG, c.FG} {
 		n := color.NRGBAModel.Convert(col).(color.NRGBA)
 		plte[3*i], plte[3*i+1], plte[3*i+2], trns[i] = n.R, n.G, n.B, n.A
 		if n.A != 0xff {
@@ -129,13 +76,13 @@ func writeTwoColorPNG(w io.Writer, code *Code, c *renderConfig, side int) error 
 	// scale times.
 	pixels := make([]uint8, side)
 	row := make([]byte, 1+(side+7)/8)
-	for my := -c.quietZone; my < code.Size()+c.quietZone && pw.err == nil; my++ {
+	for my := -c.QuietZone; my < code.Size()+c.QuietZone && pw.err == nil; my++ {
 		moduleRow(pixels, code, c, my, 1, 0)
 		clear(row)
 		for x, v := range pixels {
 			row[1+x/8] |= v << (7 - x%8)
 		}
-		for i := 0; i < c.scale; i++ {
+		for i := 0; i < c.Scale; i++ {
 			if _, err := zw.Write(row); err != nil {
 				break
 			}
@@ -192,4 +139,33 @@ func (w idatWriter) Write(b []byte) (int, error) {
 		return 0, w.p.err
 	}
 	return len(b), nil
+}
+
+// WritePNG writes the symbol as a PNG image to w. The caller has checked the
+// logo's error correction budget.
+func WritePNG(w io.Writer, c *Symbol, cfg *Config) error {
+	var img image.Image
+	if cfg.Logo != nil || cfg.multicolor() {
+		var err error
+		if img, err = RGBA(c, cfg); err != nil {
+			return err
+		}
+	} else {
+		side, err := cfg.RasterSide(c)
+		if err != nil {
+			return err
+		}
+		if !cfg.styled() {
+			if err := writeTwoColorPNG(w, c, cfg, side); err != nil {
+				return fmt.Errorf("qr: write PNG: %w", err)
+			}
+			return nil
+		}
+		img = paintStyledPaletted(c, cfg, side)
+	}
+
+	if err := png.Encode(w, img); err != nil {
+		return fmt.Errorf("qr: write PNG: %w", err)
+	}
+	return nil
 }

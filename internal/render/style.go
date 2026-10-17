@@ -1,4 +1,4 @@
-package qr
+package render
 
 import (
 	"image"
@@ -9,61 +9,15 @@ import (
 	"sync"
 )
 
-// ModuleShape is the shape drawn for each dark module outside the finder
-// patterns.
-type ModuleShape int
-
-const (
-	// ModuleSquare fills the whole module; it is the default.
-	ModuleSquare ModuleShape = iota
-	// ModuleDot draws a circle 0.8 modules across.
-	ModuleDot
-	// ModuleRounded rounds every corner whose two neighbors are light, so
-	// runs of dark modules merge into smooth shapes and isolated modules
-	// become circles.
-	ModuleRounded
-)
-
-func (s ModuleShape) valid() bool { return ModuleSquare <= s && s <= ModuleRounded }
-
-// FinderShape is the shape of the three finder patterns in the corners.
-type FinderShape int
-
-const (
-	// FinderSquare draws the standard square ring and center; it is the
-	// default.
-	FinderSquare FinderShape = iota
-	// FinderRounded rounds the ring and the center.
-	FinderRounded
-	// FinderCircle draws a circular ring around a round center.
-	FinderCircle
-)
-
-func (s FinderShape) valid() bool { return FinderSquare <= s && s <= FinderCircle }
-
-// WithModuleShape sets the shape of the dark modules. Readers sample module
-// centers, so every shape keeps the center dark; check unusual styles with
-// Code.Verify before publishing. Text output ignores it.
-func WithModuleShape(s ModuleShape) RenderOption {
-	return func(c *renderConfig) { c.moduleShape = s }
-}
-
-// WithFinderShape sets the shape of the three finder patterns. Every shape
-// keeps the 1:1:3:1:1 proportions that readers look for along the rows and
-// columns through the center. Text output ignores it.
-func WithFinderShape(s FinderShape) RenderOption {
-	return func(c *renderConfig) { c.finderShape = s }
-}
-
 // styled reports whether the rendering differs from plain square modules in
 // a single color.
-func (c *renderConfig) styled() bool {
+func (c *Config) styled() bool {
 	return c.shaped() || c.multicolor()
 }
 
 // shaped reports whether modules or finders are not plain squares.
-func (c *renderConfig) shaped() bool {
-	return c.moduleShape != ModuleSquare || c.finderShape != FinderSquare
+func (c *Config) shaped() bool {
+	return c.ModuleShape != ModuleSquare || c.FinderShape != FinderSquare
 }
 
 // dotRadius is the radius of a ModuleDot, in modules.
@@ -79,7 +33,7 @@ const (
 
 // roundedCorners returns which corners of the dark module at (x, y) have
 // both orthogonal neighbors light.
-func roundedCorners(c *Code, x, y int) int {
+func roundedCorners(c *Symbol, x, y int) int {
 	up, down := c.Module(x, y-1), c.Module(x, y+1)
 	left, right := c.Module(x-1, y), c.Module(x+1, y)
 	mask := 0
@@ -98,10 +52,10 @@ func roundedCorners(c *Code, x, y int) int {
 	return mask
 }
 
-// finderOrigin reports whether module (x, y) lies in one of the 7×7 finder
+// FinderOrigin reports whether module (x, y) lies in one of the 7×7 finder
 // patterns of a symbol of the given size, and returns that finder's
 // top-left module.
-func finderOrigin(x, y, size int) (fx, fy int, ok bool) {
+func FinderOrigin(x, y, size int) (fx, fy int, ok bool) {
 	for _, o := range [3][2]int{{0, 0}, {size - 7, 0}, {0, size - 7}} {
 		if x >= o[0] && x < o[0]+7 && y >= o[1] && y < o[1]+7 {
 			return o[0], o[1], true
@@ -241,9 +195,9 @@ func finderTile(shape FinderShape, scale int) []uint8 {
 // paintCoverage renders code with the configured shapes as an alpha map of
 // side×side pixels: 0 is background, 255 is fully dark. Module cells and
 // finder boxes do not overlap, so tiles are copied rather than blended.
-func paintCoverage(code *Code, c *renderConfig, side int) []uint8 {
+func paintCoverage(code *Symbol, c *Config, side int) []uint8 {
 	cov := make([]uint8, side*side)
-	s, size, qz := c.scale, code.Size(), c.quietZone
+	s, size, qz := c.Scale, code.Size(), c.QuietZone
 	copyTile := func(tile []uint8, px, x0, y0 int) {
 		for ty := 0; ty < px; ty++ {
 			copy(cov[(y0+ty)*side+x0:], tile[ty*px:(ty+1)*px])
@@ -254,17 +208,17 @@ func paintCoverage(code *Code, c *renderConfig, side int) []uint8 {
 			if !code.Module(x, y) {
 				continue
 			}
-			if _, _, ok := finderOrigin(x, y, size); ok {
+			if _, _, ok := FinderOrigin(x, y, size); ok {
 				continue
 			}
 			corners := 0
-			if c.moduleShape == ModuleRounded {
+			if c.ModuleShape == ModuleRounded {
 				corners = roundedCorners(code, x, y)
 			}
-			copyTile(moduleTile(c.moduleShape, corners, s), s, (x+qz)*s, (y+qz)*s)
+			copyTile(moduleTile(c.ModuleShape, corners, s), s, (x+qz)*s, (y+qz)*s)
 		}
 	}
-	finder := finderTile(c.finderShape, s)
+	finder := finderTile(c.FinderShape, s)
 	for _, o := range [3][2]int{{0, 0}, {size - 7, 0}, {0, size - 7}} {
 		copyTile(finder, 7*s, (o[0]+qz)*s, (o[1]+qz)*s)
 	}
@@ -290,9 +244,9 @@ func blendPalette(fg, bg color.Color) [256]color.RGBA {
 
 // paintStyled renders code with the configured shapes into a new RGBA
 // image.
-func paintStyled(code *Code, c *renderConfig, side int) *image.RGBA {
+func paintStyled(code *Symbol, c *Config, side int) *image.RGBA {
 	cov := paintCoverage(code, c, side)
-	pal := blendPalette(c.fg, c.bg)
+	pal := blendPalette(c.FG, c.BG)
 	img := image.NewRGBA(image.Rect(0, 0, side, side))
 	for i, a := range cov {
 		p := pal[a]
@@ -304,8 +258,8 @@ func paintStyled(code *Code, c *renderConfig, side int) *image.RGBA {
 // paintStyledPaletted renders code with the configured shapes into an
 // 8-bit paletted image, which encodes to a much smaller and faster PNG than
 // RGBA: every pixel is a blend of the two colors.
-func paintStyledPaletted(code *Code, c *renderConfig, side int) *image.Paletted {
-	pal := blendPalette(c.fg, c.bg)
+func paintStyledPaletted(code *Symbol, c *Config, side int) *image.Paletted {
+	pal := blendPalette(c.FG, c.BG)
 	palette := make(color.Palette, len(pal))
 	for i := range pal {
 		palette[i] = pal[i]
@@ -315,9 +269,9 @@ func paintStyledPaletted(code *Code, c *renderConfig, side int) *image.Paletted 
 
 // writeStyledSVGBody writes the modules and finder patterns of code with the
 // configured shapes.
-func (c *Code) writeStyledSVGBody(sb *strings.Builder, cfg *renderConfig) {
-	s := float64(cfg.scale)
-	qz := float64(cfg.quietZone)
+func writeStyledSVGBody(c *Symbol, sb *strings.Builder, cfg *Config) {
+	s := float64(cfg.Scale)
+	qz := float64(cfg.QuietZone)
 	size := c.Size()
 	fill, ringFill, centerFill := cfg.svgFills()
 
@@ -327,11 +281,11 @@ func (c *Code) writeStyledSVGBody(sb *strings.Builder, cfg *renderConfig) {
 			if !c.Module(x, y) {
 				continue
 			}
-			if _, _, ok := finderOrigin(x, y, size); ok {
+			if _, _, ok := FinderOrigin(x, y, size); ok {
 				continue
 			}
 			px, py := (float64(x)+qz)*s, (float64(y)+qz)*s
-			switch cfg.moduleShape {
+			switch cfg.ModuleShape {
 			case ModuleDot:
 				d.circle(px+s/2, py+s/2, dotRadius*s)
 			case ModuleRounded:
@@ -352,7 +306,7 @@ func (c *Code) writeStyledSVGBody(sb *strings.Builder, cfg *renderConfig) {
 	sb.Write(d.b)
 	sb.WriteString("\" fill=\"" + fill + "\"/>\n")
 
-	g := finderShapeGeometry(cfg.finderShape)
+	g := finderShapeGeometry(cfg.FinderShape)
 	for _, o := range [3][2]int{{0, 0}, {size - 7, 0}, {0, size - 7}} {
 		ox, oy := (float64(o[0])+qz)*s, (float64(o[1])+qz)*s
 		var ring, center svgPath

@@ -49,24 +49,24 @@ no scratch state is retained.
 
 ## Rendering
 
-All renderers work from `Code.Module(x, y)` and the same `renderConfig`
-(`render.go`).
+The options build one configuration (`render.go`), and `internal/render`
+draws the symbol's modules from it.
 
-- **Plain PNG** (`render_png.go`) is written straight from the modules as a
+- **Plain PNG** (`internal/render/png.go`) is written straight from the modules as a
   1-bit paletted PNG: each module row becomes one image row, repeated
   `scale` times into a pooled zlib compressor, without building an image
   first. The bytes are those `image/png` would write.
-- **Plain SVG** (`render_svg.go`) builds a graph of the edges between dark
+- **Plain SVG** (`internal/render/svg.go`) builds a graph of the edges between dark
   and light modules and walks it into one path per region, with
   `fill-rule="evenodd"` for holes. A version 40 code becomes a few kilobytes
   instead of thousands of rectangles.
-- **Styles** (`render_style.go`, `render_color.go`) rasterize each shape
+- **Styles** (`internal/render`: `style.go`, `color.go`) rasterize each shape
   once into an anti-aliased coverage tile (4×4 supersampling), cached per
   shape and scale, and copy tiles into a coverage map. Two-color output maps
   coverage through a 256-entry palette; gradients and finder colors blend
   per pixel into RGBA.
-- **Logos** (`logo.go`) are checked against the error correction budget
-  before drawing; see below.
+- **Logos** are checked against the error correction budget before drawing
+  (`logo.go`) and drawn by `internal/render/logo.go`; see below.
 
 ## Decoding
 
