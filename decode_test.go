@@ -12,6 +12,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/piglig/go-qr/v2/internal/bitbuffer"
 	"github.com/piglig/go-qr/v2/internal/detect"
 )
 
@@ -352,11 +353,11 @@ func TestDecodeNotFound(t *testing.T) {
 func TestParseBitstreamMalformed(t *testing.T) {
 	// pack builds codewords from (value, width) pairs.
 	pack := func(fields ...int) []byte {
-		var bb bitBuffer
+		var bb bitbuffer.Buffer
 		for i := 0; i < len(fields); i += 2 {
-			bb.appendBits(fields[i], fields[i+1])
+			bb.AppendBits(fields[i], fields[i+1])
 		}
-		return bb.bytes()
+		return bb.Bytes()
 	}
 	cases := []struct {
 		name string
@@ -380,22 +381,6 @@ func TestParseBitstreamMalformed(t *testing.T) {
 				t.Errorf("error = %v, want %v", err, tc.want)
 			}
 		})
-	}
-}
-
-func TestShiftJISRoundTrip(t *testing.T) {
-	for v := 0; v < len(kanjiToUnicode); v++ {
-		if _, ok := kanjiRune(v); !ok {
-			continue
-		}
-		b1, b2 := kanjiToShiftJIS(v)
-		got, ok := shiftJISToKanji(b1, b2)
-		if !ok || got != v {
-			t.Fatalf("value %d -> SJIS %02X%02X -> %d, %v", v, b1, b2, got, ok)
-		}
-	}
-	if _, ok := shiftJISToKanji(0xA0, 0x40); ok {
-		t.Error("0xA040 is not a Kanji-mode code")
 	}
 }
 
@@ -712,4 +697,45 @@ func TestDecodeReportsErrorCorrection(t *testing.T) {
 	if res, err := decodeGrid(grid, rel); err != nil || !res.SoftDecision {
 		t.Errorf("soft attempt: %v, %v", res, err)
 	}
+}
+
+// TestDecodeCharsetSymbol covers the inference through Decode: a Kanji mode
+// segment marks the symbol as Japanese, so a byte segment too short to tell
+// is read as Shift_JIS, and Windows-1252 punctuation reads as such.
+func TestDecodeCharsetSymbol(t *testing.T) {
+	kanji, err := KanjiSegment("予約")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range []struct {
+		name string
+		segs []Segment
+		want string
+	}{
+		{"short katakana alone", []Segment{BytesSegment([]byte("\xd2\xd3"))}, "ÒÓ"},
+		{"short katakana with Kanji", []Segment{kanji, BytesSegment([]byte(" \xd2\xd3"))}, "予約 ﾒﾓ"},
+		{"Windows-1252 quotes", []Segment{BytesSegment([]byte("\x93Bonjour\x94"))}, "“Bonjour”"},
+		{"two segments, one clear", []Segment{BytesSegment([]byte("\xc3\xde\xbb\xde\xb2\xdd")), mustNumericSegment("123"), BytesSegment([]byte("\xd2\xd3"))}, "ﾃﾞｻﾞｲﾝ123ﾒﾓ"},
+	} {
+		code, err := EncodeSegments(c.segs)
+		if err != nil {
+			t.Fatal(err)
+		}
+		res, err := Decode(mustImage(t, code, WithScale(4)))
+		if err != nil {
+			t.Fatalf("%s: %v", c.name, err)
+		}
+		if res.Text != c.want {
+			t.Errorf("%s: got %q, want %q", c.name, res.Text, c.want)
+		}
+	}
+}
+
+// mustNumericSegment is NumericSegment for literals in tests.
+func mustNumericSegment(digits string) Segment {
+	s, err := NumericSegment(digits)
+	if err != nil {
+		panic(err)
+	}
+	return s
 }

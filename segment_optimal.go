@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"unicode/utf8"
 
+	"github.com/piglig/go-qr/v2/internal/charset"
 	"github.com/piglig/go-qr/v2/internal/symbol"
 )
 
@@ -80,7 +81,7 @@ func minCharBits(runes []rune, gs1 bool) int {
 			gs1 && r == gs1Separator && gs1AlnumSeparator(runes, i):
 			cost = 33
 		default:
-			if _, ok := kanjiValue(r); ok {
+			if _, ok := charset.KanjiValue(r); ok {
 				cost = min(cost, 78)
 			}
 		}
@@ -137,7 +138,7 @@ func charModes(runes []rune, ver int, gs1 bool) []Mode {
 			cur[2] = prev[2] + 20
 			step[2] = ModeNumeric
 		}
-		if _, ok := kanjiValue(r); ok {
+		if _, ok := charset.KanjiValue(r); ok {
 			cur[3] = prev[3] + 78
 			step[3] = ModeKanji
 		}

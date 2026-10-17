@@ -3,6 +3,8 @@ package qr
 import (
 	"fmt"
 	"unicode/utf8"
+
+	"github.com/piglig/go-qr/v2/internal/charset"
 )
 
 // bitReader reads big-endian bits out of the corrected data codewords.
@@ -74,15 +76,15 @@ func parseBitstream(data []byte, ver int) (bitstream, error) {
 		for i, p := range pend {
 			segs[i] = p.b
 		}
-		cs := guessCharset(segs, hasKanji)
+		cs := charset.Guess(segs, hasKanji)
 		var full []byte
 		last := 0
 		for _, p := range pend {
 			full = append(full, text[last:p.at]...)
-			if cs == charsetShiftJIS {
-				full = appendShiftJIS(full, p.b)
+			if cs == charset.ShiftJIS {
+				full = charset.AppendShiftJIS(full, p.b)
 			} else {
-				full = appendWindows1252(full, p.b)
+				full = charset.AppendWindows1252(full, p.b)
 			}
 			last = p.at
 		}
@@ -276,9 +278,9 @@ func readKanji(r *bitReader, count int, text []byte) (sjis, _ []byte, err error)
 	sjis = make([]byte, 0, 2*count)
 	for i := 0; i < count; i++ {
 		v, _ := r.read(13)
-		b1, b2 := kanjiToShiftJIS(v)
+		b1, b2 := charset.KanjiToShiftJIS(v)
 		sjis = append(sjis, b1, b2)
-		c, ok := kanjiRune(v)
+		c, ok := charset.KanjiRune(v)
 		if !ok {
 			c = utf8.RuneError
 		}
@@ -298,7 +300,7 @@ func appendCharset(text, b []byte, eci int) ([]byte, error) {
 	case 1, 3: // ISO-8859-1
 		return appendLatin1(text, b), nil
 	case 20: // Shift_JIS
-		return appendShiftJIS(text, b), nil
+		return charset.AppendShiftJIS(text, b), nil
 	}
 	return nil, fmt.Errorf("%w: ECI %d character set", ErrUnsupported, eci)
 }
@@ -306,33 +308,6 @@ func appendCharset(text, b []byte, eci int) ([]byte, error) {
 func appendLatin1(text, b []byte) []byte {
 	for _, c := range b {
 		text = utf8.AppendRune(text, rune(c))
-	}
-	return text
-}
-
-// appendShiftJIS decodes Shift_JIS: ASCII, half-width katakana, and the
-// double-byte range covered by the QR Kanji table. Anything else becomes
-// U+FFFD.
-func appendShiftJIS(text, b []byte) []byte {
-	for i := 0; i < len(b); i++ {
-		c := b[i]
-		switch {
-		case c < 0x80:
-			text = append(text, c)
-		case 0xA1 <= c && c <= 0xDF:
-			text = utf8.AppendRune(text, 0xFF61+rune(c-0xA1))
-		case i+1 < len(b):
-			r := utf8.RuneError
-			if v, ok := shiftJISToKanji(c, b[i+1]); ok {
-				if k, ok := kanjiRune(v); ok {
-					r = k
-				}
-			}
-			text = utf8.AppendRune(text, r)
-			i++
-		default:
-			text = utf8.AppendRune(text, utf8.RuneError)
-		}
 	}
 	return text
 }

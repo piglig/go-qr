@@ -18,7 +18,7 @@ text ──► segments ──► bitstream ──► codewords + ECC ──► 
    searching for the smallest version that fits; a range of versions that
    even the cheapest encoding of the text overflows is skipped without
    segmenting.
-2. **Bitstream** (`encode.go`, `bitbuffer.go`). Segments are written with
+2. **Bitstream** (`encode.go`, `internal/bitbuffer`). Segments are written with
    their headers, followed by the terminator and the alternating pad bytes
    0xEC and 0x11 up to the version's capacity. If there is room, the error
    correction level is raised: the symbol size is fixed by then, so a higher
@@ -159,7 +159,8 @@ image ──► luminance ──► threshold ──► locate ──► fit gri
    reads in the same way. `DecodeContext` and `DecodeAllContext` check
    their context between these stages: before each level, each window
    located again at full resolution and each triple `DecodeAll` decodes.
-8. **Matrix and bitstream** (`internal/symbol/matrix.go`, `decode_segments.go`). The
+8. **Matrix and bitstream** (`internal/symbol/matrix.go`, `decode_segments.go`,
+   with the character sets of `internal/charset`). The
    format information is BCH-corrected, the mask removed, codewords read in
    the placement order, blocks de-interleaved and Reed–Solomon corrected, and
    the segments parsed, applying ECI character sets, GS1 and structured

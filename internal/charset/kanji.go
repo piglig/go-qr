@@ -1,4 +1,4 @@
-package qr
+package charset
 
 import "encoding/base64"
 
@@ -146,26 +146,26 @@ func init() {
 	}
 }
 
-// kanjiValue returns the 13-bit QR Kanji value of r and whether r is
+// KanjiValue returns the 13-bit QR Kanji value of r and whether r is
 // encodable in Kanji mode.
-func kanjiValue(r rune) (int, bool) {
+func KanjiValue(r rune) (int, bool) {
 	if r < 0 || int(r) >= len(unicodeToKanji) || unicodeToKanji[r] < 0 {
 		return 0, false
 	}
 	return int(unicodeToKanji[r]), true
 }
 
-// kanjiRune returns the character for a 13-bit QR Kanji value.
-func kanjiRune(v int) (rune, bool) {
+// KanjiRune returns the character for a 13-bit QR Kanji value.
+func KanjiRune(v int) (rune, bool) {
 	if v < 0 || v >= len(kanjiToUnicode) || kanjiToUnicode[v] < 0 {
 		return 0, false
 	}
 	return kanjiToUnicode[v], true
 }
 
-// kanjiToShiftJIS expands a 13-bit QR Kanji value into its two Shift_JIS
+// KanjiToShiftJIS expands a 13-bit QR Kanji value into its two Shift_JIS
 // bytes (ISO/IEC 18004 §7.4.6, in reverse).
-func kanjiToShiftJIS(v int) (byte, byte) {
+func KanjiToShiftJIS(v int) (byte, byte) {
 	c := (v/0xC0)<<8 | v%0xC0
 	if c < 0x1F00 {
 		c += 0x8140
@@ -175,9 +175,9 @@ func kanjiToShiftJIS(v int) (byte, byte) {
 	return byte(c >> 8), byte(c)
 }
 
-// shiftJISToKanji compacts a Shift_JIS double-byte code into its 13-bit QR
+// ShiftJISToKanji compacts a Shift_JIS double-byte code into its 13-bit QR
 // Kanji value, reporting false outside the two ranges QR Kanji mode covers.
-func shiftJISToKanji(b1, b2 byte) (int, bool) {
+func ShiftJISToKanji(b1, b2 byte) (int, bool) {
 	c := int(b1)<<8 | int(b2)
 	switch {
 	case 0x8140 <= c && c <= 0x9FFC:

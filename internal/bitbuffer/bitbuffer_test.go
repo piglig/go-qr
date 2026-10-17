@@ -1,51 +1,51 @@
-package qr
+package bitbuffer
 
 import (
 	"testing"
 )
 
-// bufFromBits builds a bitBuffer from a sequence of bits.
-func bufFromBits(bits ...bool) bitBuffer {
-	var b bitBuffer
+// bufFromBits builds a Buffer from a sequence of bits.
+func bufFromBits(bits ...bool) Buffer {
+	var b Buffer
 	for _, bit := range bits {
-		b.appendBit(bit)
+		b.AppendBit(bit)
 	}
 	return b
 }
 
-// bitsOf reads a bitBuffer back into a []bool for comparison.
-func bitsOf(b *bitBuffer) []bool {
-	out := make([]bool, b.len())
+// bitsOf reads a Buffer back into a []bool for comparison.
+func bitsOf(b *Buffer) []bool {
+	out := make([]bool, b.Len())
 	for i := range out {
-		out[i] = b.getBit(i)
+		out[i] = b.GetBit(i)
 	}
 	return out
 }
 
 func TestBitBuffer_AppendBitAndGet(t *testing.T) {
-	var b bitBuffer
-	if b.getBit(0) {
+	var b Buffer
+	if b.GetBit(0) {
 		t.Fatal("empty buffer should read 0 out of range")
 	}
 
 	pattern := []bool{true, false, true, true, false, false, true, false, true}
 	for _, bit := range pattern {
-		b.appendBit(bit)
+		b.AppendBit(bit)
 	}
-	if b.len() != len(pattern) {
-		t.Fatalf("len = %d, want %d", b.len(), len(pattern))
+	if b.Len() != len(pattern) {
+		t.Fatalf("len = %d, want %d", b.Len(), len(pattern))
 	}
 	assertEqual(t, pattern, bitsOf(&b))
-	if b.getBit(len(pattern)) {
+	if b.GetBit(len(pattern)) {
 		t.Fatal("read past end should be 0")
 	}
 }
 
 func TestBitBuffer_AppendBits(t *testing.T) {
-	var b bitBuffer
-	b.appendBits(5, 3)
-	b.appendBits(0, 4)
-	b.appendBits(0x7FFFFFFF, 31)
+	var b Buffer
+	b.AppendBits(5, 3)
+	b.AppendBits(0, 4)
+	b.AppendBits(0x7FFFFFFF, 31)
 	want := append([]bool{true, false, true, false, false, false, false}, make([]bool, 31)...)
 	for i := 7; i < len(want); i++ {
 		want[i] = true
@@ -61,8 +61,8 @@ func TestBitBuffer_AppendBitsPanicsOutOfRange(t *testing.T) {
 					t.Errorf("appendBits(%d, %d) did not panic", tc.val, tc.length)
 				}
 			}()
-			var b bitBuffer
-			b.appendBits(tc.val, tc.length)
+			var b Buffer
+			b.AppendBits(tc.val, tc.length)
 		}()
 	}
 }
@@ -70,7 +70,7 @@ func TestBitBuffer_AppendBitsPanicsOutOfRange(t *testing.T) {
 func TestBitBuffer_AppendBuffer(t *testing.T) {
 	cases := []struct {
 		name     string
-		a, b     bitBuffer
+		a, b     Buffer
 		wantBits []bool
 	}{
 		{
@@ -99,11 +99,11 @@ func TestBitBuffer_AppendBuffer(t *testing.T) {
 
 	for _, tt := range cases {
 		t.Run(tt.name, func(t *testing.T) {
-			tt.a.appendBuffer(&tt.b)
+			tt.a.AppendBuffer(&tt.b)
 			assertEqual(t, tt.wantBits, bitsOf(&tt.a))
 			// Bits appended after a fast-path copy must land correctly.
-			tt.a.appendBit(true)
-			if !tt.a.getBit(tt.a.len() - 1) {
+			tt.a.AppendBit(true)
+			if !tt.a.GetBit(tt.a.Len() - 1) {
 				t.Error("bit appended after appendBuffer is lost")
 			}
 		})
@@ -112,10 +112,10 @@ func TestBitBuffer_AppendBuffer(t *testing.T) {
 
 func TestBitBuffer_AppendBufferDoesNotAlias(t *testing.T) {
 	src := bufFromBits(true, false, true, true, false, true, true, false)
-	var a, b bitBuffer
-	a.appendBuffer(&src)
-	b.appendBuffer(&src)
-	a.appendBits(0xFF, 8)
+	var a, b Buffer
+	a.AppendBuffer(&src)
+	b.AppendBuffer(&src)
+	a.AppendBits(0xFF, 8)
 	assertEqual(t, bitsOf(&src), bitsOf(&b))
-	assertEqual(t, 8, src.len())
+	assertEqual(t, 8, src.Len())
 }
