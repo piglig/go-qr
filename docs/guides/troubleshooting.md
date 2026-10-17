@@ -62,11 +62,18 @@ not accept rounded or circular finders.
 - **Large codes.** Version 20 and larger codes in photos decode less often
   than small ones; lens distortion bends their grid. Fill more of the frame
   with the code and keep it near the center.
+- **Glare, blur or damage over the data.** *Since v2.7*, a symbol that is
+  located but does not read is read again with soft decisions, which
+  recover more of such damage. What remains unreadable needs a better
+  photo: tilt the code away from the light, and hold the camera steady.
 - **Very large images.** No need to downscale: the decoder searches reduced
-  scales itself and reads modules at full resolution. A 12-megapixel photo
-  takes about 10 ms when the code fills a fair part of it, and about
-  50 ms when the code is very small or missing.
-- **Several codes.** Only one is read. Crop the image to the code you want.
+  scales itself and reads modules at full resolution. The median
+  12-megapixel camera photo takes about 11 ms; a very small code takes
+  up to about 35 ms, and an image without a code about 110 ms, since
+  every scale is searched.
+- **Several codes.** `Decode` returns one of them. `DecodeAll`
+  (*since v2.6*) returns every code in reading order; or crop the image to
+  the code you want.
 
 ## The text has wrong characters
 

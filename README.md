@@ -35,8 +35,9 @@
   colors, gradients and logos. `Verify` renders the result, decodes it and
   checks the contrast, so you know a design scans before you publish it.
 - **A decoder that reads photos.** Perspective, lens distortion, glare,
-  photos of screens and codes with a damaged finder pattern. It reads about
-  as many real photos as zxing-cpp and more than WeChat, ZBar and gozxing
+  blur, photos of screens and codes with a damaged finder pattern, and with
+  `DecodeAll` every code in a photo. It reads about as many real photos as
+  zxing-cpp and more than WeChat, ZBar and gozxing
   ([comparison](docs/explanation/performance.md#reading-photos)).
 - **Fast and dependency-free.** Only the standard library. Encoding is 8 to
   21× faster than [skip2/go-qrcode] and decoding about 7× faster than

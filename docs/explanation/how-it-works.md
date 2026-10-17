@@ -15,7 +15,9 @@ text ──► segments ──► bitstream ──► codewords + ECC ──► 
    and Kanji segments with the fewest bits. The cost of a segment header
    depends on the width of its character count field, which changes at
    versions 10 and 27, so the split is recomputed at those boundaries while
-   searching for the smallest version that fits.
+   searching for the smallest version that fits; a range of versions that
+   even the cheapest encoding of the text overflows is skipped without
+   segmenting.
 2. **Bitstream** (`encode.go`, `bitbuffer.go`). Segments are written with
    their headers, followed by the terminator and the alternating pad bytes
    0xEC and 0x11 up to the version's capacity. If there is room, the error
@@ -24,9 +26,13 @@ text ──► segments ──► bitstream ──► codewords + ECC ──► 
 3. **Error correction** (`builder.go`, `internal/reedsolomon`). The data is
    split into blocks, each extended with Reed–Solomon codewords over GF(2⁸),
    and the blocks are interleaved.
-4. **Layout** (`builder.go`, `layout.go`). Finder, timing and alignment
-   patterns and format and version information are drawn, then the codewords
-   are placed in the two-column zig-zag defined by the standard.
+4. **Layout** (`builder.go`, `layout.go`, `template.go`). Finder, timing
+   and alignment patterns and format and version information are drawn,
+   then the codewords are placed in the two-column zig-zag defined by the
+   standard. The zig-zag is walked once per version into a map of the data
+   bit each module carries, cached with the version's other tables, so
+   placing the codewords is a pass over the rows that also packs them for
+   masking.
 5. **Masking** (`mask.go`, `template.go`). All eight masks are scored with
    the ISO penalty rules and the lowest wins. The modules are packed into
    64-bit words, as rows and, transposed, as columns, and the per-version
@@ -46,8 +52,10 @@ no scratch state is retained.
 All renderers work from `Code.Module(x, y)` and the same `renderConfig`
 (`render.go`).
 
-- **Plain PNG** paints a 1-bit paletted image row by row and copies each row
-  `scale` times (`render.go`), avoiding per-pixel calls.
+- **Plain PNG** (`render_png.go`) is written straight from the modules as a
+  1-bit paletted PNG: each module row becomes one image row, repeated
+  `scale` times into a pooled zlib compressor, without building an image
+  first. The bytes are those `image/png` would write.
 - **Plain SVG** (`render_svg.go`) builds a graph of the edges between dark
   and light modules and walks it into one path per region, with
   `fill-rule="evenodd"` for holes. A version 40 code becomes a few kilobytes
