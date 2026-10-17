@@ -108,14 +108,33 @@ func TestDecodeRGBA(t *testing.T) {
 	nrgba := image.NewNRGBA(img.Bounds())
 	draw.Draw(nrgba, nrgba.Bounds(), img, image.Point{}, draw.Src)
 
-	got := decodeRGBA(nrgba.Pix, nrgba.Bounds().Dx(), nrgba.Bounds().Dy())
+	w, h := nrgba.Bounds().Dx(), nrgba.Bounds().Dy()
+	got := decodeRGBA(nrgba.Pix, w, h, false)
 	if got.Error != "" || got.Text != "WIFI:T:WPA;S:home;P:pw;;" || got.Payload != "WiFi" {
 		t.Fatalf("decode: %+v", got)
 	}
-	if bad := decodeRGBA(make([]byte, 10), 5, 5); bad.Error == "" {
+	if got.UnusedEC != 1 || got.Quality == nil || got.Quality.Grade != "A" || len(got.Quality.Parameters) != 7 {
+		t.Errorf("quality: unused error correction %v, %+v", got.UnusedEC, got.Quality)
+	}
+	// Camera frames are not graded, and light codes on dark not read.
+	if frame := decodeRGBA(nrgba.Pix, w, h, true); frame.Error != "" || frame.Quality != nil {
+		t.Errorf("frame: %+v", frame)
+	}
+	for i := 0; i < len(nrgba.Pix); i += 4 {
+		for c := i; c < i+3; c++ {
+			nrgba.Pix[c] = 255 - nrgba.Pix[c]
+		}
+	}
+	if frame := decodeRGBA(nrgba.Pix, w, h, true); frame.Error == "" {
+		t.Error("frame: read a light code on dark")
+	}
+	if inverted := decodeRGBA(nrgba.Pix, w, h, false); inverted.Error != "" {
+		t.Errorf("inverted image: %v", inverted.Error)
+	}
+	if bad := decodeRGBA(make([]byte, 10), 5, 5, false); bad.Error == "" {
 		t.Error("short pixel buffer accepted")
 	}
-	if blank := decodeRGBA(make([]byte, 4*40*40), 40, 40); blank.Error == "" {
+	if blank := decodeRGBA(make([]byte, 4*40*40), 40, 40, false); blank.Error == "" {
 		t.Error("blank image decoded")
 	}
 }
