@@ -29,7 +29,8 @@
 //
 // WithModuleShape, WithFinderShape, WithFinderColor and WithGradient style
 // the code. Code.Verify decodes a rendering to confirm it is readable
-// before it is published.
+// before it is published, and Grade grades a rendering or a photo of a
+// print by the print quality parameters of ISO/IEC 15415.
 //
 // # Decoding
 //
