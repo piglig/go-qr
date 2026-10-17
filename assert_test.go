@@ -120,3 +120,11 @@ func assertContains(t testing.TB, s, substr string, msgAndArgs ...any) {
 func encodeText(text string, ecc ECC) (*Code, error) {
 	return Encode(text, WithECC(ecc), WithSimpleSegmentation())
 }
+
+// abs returns the absolute value of x. (min and max use the language builtins.)
+func abs(x int) int {
+	if x < 0 {
+		return -x
+	}
+	return x
+}
