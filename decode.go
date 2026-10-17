@@ -77,6 +77,7 @@ type decodeConfig struct {
 	fastPathOnly  bool
 	maxSymbols    int
 	maxSymbolsSet bool
+	noInverted    bool
 	ctx           context.Context // nil for none
 }
 
@@ -97,6 +98,25 @@ type DecodeOption func(*decodeConfig)
 func WithFastPathOnly() DecodeOption {
 	return func(c *decodeConfig) { c.fastPathOnly = true }
 }
+
+// WithoutInverted skips the search for light symbols on a dark background,
+// which Decode and DecodeAll make last, once the image holds no other
+// symbol they can read. It saves the most on images without a symbol,
+// such as most frames of a video in which a code is being looked for.
+// Since v2.7.
+func WithoutInverted() DecodeOption {
+	return func(c *decodeConfig) { c.noInverted = true }
+}
+
+// polarities returns whether to search for symbols as is and inverted.
+func (c *decodeConfig) polarities() []bool {
+	if c.noInverted {
+		return bothPolarities[:1]
+	}
+	return bothPolarities[:]
+}
+
+var bothPolarities = [2]bool{false, true}
 
 // Decode finds a QR Code in img and decodes it.
 //
@@ -210,7 +230,7 @@ func searchImage(img image.Image, cfg decodeConfig, read gridReader) (*DecodeRes
 		return res, err, err == nil || errors.Is(err, ErrUnsupported)
 	}
 	if cfg.fastPathOnly {
-		for _, inverted := range []bool{false, true} {
+		for _, inverted := range cfg.polarities() {
 			if res, err, done := fast(inverted); done {
 				return res, err
 			}
@@ -257,7 +277,6 @@ func searchImage(img image.Image, cfg decodeConfig, read gridReader) (*DecodeRes
 		note(err)
 	}
 
-	// Light symbols on a dark background, at full resolution.
 	if err := cfg.canceled(); err != nil {
 		return nil, err
 	}
@@ -265,6 +284,10 @@ func searchImage(img image.Image, cfg decodeConfig, read gridReader) (*DecodeRes
 		if res, err, done := fast(false); done {
 			return res, err
 		}
+	}
+	// Light symbols on a dark background, at full resolution.
+	if cfg.noInverted {
+		return nil, firstErr
 	}
 	if res, err, done := fast(true); done {
 		return res, err
