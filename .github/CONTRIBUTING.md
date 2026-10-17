@@ -24,9 +24,9 @@ what a change needs before it can be merged.
 | `tools/` | `github.com/piglig/go-qr/tools` | The `generator` CLI, `verify` helpers and the `bench` comparisons with other libraries. |
 | `demo/` | `github.com/piglig/go-qr/demo` | The WebAssembly playground published to GitHub Pages. |
 | `mcp/` | `github.com/piglig/go-qr/mcp` | The `go-qr-mcp` Model Context Protocol server for AI assistants. Needs Go 1.25 or later. |
-| `docs/` | | Documentation; see [docs/README.md](docs/README.md). |
+| `docs/` | | Documentation; see [docs/README.md](../docs/README.md). |
 
-[How it works](docs/explanation/how-it-works.md) maps the library's source
+[How it works](../docs/explanation/how-it-works.md) maps the library's source
 files to the encode, render and decode pipelines.
 
 `tools` and `mcp` pin a released version of the library so that
@@ -99,7 +99,7 @@ regression test, together with the fix.
 The regression check in CI runs on every pull request that changes Go code.
 It benchmarks the library at the pull request and at its base on the same
 runner, alternating the two, and runs the synthetic distortion sweeps of
-[tools/bench](tools/bench) for both. It fails when:
+[tools/bench](../tools/bench) for both. It fails when:
 
 - a benchmark allocates more, by more than 5% or 2 allocations, or is more
   than 25% slower;
@@ -122,8 +122,8 @@ go test -run='^$' -bench=Decode -benchmem -count=10 . > new.txt
 ```
 
 Decoder changes should also be checked on real photos, which CI cannot
-hold: see `TestBoofCV` in [tools/bench](tools/bench) and
-[Performance](docs/explanation/performance.md). A change that makes the
+hold: see `TestBoofCV` in [tools/bench](../tools/bench) and
+[Performance](../docs/explanation/performance.md). A change that makes the
 default path noticeably slower needs a strong reason, or should be opt-in.
 
 ### Documentation
@@ -170,7 +170,7 @@ Pull requests are squash-merged, so the title becomes the commit message.
 ## Releases
 
 Releases are made from `main` by the
-[release workflow](.github/workflows/release.yml); version tags are
+[release workflow](workflows/release.yml); version tags are
 protected, so nobody creates them by hand.
 
 **The library.** A maintainer runs `scripts/release.sh` on an up-to-date
@@ -203,7 +203,7 @@ a published version, which CI checks on every pull request.
 ### Repository setup
 
 Done once by the repository owner. The rulesets in
-[.github/rulesets](.github/rulesets) protect `main` (squash-merged pull
+[.github/rulesets](rulesets) protect `main` (squash-merged pull
 requests with passing checks only) and the release tags (only deploy keys
 may create them). In a repository owned by a user, rulesets cannot exempt
 GitHub Actions itself, so the release workflow pushes tags with a deploy
@@ -225,8 +225,8 @@ To change a ruleset later, edit its file and apply it with
 ## AI coding assistants
 
 Contributions written with AI assistants are welcome, under the same rules.
-[AGENTS.md](AGENTS.md) states these rules for assistants; Claude Code reads
-it through `CLAUDE.md`, and most other assistants read it directly. For
+[AGENTS.md](../AGENTS.md) states these rules for assistants; Claude Code reads
+it through `.claude/CLAUDE.md`, and most other assistants read it directly. For
 Claude Code, `.claude/` also holds a `/release` and a `/perf-check` skill,
 and a hook that blocks creating tags or releases and pushing to `main`.
 

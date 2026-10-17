@@ -18,4 +18,4 @@ Prebuilt binaries are attached to each `tools/v*`
 [release](https://github.com/piglig/go-qr/releases).
 
 The module pins a released version of the library. To work against a local
-checkout, see [CONTRIBUTING.md](../CONTRIBUTING.md#repository-layout).
+checkout, see [CONTRIBUTING.md](../.github/CONTRIBUTING.md#repository-layout).
