@@ -68,7 +68,8 @@ type DecodeResult struct {
 	// by hard decisions only. Since v2.7.
 	SoftDecision bool
 
-	codewords []byte // corrected data codewords, for Code.Verify
+	codewords []byte         // corrected data codewords, for Code.Verify and Grade
+	centers   *moduleCenters // filled in by locate when set, for Grade
 }
 
 type decodeConfig struct {
@@ -134,6 +135,9 @@ func locate(res *DecodeResult, at func(u, v float64) (float64, float64), dim int
 		res.Corners[i] = image.Pt(int(math.Round(x)), int(math.Round(y)))
 	}
 	res.Inverted = inverted
+	if res.centers != nil {
+		res.centers.fill(at, dim)
+	}
 }
 
 // searchImage runs the fast and robust samplers over img, each on the image
@@ -341,6 +345,7 @@ func decodeModules(grid [][]bool, rel []float32) (*DecodeResult, error) {
 		Text: bs.text, Version: sd.ver, ECC: sd.ecc, Mask: sd.mask, Segments: bs.segs,
 		StructuredAppend: bs.structured, GS1: bs.gs1,
 		ErrorsCorrected: sd.corrected, UnusedErrorCorrection: sd.unusedEC, SoftDecision: rel != nil,
+		codewords: sd.data,
 	}, nil
 }
 

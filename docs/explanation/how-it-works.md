@@ -173,6 +173,21 @@ image ──► luminance ──► threshold ──► locate ──► fit gri
 The decoder reuses the encoder's layout code to know which modules are
 function patterns, so the two cannot disagree about the geometry.
 
+## Grading
+
+*Since v2.7.* `Grade` (`grade.go`) decodes by hard decisions only and has
+the search record the image position of every module center the fitted
+grid located, and of the quiet zone's. It re-encodes the corrected data
+to know each module's intended color, then measures the ISO/IEC 15415
+parameters from the image: reflectance over a disc at each center,
+linearized from sRGB; the symbol contrast and the global threshold
+between the extremes; each module's modulation and reflectance margin,
+graded per codeword through the encoder's map of the bit each module
+carries and weighed against the error correction that the codewords
+below each grade would use; the finder patterns' damage; the module
+pitch along both axes; and the offset of the alignment pattern centers
+from the regular grid through the finders.
+
 ## Design decisions
 
 **Optimal segmentation by default.** Mixed content, such as a URL with a

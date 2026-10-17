@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `Grade` decodes a symbol and grades its print quality by the parameters
+  of ISO/IEC 15415: symbol contrast, modulation, reflectance margin, fixed
+  pattern damage of the finder patterns, axial and grid nonuniformity,
+  and unused error correction, A to F, and the lowest of them. The grades
+  are estimates from one uncalibrated image, for comparing prints and
+  renderings and watching codes wear.
 - `DecodeResult` reports how much error correction a decode used:
   `ErrorsCorrected` counts the codewords repaired, and
   `UnusedErrorCorrection` gives the share of the correction capacity left

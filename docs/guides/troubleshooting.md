@@ -20,7 +20,10 @@ It reports the most common causes directly:
 - **Logo too large.** Use `qr.WithECC(qr.ECCHigh)` and a ratio around 0.2;
   see [Logos](rendering.md#logos).
 
-If `Verify` passes but a printed code does not scan:
+If `Verify` passes but a printed code does not scan, photograph it squarely
+and grade the photo with `Grade` (*since v2.7*): its lowest parameters point
+to the cause, such as the symbol contrast of the ink and paper. Common
+causes:
 
 - **Too small.** Keep each module at least about 0.4 mm wide in print, more
   for scanning from a distance. Fewer characters or a lower error correction

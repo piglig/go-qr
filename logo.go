@@ -76,26 +76,10 @@ func (l *logoConfig) validate(code *Code) error {
 // with a module under the box counts as lost, whatever the logo looks like.
 func logoDamage(code *Code, box int) float64 {
 	ver, ecc := code.Version(), code.ECC()
-	numBlocks := int(numErrorCorrectionBlocks[ecc][ver])
-	eccLen := int(eccCodeWordsPerBlock[ecc][ver])
-	raw := numRawDataModules(ver) / 8
-
-	// Placement order to block: the inverse of the interleaving in
-	// addEccAndInterLeave.
-	numShort := numBlocks - raw%numBlocks
-	shortLen := raw / numBlocks
-	blockOf := make([]int, 0, raw)
-	for i := 0; i <= shortLen; i++ {
-		for j := 0; j < numBlocks; j++ {
-			if i != shortLen-eccLen || j >= numShort {
-				blockOf = append(blockOf, j)
-			}
-		}
-	}
-
+	blockOf := codewordBlocks(ver, ecc)
 	bitAt := getTemplate(ver).bitAt
-	lost := make([]bool, raw)
-	perBlock := make([]int, numBlocks)
+	lost := make([]bool, len(blockOf))
+	perBlock := make([]int, numErrorCorrectionBlocks[ecc][ver])
 	start := (code.Size() - box) / 2
 	for y := start; y < start+box; y++ {
 		for x := start; x < start+box; x++ {

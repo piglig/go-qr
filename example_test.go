@@ -266,3 +266,23 @@ func ExampleDecodeAll() {
 	// left (20,20)
 	// right (220,20)
 }
+
+// Grade measures how well a code is printed, or rendered: here a logo
+// covers codewords and uses up error correction.
+func ExampleGrade() {
+	code, _ := qr.Encode("https://example.com", qr.WithECC(qr.ECCHigh))
+	logo := image.NewUniform(color.RGBA{0xc0, 0x20, 0x20, 0xff})
+	img, _ := code.Image(qr.WithScale(8), qr.WithLogo(logo, 0.2))
+
+	q, err := qr.Grade(img)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println("grade", q.Grade)
+	fmt.Println("symbol contrast", q.SymbolContrast.Grade)
+	fmt.Printf("unused error correction %.2f (%v)\n", q.UnusedErrorCorrection.Value, q.UnusedErrorCorrection.Grade)
+	// Output:
+	// grade C
+	// symbol contrast A
+	// unused error correction 0.45 (C)
+}

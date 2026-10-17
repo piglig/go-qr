@@ -101,6 +101,22 @@ Call it whenever colors, styles or logos come from users or designers.
 `Verify` checks the raster rendering; SVG output with the same options draws
 the same modules.
 
+`Verify` answers whether a design reads; `Grade` (*Since v2.7*) tells how
+well, by the print quality parameters of ISO/IEC 15415, for the rendering
+or for a photo of the print:
+
+```go
+img, _ := code.Image(opts...)
+q, err := qr.Grade(img)
+if err == nil && q.Grade < qr.GradeC {
+	log.Printf("grade %v: contrast %v, unused error correction %v", q.Grade, q.SymbolContrast.Grade, q.UnusedErrorCorrection.Grade)
+}
+```
+
+A logo grades lower as it uses up error correction, and rounded or
+circular finders grade F for fixed pattern damage, since they differ from
+the standard's; see [Grading print quality](decoding.md#grading-print-quality).
+
 ## Rendering cost
 
 Plain PNGs are the fastest raster output and SVG is cheap in every style.
