@@ -44,6 +44,8 @@
 //
 // DecodeAll reads every symbol in an image, in reading order, and
 // JoinStructuredAppend joins the symbols of a structured append sequence.
+// DecodeContext and DecodeAllContext stop when a context is done, which
+// bounds the time an image may take.
 //
 // # Batches
 //

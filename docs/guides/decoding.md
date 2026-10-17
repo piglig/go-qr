@@ -233,6 +233,7 @@ bug worth surfacing. `WithMaxSymbols(n)` *Since v2.6* limits `DecodeAll` to
 | `ErrNotFound` | No symbol was located, or the image is too small or has no contrast. |
 | `ErrDecodeFailed` | A symbol was located but could not be read, for example because there was too much damage to correct. |
 | `ErrUnsupported` | The symbol uses a feature listed above as unsupported. |
+| `context.Canceled`, `context.DeadlineExceeded` | `DecodeContext` or `DecodeAllContext` stopped because the context was done. |
 
 ## Decoding untrusted images
 
@@ -242,4 +243,26 @@ the number of pixels on any image, at most about 120 ms for a
 12-megapixel one without a code, including images crafted with many
 finder patterns (*since v2.5.1*), and
 decoding the image file itself costs more. Check the dimensions of untrusted uploads
-with `image.DecodeConfig` and reject oversized ones before decoding them.
+with `image.DecodeConfig` and reject oversized ones before decoding them,
+and bound the time each one may take with a context, as below.
+
+## Bounding the time
+
+*Since v2.7.* `DecodeContext` and `DecodeAllContext` stop searching when a
+context is done, for example at a request's deadline, or when a newer frame
+of video makes the current one moot:
+
+```go
+ctx, cancel := context.WithTimeout(r.Context(), 200*time.Millisecond)
+defer cancel()
+res, err := qr.DecodeContext(ctx, img)
+if errors.Is(err, context.DeadlineExceeded) {
+	// The image took too long; it holds no code that is easy to find.
+}
+```
+
+`DecodeAllContext` returns the symbols it read before the context was
+done, along with the context's error. The search checks the context
+between its stages, such as the scales of the image, so it can run on for
+one stage after the context is done: at full resolution, up to about half
+of the time an image without a code takes.

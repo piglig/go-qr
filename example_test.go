@@ -8,6 +8,7 @@ import (
 	"image/color"
 	"image/draw"
 	"strings"
+	"time"
 
 	"github.com/piglig/go-qr/v2"
 )
@@ -285,4 +286,42 @@ func ExampleGrade() {
 	// grade C
 	// symbol contrast A
 	// unused error correction 0.45 (C)
+}
+
+// A deadline bounds the time spent on an image, for example one uploaded
+// to a server.
+func ExampleDecodeContext() {
+	code, _ := qr.Encode("within the deadline")
+	img, _ := code.Image()
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	res, err := qr.DecodeContext(ctx, img)
+	switch {
+	case errors.Is(err, context.DeadlineExceeded):
+		fmt.Println("gave up")
+	case err != nil:
+		fmt.Println("no code:", err)
+	default:
+		fmt.Println(res.Text)
+	}
+	// Output: within the deadline
+}
+
+// DecodeAllContext returns the symbols read before the context was done.
+func ExampleDecodeAllContext() {
+	code, _ := qr.Encode("read before the deadline")
+	img, _ := code.Image()
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	results, err := qr.DecodeAllContext(ctx, img)
+	if err != nil && !errors.Is(err, context.DeadlineExceeded) {
+		fmt.Println("no code:", err)
+		return
+	}
+	for _, res := range results {
+		fmt.Println(res.Text)
+	}
+	// Output: read before the deadline
 }
