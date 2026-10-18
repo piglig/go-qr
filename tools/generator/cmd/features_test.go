@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"errors"
 	"image"
+	"image/color"
 	"image/draw"
 	"image/png"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"strings"
@@ -393,5 +395,110 @@ func TestDecodeAllSequence(t *testing.T) {
 	}
 	if out.String() != text+"\n" {
 		t.Fatalf("output %q", out.String())
+	}
+}
+
+// TestDecodeGrade grades each code of a sheet in its own window: a code
+// with a logo grades lower on its unused error correction, the plain ones
+// grade A.
+func TestDecodeGrade(t *testing.T) {
+	plain, _ := qr.Encode("plain", qr.WithECC(qr.ECCHigh))
+	logo, _ := qr.Encode("logo", qr.WithECC(qr.ECCHigh))
+	path := writeSheet(t, []*qr.Code{plain, logo, plain})
+	// Draw a logo over the middle code, as WithLogo would.
+	f, err := os.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	src, err := png.Decode(f)
+	f.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	sheet := image.NewRGBA(src.Bounds())
+	draw.Draw(sheet, sheet.Bounds(), src, image.Point{}, draw.Src)
+	withLogo, err := logo.Image(qr.WithScale(5), qr.WithLogo(image.NewUniform(color.RGBA{R: 0xc0, A: 0xff}), 0.2))
+	if err != nil {
+		t.Fatal(err)
+	}
+	draw.Draw(sheet, withLogo.Bounds().Add(image.Pt(220, 0)), withLogo, image.Point{}, draw.Src)
+	if f, err = os.Create(path); err != nil {
+		t.Fatal(err)
+	}
+	if err := png.Encode(f, sheet); err != nil {
+		t.Fatal(err)
+	}
+	f.Close()
+
+	var out, errOut bytes.Buffer
+	if err := run([]string{"decode", "-all", "-grade", "-json", path}, &out, &errOut); err != nil {
+		t.Fatal(err)
+	}
+	var got struct {
+		Symbols []decodedSymbol `json:"symbols"`
+	}
+	if err := json.Unmarshal(out.Bytes(), &got); err != nil {
+		t.Fatalf("%v in %s", err, out.String())
+	}
+	if len(got.Symbols) != 3 {
+		t.Fatalf("got %+v", got)
+	}
+	for i, s := range got.Symbols {
+		q := s.Quality
+		if q == nil || q.Error != "" || q.UnusedErrorCorrection == nil {
+			t.Fatalf("symbol %d: quality %+v", i, q)
+		}
+		want := "A"
+		if s.Text == "logo" {
+			want = "C"
+		}
+		if q.Grade != want || q.PixelsPerModule != 5 {
+			t.Errorf("%s: grade %s at %v px per module, want %s at 5", s.Text, q.Grade, q.PixelsPerModule, want)
+		}
+		if (s.Text == "logo") != (s.ErrorsCorrected > 0) || (s.Text == "logo") != (s.UnusedErrorCorrection < 1) {
+			t.Errorf("%s: %d codewords corrected, %v unused", s.Text, s.ErrorsCorrected, s.UnusedErrorCorrection)
+		}
+	}
+
+	// Without -json, a line per code follows the texts.
+	out.Reset()
+	if err := run([]string{"decode", "-all", "-grade", path}, &out, &errOut); err != nil {
+		t.Fatal(err)
+	}
+	lines := strings.Split(strings.TrimSpace(out.String()), "\n")
+	if len(lines) != 6 || lines[0] != "plain" || !strings.HasPrefix(lines[3], path+": grade A (symbol contrast A,") ||
+		!strings.HasPrefix(lines[4], path+": grade C (") {
+		t.Fatalf("output %q", out.String())
+	}
+}
+
+func TestDecodeTimeout(t *testing.T) {
+	// An image without a code is searched at every scale, which takes far
+	// longer than a nanosecond.
+	noise := image.NewGray(image.Rect(0, 0, 800, 600))
+	rng := rand.New(rand.NewSource(1))
+	for i := range noise.Pix {
+		noise.Pix[i] = uint8(150 + rng.Intn(60))
+	}
+	path := filepath.Join(t.TempDir(), "noise.png")
+	f, err := os.Create(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := png.Encode(f, noise); err != nil {
+		t.Fatal(err)
+	}
+	f.Close()
+	var out, errOut bytes.Buffer
+	err = run([]string{"decode", "-timeout", "1ns", path}, &out, &errOut)
+	if err == nil || !strings.Contains(err.Error(), "no code read within 1ns") {
+		t.Errorf("error %v, want a timeout", err)
+	}
+	// A code is read within a generous limit.
+	code, _ := qr.Encode("in time")
+	path = writeSheet(t, []*qr.Code{code})
+	out.Reset()
+	if err := run([]string{"decode", "-timeout", "1m", path}, &out, &errOut); err != nil || out.String() != "in time\n" {
+		t.Errorf("output %q, %v", out.String(), err)
 	}
 }
