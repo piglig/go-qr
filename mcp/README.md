@@ -7,7 +7,7 @@ AI assistants exact QR Code tools, built on
 - `decode_qr` decodes every code in a local image and explains what
   scanning each would do, with risk signals such as lookalike domains, open
   Wi-Fi, embedded 2FA secrets, or several codes where a sticker may cover
-  the genuine one;
+  the genuine one, and can grade each code's print quality (ISO/IEC 15415);
 - `generate_qr` creates plain, payload (Wi-Fi, contact, event, 2FA, SEPA
   payment, ...) and styled codes, and verifies that each one scans;
 - `inspect_qr` explains content the assistant already has.

@@ -35,7 +35,9 @@ network, pays or enrolls 2FA, summarize the inspection report from decode_qr or
 inspect_qr, including every caution and danger signal. When decode_qr finds
 several unrelated codes, say which code each signal belongs to.
 
-generate_qr checks that each code it makes is readable, including color contrast.`
+generate_qr checks that each code it makes is readable, including color contrast,
+and grades its print quality. To check how well a printed code is printed, call
+decode_qr with grade set; the grades are estimates from one photo, best taken squarely.`
 
 // New returns an MCP server with the decode_qr, generate_qr and inspect_qr
 // tools.

@@ -10,6 +10,7 @@ import (
 	_ "image/gif"
 	_ "image/jpeg"
 	_ "image/png"
+	"math"
 	"os"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -21,6 +22,7 @@ import (
 type DecodeInput struct {
 	Paths       []string `json:"paths,omitempty" jsonschema:"local image file paths (PNG, JPEG or GIF); several paths are decoded together and joined if they form a structured append sequence"`
 	ImageBase64 string   `json:"image_base64,omitempty" jsonschema:"alternatively, the image file contents as base64"`
+	Grade       bool     `json:"grade,omitempty" jsonschema:"also grade each code's print quality, A to F, by the parameters of ISO/IEC 15415 (an estimate from the image); for checking printed labels"`
 }
 
 // DecodeOutput is the result of decode_qr.
@@ -44,6 +46,31 @@ type Symbol struct {
 	StructuredAppend *StructuredAppend `json:"structured_append,omitempty"`
 	Segments         []Segment         `json:"segments"`
 	Inspection       *inspect.Report   `json:"inspection,omitempty" jsonschema:"what this code does and its risks, when several unrelated codes were found"`
+
+	ErrorsCorrected       int      `json:"errors_corrected" jsonschema:"codewords that error correction repaired"`
+	UnusedErrorCorrection float64  `json:"unused_error_correction" jsonschema:"share of the error correction capacity left unused, from 1 (no damage) to 0 (barely readable), as ISO/IEC 15415 defines it"`
+	SoftDecision          bool     `json:"soft_decision,omitempty" jsonschema:"only soft decisions read the code; many phone scanners may not"`
+	Quality               *Quality `json:"quality,omitempty" jsonschema:"print quality grade, with grade set"`
+}
+
+// Quality is a code's print quality by the parameters of ISO/IEC 15415.
+type Quality struct {
+	Grade                 string     `json:"grade,omitempty" jsonschema:"A (best) to F (fail), the lowest of the parameters' grades; C or better is commonly asked of prints"`
+	SymbolContrast        *Parameter `json:"symbol_contrast,omitempty"`
+	Modulation            *Parameter `json:"modulation,omitempty"`
+	ReflectanceMargin     *Parameter `json:"reflectance_margin,omitempty"`
+	FixedPatternDamage    *Parameter `json:"fixed_pattern_damage,omitempty"`
+	AxialNonuniformity    *Parameter `json:"axial_nonuniformity,omitempty"`
+	GridNonuniformity     *Parameter `json:"grid_nonuniformity,omitempty"`
+	UnusedErrorCorrection *Parameter `json:"unused_error_correction,omitempty"`
+	PixelsPerModule       float64    `json:"pixels_per_module,omitempty"`
+	Error                 string     `json:"error,omitempty" jsonschema:"why the code could not be graded"`
+}
+
+// Parameter is one graded parameter.
+type Parameter struct {
+	Value float64 `json:"value"`
+	Grade string  `json:"grade"`
 }
 
 // StructuredAppend is a symbol's position in a sequence.
@@ -60,7 +87,7 @@ type Segment struct {
 	ECI   int    `json:"eci" jsonschema:"ECI character set number, or -1 for none"`
 }
 
-func (f fileAccess) decode(_ context.Context, _ *mcp.CallToolRequest, in DecodeInput) (*mcp.CallToolResult, DecodeOutput, error) {
+func (f fileAccess) decode(ctx context.Context, _ *mcp.CallToolRequest, in DecodeInput) (*mcp.CallToolResult, DecodeOutput, error) {
 	type source struct {
 		name string
 		data []byte
@@ -114,13 +141,18 @@ func (f fileAccess) decode(_ context.Context, _ *mcp.CallToolRequest, in DecodeI
 		if err != nil {
 			return nil, DecodeOutput{}, fmt.Errorf("%s: not a PNG, JPEG or GIF image: %w", src.name, err)
 		}
-		rs, err := qr.DecodeAll(img)
+		// The search stops when the client cancels the call.
+		rs, err := qr.DecodeAllContext(ctx, img)
 		if err != nil {
 			return nil, DecodeOutput{}, fmt.Errorf("%s: %w%s", src.name, err, decodeHint(err))
 		}
 		for _, r := range rs {
 			results = append(results, r)
-			out.Symbols = append(out.Symbols, symbol(src.name, r))
+			s := symbol(src.name, r)
+			if in.Grade {
+				s.Quality = grade(symbolWindow(img, r))
+			}
+			out.Symbols = append(out.Symbols, s)
 		}
 	}
 
@@ -168,6 +200,7 @@ func symbol(src string, r *qr.DecodeResult) Symbol {
 	s := Symbol{
 		Source: src, Text: r.Text, Version: r.Version, ECC: r.ECC.String(), Mask: r.Mask,
 		Mirrored: r.Mirrored, Inverted: r.Inverted, GS1: r.GS1, Segments: []Segment{},
+		ErrorsCorrected: r.ErrorsCorrected, UnusedErrorCorrection: r.UnusedErrorCorrection, SoftDecision: r.SoftDecision,
 	}
 	for i, p := range r.Corners {
 		s.Corners[i] = [2]int{p.X, p.Y}
@@ -179,4 +212,44 @@ func symbol(src string, r *qr.DecodeResult) Symbol {
 		s.Segments = append(s.Segments, Segment{Mode: seg.Mode.String(), Chars: seg.NumChars, ECI: seg.ECI})
 	}
 	return s
+}
+
+// grade grades the print quality of the code in img.
+func grade(img image.Image) *Quality {
+	q, err := qr.Grade(img)
+	if errors.Is(err, qr.ErrDecodeFailed) {
+		return &Quality{Error: "only soft decisions read the code, which most readers do not have; it grades F"}
+	}
+	if err != nil {
+		return &Quality{Error: err.Error()}
+	}
+	p := func(v qr.QualityParameter) *Parameter { return &Parameter{Value: v.Value, Grade: v.Grade.String()} }
+	return &Quality{
+		Grade: q.Grade.String(), SymbolContrast: p(q.SymbolContrast), Modulation: p(q.Modulation),
+		ReflectanceMargin: p(q.ReflectanceMargin), FixedPatternDamage: p(q.FixedPatternDamage),
+		AxialNonuniformity: p(q.AxialNonuniformity), GridNonuniformity: p(q.GridNonuniformity),
+		UnusedErrorCorrection: p(q.UnusedErrorCorrection), PixelsPerModule: q.PixelsPerModule,
+	}
+}
+
+// symbolWindow returns the part of img that holds r's symbol and a margin
+// of eight modules, the quiet zone with room for error, so that the other
+// codes of a photo do not interfere with grading it; or img itself if it
+// cannot be cropped.
+func symbolWindow(img image.Image, r *qr.DecodeResult) image.Image {
+	sub, ok := img.(interface {
+		SubImage(image.Rectangle) image.Image
+	})
+	if !ok {
+		return img
+	}
+	box := image.Rectangle{Min: r.Corners[0], Max: r.Corners[0]}
+	side := 0.0
+	for i, p := range r.Corners {
+		box = box.Union(image.Rectangle{Min: p, Max: p.Add(image.Pt(1, 1))})
+		q := r.Corners[(i+1)%4]
+		side = max(side, math.Hypot(float64(q.X-p.X), float64(q.Y-p.Y)))
+	}
+	margin := int(math.Ceil(8 * side / float64(4*r.Version+17)))
+	return sub.SubImage(box.Inset(-margin).Intersect(img.Bounds()))
 }

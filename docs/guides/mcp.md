@@ -29,7 +29,7 @@ configurations below if that directory is not on the `PATH` of your client.
 
 Without Go, download the archive for your platform from the latest
 [`mcp/v*` release](https://github.com/piglig/go-qr/releases): Linux, macOS
-and Windows, on amd64 and arm64. *Since mcp/v0.1.6.* Each release lists
+and Windows, on amd64 and arm64. *Since mcp/v0.2.0.* Each release lists
 SHA-256 checksums, and `gh attestation verify <archive> --repo piglig/go-qr`
 checks that an archive was built by the repository's release workflow.
 
@@ -97,17 +97,28 @@ show them to the model. In short:
 
 ### decode_qr
 
-Input: `paths` (one or more local PNG, JPEG or GIF files) or `image_base64`.
+Input: `paths` (one or more local PNG, JPEG or GIF files) or `image_base64`,
+and optionally `grade` (*since mcp/v0.2.0*) to grade each code's print
+quality.
 
 Images are decoded at full resolution, so small codes in large photos keep
 their detail; files over 25 MB or images over 100 megapixels are refused.
+A client that cancels the call stops the search (*since mcp/v0.2.0*).
 Every code in each image is read, in reading order. Codes that form a [structured append](encoding.md)
 sequence, in one image or across several, are joined in order, whatever
 order they are given in.
 
 Output: the decoded `text`; for each code its version, error correction
 level, mask, `corners` in the image, segments, GS1 and structured append
-details; and an `inspection` report as described below. When the codes are
+details; *since mcp/v0.2.0*, the error correction it used
+(`errors_corrected`, `unused_error_correction` from 1 for no damage to 0
+for barely readable, and `soft_decision` when only soft decisions read it,
+which many phone scanners lack); and an `inspection` report as described
+below. With `grade`, each code also has a `quality`: its print quality
+grade by the parameters of ISO/IEC 15415, A to F, with each parameter's
+value and grade, measured in a window around the code; see
+[Grading print quality](decoding.md#grading-print-quality). Ask for it when
+checking printed labels: "Is this label printed well enough?" When the codes are
 unrelated, as on a poster with a menu link and a Wi-Fi code, each code has
 its own `inspection`, and the top-level report, of kind `multiple`, lists
 every code's signals, prefixed with the code they belong to, so its risk
@@ -132,6 +143,11 @@ Every code is checked with [`Code.Verify`](rendering.md) before it is
 returned: a style whose colors lack contrast, or that would not decode, is
 rejected with a suggestion instead of producing an unreadable image. The
 image is returned to the client as well, so the assistant can show it.
+*Since mcp/v0.2.0*, the output's `quality` grades the rendering by the
+parameters of ISO/IEC 15415, as `decode_qr` does: a logo lowers its unused
+error correction, and rounded or circular finders, which differ from the
+standard's square ones, grade F for fixed pattern damage although phone
+scanners read them; the summary says so.
 
 ### inspect_qr
 
