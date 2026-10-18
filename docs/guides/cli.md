@@ -8,7 +8,7 @@ go install github.com/piglig/go-qr/tools/generator@latest
 
 Without Go, download the archive for your platform from the latest
 [`tools/v*` release](https://github.com/piglig/go-qr/releases): Linux,
-macOS and Windows, on amd64 and arm64. *Since tools/v1.1.7.* Each release
+macOS and Windows, on amd64 and arm64. *Since tools/v1.2.0.* Each release
 lists SHA-256 checksums, and
 `gh attestation verify <archive> --repo piglig/go-qr` checks that an
 archive was built by the repository's release workflow.
@@ -112,7 +112,7 @@ backslash. List values (phones, emails, CC and BCC) are separated with `;`.
 ## decode
 
 ```shell
-generator decode [-all] [-json] <image-file>...
+generator decode [-all] [-json] [-grade] [-timeout duration] <image-file>...
 ```
 
 Reads PNG, JPEG or GIF images and prints their text. With `-all`, every
@@ -121,10 +121,21 @@ otherwise one code per image. Symbols that form a structured append
 sequence are joined into one message, in any order; otherwise each text is
 printed on its own line.
 
+| Flag | Meaning |
+| --- | --- |
+| `-all` | Read every code in each image, not only one. |
+| `-json` | Print the result as JSON; see below. |
+| `-grade` | *Since tools/v1.2.0.* Also grade each code's print quality by the parameters of ISO/IEC 15415, A to F, as `qr.Grade` does; see [Grading print quality](decoding.md#grading-print-quality). Each code is graded in a window around it, so the other codes of the image do not interfere. A line per code follows the texts: `label.png: grade B (symbol contrast A, modulation B, …; 6.2 px per module)`. |
+| `-timeout duration` | *Since tools/v1.2.0.* Give up on an image after this long, such as `2s`, as `qr.DecodeContext` does; with `-all`, the codes read in time are kept. By default there is no limit. |
+
 `-json` prints the text together with each symbol's version, error
 correction level, mask, corners in the image (top-left, top-right,
-bottom-right, bottom-left), segments, structured append position and
-detected payload type:
+bottom-right, bottom-left), segments, structured append position,
+detected payload type and, *since tools/v1.2.0*, the error correction it
+used: the codewords corrected, the unused error correction of
+ISO/IEC 15415, and `softDecision` when only soft decisions read it. With
+`-grade`, each symbol has a `quality` with its grade and each parameter's
+value and grade, or an `error` saying why it could not be graded:
 
 ```json
 {
@@ -141,11 +152,27 @@ detected payload type:
       "segments": [
         { "mode": "alphanumeric", "chars": 10, "eci": -1 },
         { "mode": "byte", "chars": 14, "eci": -1 }
-      ]
+      ],
+      "errorsCorrected": 0,
+      "unusedErrorCorrection": 1,
+      "quality": {
+        "grade": "A",
+        "symbolContrast": { "value": 1, "grade": "A" },
+        "modulation": { "value": 1, "grade": "A" },
+        "reflectanceMargin": { "value": 1, "grade": "A" },
+        "fixedPatternDamage": { "value": 0, "grade": "A" },
+        "axialNonuniformity": { "value": 0, "grade": "A" },
+        "gridNonuniformity": { "value": 0, "grade": "A" },
+        "unusedErrorCorrection": { "value": 1, "grade": "A" },
+        "pixelsPerModule": 10
+      }
     }
   ]
 }
 ```
+
+This is `generator decode -json -grade wifi.png` for a code the tool
+rendered itself.
 
 ## Examples
 
@@ -176,4 +203,6 @@ generator decode part-*.png
 generator decode hello.png
 generator decode -json wifi.png
 generator decode -all shelf.jpg                               # every code in the photo
+generator decode -grade label.jpg                             # print quality, ISO/IEC 15415
+generator decode -timeout 2s -json upload.jpg                 # bounded time, for scripts
 ```
