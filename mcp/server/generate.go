@@ -128,6 +128,7 @@ type GenerateOutput struct {
 	Modules    int            `json:"modules" jsonschema:"side of the symbol in modules"`
 	Format     string         `json:"format"`
 	Verified   bool           `json:"verified" jsonschema:"the rendering was decoded back and its colors have enough contrast"`
+	Quality    *Quality       `json:"quality" jsonschema:"print quality of the rendering by the parameters of ISO/IEC 15415; a logo, light colors or rounded finders lower it"`
 	SavedTo    string         `json:"saved_to,omitempty"`
 	Inspection inspect.Report `json:"inspection" jsonschema:"what scanning the code does"`
 }
@@ -163,6 +164,12 @@ func (f fileAccess) generate(_ context.Context, _ *mcp.CallToolRequest, in Gener
 	if err := code.Verify(opts...); err != nil {
 		return nil, GenerateOutput{}, fmt.Errorf("the code would not scan reliably with this style: %w; use darker colors, a plain style, or higher error correction", err)
 	}
+	// SVG output draws the same modules as the raster, which is graded.
+	raster, err := code.Image(opts...)
+	if err != nil {
+		return nil, GenerateOutput{}, err
+	}
+	quality := grade(raster)
 
 	var data []byte
 	if format == "png" {
@@ -176,7 +183,7 @@ func (f fileAccess) generate(_ context.Context, _ *mcp.CallToolRequest, in Gener
 
 	out := GenerateOutput{
 		Content: content, Version: code.Version(), ECC: code.ECC().String(), Modules: code.Size(),
-		Format: format, Verified: true, Inspection: inspect.Text(content, false),
+		Format: format, Verified: true, Quality: quality, Inspection: inspect.Text(content, false),
 	}
 	if in.OutputPath != "" {
 		if out.SavedTo, err = f.save(in.OutputPath, format, data, in.Overwrite); err != nil {
@@ -186,6 +193,12 @@ func (f fileAccess) generate(_ context.Context, _ *mcp.CallToolRequest, in Gener
 
 	summary := fmt.Sprintf("Created a version %d QR Code (%dx%d modules, error correction %s) that encodes %q. It was verified to scan.",
 		out.Version, out.Modules, out.Modules, out.ECC, content)
+	if quality.Grade != "" {
+		summary += " Print quality grade (ISO/IEC 15415): " + quality.Grade + "."
+		if quality.FixedPatternDamage != nil && quality.FixedPatternDamage.Grade == "F" && in.Style != nil && in.Style.Finder != "" && in.Style.Finder != "square" {
+			summary += " The finder shape differs from the standard's square, which grades F for fixed pattern damage; phone scanners read it."
+		}
+	}
 	if out.SavedTo != "" {
 		summary += " Saved to " + out.SavedTo + "."
 	}

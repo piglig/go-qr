@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/binary"
 	"encoding/json"
+	"errors"
 	"hash/crc32"
 	"image"
 	"image/draw"
@@ -437,5 +438,77 @@ func TestDecodeOneCodeUnchanged(t *testing.T) {
 	}
 	if len(dec.Symbols) != 1 || dec.Symbols[0].Inspection != nil || dec.Inspection.Kind != "text" || dec.Symbols[0].Corners[0] != [2]int{20, 20} {
 		t.Fatalf("%+v", dec)
+	}
+}
+
+// TestDecodeGrade grades each code of a sheet in its own window, and
+// reports the error correction each decode used.
+func TestDecodeGrade(t *testing.T) {
+	cs := connect(t, Options{})
+	sheet := sheetPNG(t, "plain", "damaged")
+	img, err := png.Decode(bytes.NewReader(sheet))
+	if err != nil {
+		t.Fatal(err)
+	}
+	rgba := image.NewRGBA(img.Bounds())
+	draw.Draw(rgba, rgba.Bounds(), img, image.Point{}, draw.Src)
+	// A light scratch across the second code's data modules.
+	draw.Draw(rgba, image.Rect(260+60, 70, 260+100, 76), image.White, image.Point{}, draw.Src)
+	var buf bytes.Buffer
+	png.Encode(&buf, rgba)
+
+	var dec DecodeOutput
+	res := call(t, cs, "decode_qr", map[string]any{"image_base64": base64.StdEncoding.EncodeToString(buf.Bytes()), "grade": true}, &dec)
+	if res.IsError {
+		t.Fatal(errorText(res))
+	}
+	if len(dec.Symbols) != 2 {
+		t.Fatalf("%d symbols", len(dec.Symbols))
+	}
+	plain, damaged := dec.Symbols[0], dec.Symbols[1]
+	if plain.ErrorsCorrected != 0 || plain.UnusedErrorCorrection != 1 || damaged.ErrorsCorrected == 0 || damaged.UnusedErrorCorrection >= 1 {
+		t.Errorf("error correction: plain %d/%v, damaged %d/%v", plain.ErrorsCorrected, plain.UnusedErrorCorrection, damaged.ErrorsCorrected, damaged.UnusedErrorCorrection)
+	}
+	if q := plain.Quality; q == nil || q.Grade != "A" || q.PixelsPerModule != 5 || q.SymbolContrast == nil {
+		t.Errorf("plain quality %+v", q)
+	}
+	if q := damaged.Quality; q == nil || q.Error != "" || q.UnusedErrorCorrection == nil || q.UnusedErrorCorrection.Value != damaged.UnusedErrorCorrection {
+		t.Errorf("damaged quality %+v", q)
+	}
+	// Without grade, no quality.
+	var plainDec DecodeOutput
+	res = call(t, cs, "decode_qr", map[string]any{"image_base64": base64.StdEncoding.EncodeToString(sheet)}, &plainDec)
+	if res.IsError || plainDec.Symbols[0].Quality != nil {
+		t.Errorf("quality without grade: %+v", plainDec.Symbols[0].Quality)
+	}
+}
+
+func TestDecodeCanceled(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	in := DecodeInput{ImageBase64: base64.StdEncoding.EncodeToString(sheetPNG(t, "canceled"))}
+	if _, _, err := (fileAccess{}).decode(ctx, nil, in); !errors.Is(err, context.Canceled) {
+		t.Errorf("error %v, want context.Canceled", err)
+	}
+}
+
+// TestGenerateGrade reports the rendering's print quality, and explains
+// the grade of a rounded finder.
+func TestGenerateGrade(t *testing.T) {
+	cs := connect(t, Options{})
+	var gen GenerateOutput
+	res := call(t, cs, "generate_qr", map[string]any{"text": "graded"}, &gen)
+	if res.IsError {
+		t.Fatal(errorText(res))
+	}
+	if gen.Quality == nil || gen.Quality.Grade != "A" || !strings.Contains(errorText(res), "Print quality grade (ISO/IEC 15415): A.") {
+		t.Fatalf("quality %+v, summary %q", gen.Quality, errorText(res))
+	}
+	res = call(t, cs, "generate_qr", map[string]any{"text": "graded", "style": map[string]any{"finder": "rounded"}}, &gen)
+	if res.IsError {
+		t.Fatal(errorText(res))
+	}
+	if gen.Quality.Grade != "F" || !strings.Contains(errorText(res), "phone scanners read it") {
+		t.Fatalf("quality %+v, summary %q", gen.Quality, errorText(res))
 	}
 }
