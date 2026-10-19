@@ -129,6 +129,59 @@ func BenchmarkHalve(b *testing.B) {
 	}
 }
 
+// referenceBlockStats is how HybridThresholds measured a block up to v2.7,
+// a pixel at a time.
+func referenceBlockStats(l []uint8, w int) (lo, hi uint8, sum int) {
+	mn, mx := 255, 0
+	for y := 0; y < ThresholdBlock; y++ {
+		for _, v := range l[y*w : y*w+ThresholdBlock] {
+			sum += int(v)
+			mn, mx = min(mn, int(v)), max(mx, int(v))
+		}
+	}
+	return uint8(mn), uint8(mx), sum
+}
+
+func TestBlockStatsMatchesReference(t *testing.T) {
+	r := rand.New(rand.NewSource(1))
+	const w = 11 // rows wider than a block, so a block reads part of each
+	fills := []func() uint8{
+		func() uint8 { return uint8(r.Intn(256)) },
+		func() uint8 { return 255 },
+		func() uint8 { return 0 },
+		func() uint8 { return uint8(r.Intn(2) * 255) },
+		func() uint8 { return uint8(127 + r.Intn(3)) },
+	}
+	for i := 0; i < 20000; i++ {
+		f := fills[i%len(fills)]
+		l := make([]uint8, w*ThresholdBlock)
+		for j := range l {
+			l[j] = f()
+		}
+		if i%7 == 0 { // a lone extreme anywhere in the block
+			l[r.Intn(ThresholdBlock)*w+r.Intn(ThresholdBlock)] = uint8(r.Intn(2) * 255)
+		}
+		lo, hi, sum := blockStats(l, w)
+		wlo, whi, wsum := referenceBlockStats(l, w)
+		if lo != wlo || hi != whi || sum != wsum {
+			t.Fatalf("block %v: blockStats = %d, %d, %d; want %d, %d, %d", l, lo, hi, sum, wlo, whi, wsum)
+		}
+	}
+}
+
+func BenchmarkHybridThresholds(b *testing.B) {
+	r := rand.New(rand.NewSource(1))
+	l := make([]uint8, 4000*3000)
+	for i := range l {
+		l[i] = uint8(r.Intn(256))
+	}
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		HybridThresholds(l, 4000, 3000)
+	}
+}
+
 func TestFinderRowStep(t *testing.T) {
 	for _, c := range []struct{ px, want int }{{640 * 480, 1}, {1920 * 1080, 2}, {4032 * 3024, 3}} {
 		if got := FinderRowStep(c.px); got != c.want {
