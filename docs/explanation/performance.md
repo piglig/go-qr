@@ -17,9 +17,9 @@ Decoding crisp rendered images, compared with [gozxing], a Go port of ZXing:
 
 | Symbol | go-qr | gozxing |
 | --- | --- | --- |
-| numeric (v1) | **113 µs** · 20 allocs | 684 µs · 53,914 allocs (6.1×) |
-| URL (v4) | **224 µs** · 26 allocs | 1,440 µs · 107,701 allocs (6.4×) |
-| text (v29) | **2.3 ms** · 117 allocs | 17.5 ms · 1.27M allocs (7.6×) |
+| numeric (v1) | **113 µs** · 20 allocs | 685 µs · 53,914 allocs (6.1×) |
+| URL (v4) | **216 µs** · 26 allocs | 1,390 µs · 107,701 allocs (6.4×) |
+| text (v29) | **5.0 ms** · 166 allocs | 16.8 ms · 1.27M allocs (3.4×) |
 
 ### Reading photos
 
@@ -52,7 +52,7 @@ nothing here; `DecodeAll`, which reads every code, is compared below.
 | pathological | 82.6% | 43.5% | **91.3%** | 65.2% | 4.3% | 34.8% |
 | lots | **100%** | **100%** | 0% | **100%** | **100%** | **100%** |
 | **all photos** | **80.6%** | 73.1% | 68.8% | 45.7% | 40.1% | 34.1% |
-| decode time, all photos | **4.4 s** | 5.5 s | 106 s | 61 s | 171 s | 34 s |
+| decode time, all photos | **3.0 s** | 5.5 s | 106 s | 61 s | 171 s | 17 s |
 
 Counting codes rather than photos, `DecodeAll` (*since v2.6*) reads what
 `Decode` reads and the other codes in photos of several:
@@ -62,7 +62,7 @@ Counting codes rather than photos, `DecodeAll` (*since v2.6*) reads what
 | lots (7 photos, 420 codes) | 1.7% | **23.3%** | **23.3%** | 0% | 14.0% | 22.6% | 22.6% |
 | rotations (44 photos, 133 codes) | 33.1% | **99.2%** | 98.5% | 82.0% | 48.1% | 66.2% | 42.1% |
 | **all codes** | 35.1% | **57.1%** | 52.9% | 41.2% | 30.7% | 30.4% | 28.4% |
-| median decode time per photo | **3.5 ms** | 13.7 ms | 5.8 ms | 19.2 ms | 36.0 ms | 70.5 ms | 13.4 ms |
+| median decode time per photo | **2.1 ms** | 10.1 ms | 5.8 ms | 19.2 ms | 36.0 ms | 70.5 ms | 13.3 ms |
 
 WeChat uses a CNN detector and super-resolution; OpenCV's QRCodeDetector
 reads with quirc. Large symbols are go-qr's weak spot: version 20 and up
@@ -168,13 +168,13 @@ first.
 | Image | Time | Memory |
 | --- | --- | --- |
 | 12 megapixels | 23 ms | 5.4 MB |
-| 12 megapixels, no code | 81 ms | 8.5 MB |
+| 12 megapixels, no code | 80 ms | 8.5 MB |
 | 48 megapixels | 53 ms | 19.0 MB |
 
 These are the worst case for the search: a version 4 code at 3 pixels per
 module on random texture, which half resolution barely resolves. Codes in
 camera photos usually take far less: the median over the 12-megapixel
-BoofCV photos is 11 ms. An image without a code costs more than one with
+BoofCV photos is 6.3 ms. An image without a code costs more than one with
 a code, because every scale is searched.
 Decoding JPEG with `image/jpeg` usually takes longer than reading the code.
 

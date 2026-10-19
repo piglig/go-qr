@@ -165,7 +165,7 @@ text, err := qr.JoinStructuredAppend(results...)
 
 `DecodeAll` keeps searching after the first symbol, through every scale
 and polarity, so it takes several times as long as `Decode` on an image of
-one symbol: 13.7 ms against 3.5 ms, the medians over the BoofCV photos.
+one symbol: 10.1 ms against 2.1 ms, the medians over the BoofCV photos.
 `qr.WithMaxSymbols(n)` stops it after `n` symbols.
 
 ## Grading print quality
@@ -278,7 +278,7 @@ it is searched. Four things keep up with the frames:
 
 - `WithoutInverted()` skips the last search, for light symbols on a dark
   background, which printed codes rarely are. On frames of texture without
-  a code, from VGA to 12 megapixels, it saves 28% of the time.
+  a code, from VGA to 12 megapixels, it saves 25 to 29% of the time.
 - A frame needs no more pixels than its code: downscale frames to a
   megapixel or two before decoding when the code fills a good part of
   the view.
@@ -337,7 +337,7 @@ func around(corners [4]image.Point, bounds image.Rectangle) image.Rectangle {
 
 The decoder is fuzz-tested against arbitrary images and malformed
 bitstreams, and returns errors rather than panicking. Its cost grows with
-the number of pixels on any image, at most about 120 ms for a
+the number of pixels on any image, at most about 80 ms for a
 12-megapixel one without a code, including images crafted with many
 finder patterns (*since v2.5.1*), and
 decoding the image file itself costs more. Check the dimensions of untrusted uploads
