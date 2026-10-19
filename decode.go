@@ -195,9 +195,39 @@ func searchImage(img image.Image, cfg decodeConfig, read gridReader) (*DecodeRes
 		return nil, fmt.Errorf("%w: image too small (%dx%d)", ErrNotFound, w, h)
 	}
 	l := detect.ToLuma(img)
-	threshold, lo, hi := detect.OtsuThreshold(l)
-	if hi-lo < detect.MinContrast {
-		return nil, fmt.Errorf("%w: image has no contrast", ErrNotFound)
+	// Photos from cameras have far more pixels than their codes need, and
+	// the fast path reads only rendered images, which are small.
+	smallImage := w*h <= detect.FastFirstPixels
+
+	// The fast path thresholds the image globally, by Otsu's method over
+	// the whole image. A large image tries it only after the robust
+	// search, which most photos are read by, so the threshold is computed
+	// when the fast path first needs it. An image without contrast is
+	// rejected first; a large one only if the first pyramid level the
+	// search locates symbols in has none either, which it checks for a
+	// fraction of the cost: a level's pixels are means of the image's.
+	var threshold uint8
+	otsu := false
+	global := func() (lo, hi uint8) {
+		threshold, lo, hi = detect.OtsuThreshold(l)
+		otsu = true
+		return lo, hi
+	}
+	var (
+		pyr   *detect.Pyramid
+		order []int // of the levels to search
+	)
+	if cfg.fastPathOnly || smallImage {
+		if lo, hi := global(); hi-lo < detect.MinContrast {
+			return nil, fmt.Errorf("%w: image has no contrast", ErrNotFound)
+		}
+	} else {
+		pyr, order = detect.NewPyramid(l, w, h), detect.SearchOrder(w, h)
+		if lo, hi := detect.LumaRange(pyr.Level(order[0]).L); hi-lo < detect.MinContrast {
+			if lo, hi := global(); hi-lo < detect.MinContrast {
+				return nil, fmt.Errorf("%w: image has no contrast", ErrNotFound)
+			}
+		}
 	}
 
 	var firstErr error
@@ -227,6 +257,9 @@ func searchImage(img image.Image, cfg decodeConfig, read gridReader) (*DecodeRes
 	// fast tries the fast path, which reads crisp, axis-aligned images such
 	// as rendered ones.
 	fast := func(inverted bool) (*DecodeResult, error, bool) {
+		if !otsu {
+			global()
+		}
 		grid, box, err := detect.FastSample(l, w, h, threshold, inverted)
 		res, err := try(grid, box, inverted, err)
 		return res, err, err == nil || errors.Is(err, ErrUnsupported)
@@ -239,9 +272,6 @@ func searchImage(img image.Image, cfg decodeConfig, read gridReader) (*DecodeRes
 		}
 		return nil, firstErr
 	}
-	// Photos from cameras have far more pixels than their codes need, and
-	// the fast path reads only rendered images, which are small.
-	smallImage := w*h <= detect.FastFirstPixels
 	if smallImage {
 		if res, err, done := fast(false); done {
 			return res, err
@@ -259,9 +289,11 @@ func searchImage(img image.Image, cfg decodeConfig, read gridReader) (*DecodeRes
 	// resolution. It tries the same levels in any image as a search from
 	// full resolution would, so it finds the same symbols, at a fraction
 	// of the cost in camera photos.
-	pyr := detect.NewPyramid(l, w, h)
+	if pyr == nil {
+		pyr, order = detect.NewPyramid(l, w, h), detect.SearchOrder(w, h)
+	}
 	var full *detect.ThresholdMap // level 0's, also for the inverted image
-	for _, k := range detect.SearchOrder(w, h) {
+	for _, k := range order {
 		if err := cfg.canceled(); err != nil {
 			return nil, err
 		}

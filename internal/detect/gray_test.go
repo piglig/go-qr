@@ -272,6 +272,27 @@ func BenchmarkRuns(b *testing.B) {
 	}
 }
 
+func TestLumaRange(t *testing.T) {
+	r := rand.New(rand.NewSource(1))
+	for n := 1; n < 70; n++ {
+		for k := 0; k < 50; k++ {
+			l := make([]uint8, n)
+			base := uint8(r.Intn(256))
+			for i := range l {
+				l[i] = base
+			}
+			// A few values anywhere, including the tail past the words.
+			for j := r.Intn(3); j > 0; j-- {
+				l[r.Intn(n)] = uint8(r.Intn(256))
+			}
+			wlo, whi := slices.Min(l), slices.Max(l)
+			if lo, hi := LumaRange(l); lo != wlo || hi != whi {
+				t.Fatalf("LumaRange(%v) = %d, %d; want %d, %d", l, lo, hi, wlo, whi)
+			}
+		}
+	}
+}
+
 func TestFinderRowStep(t *testing.T) {
 	for _, c := range []struct{ px, want int }{{640 * 480, 1}, {1920 * 1080, 2}, {4032 * 3024, 3}} {
 		if got := FinderRowStep(c.px); got != c.want {
