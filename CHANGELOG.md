@@ -25,6 +25,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   536 BoofCV photos `Decode` takes 3.7 s instead of 4.0 s; a 12-megapixel
   image with a small code takes 30 ms instead of 32 ms, one without a code
   105 ms instead of 112 ms, and a 48-megapixel one 73 ms instead of 79 ms.
+- The search for finder patterns classifies the pixels of a row eight at
+  a time, against their block's threshold, and visits only those whose
+  class differs from the one before, instead of classifying one pixel at
+  a time; most words of a photo hold none. It reads rows 1.3 to 2.3 times
+  as fast and finds the same runs. On the 536 BoofCV photos `Decode`
+  takes 3.4 s instead of 3.7 s; a 12-megapixel image with a small code
+  takes 24 ms instead of 30 ms, one without a code 81 ms instead of
+  105 ms, and a 48-megapixel one 59 ms instead of 73 ms.
 
 ## [2.7.0] - 2026-10-18
 

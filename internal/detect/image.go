@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"image"
+	"math/bits"
 	"sort"
 
 	"github.com/piglig/go-qr/v2/internal/errs"
@@ -455,32 +456,52 @@ func (m *ThresholdMap) Dark(x, y int) bool {
 // runs appends to dst the lengths of the runs of one class along row y,
 // alternating light and dark and starting with light (of length zero when
 // the row starts dark), and returns it.
+//
+// Each block's pixels of the row are compared with its threshold a word
+// of eight at a time, into a byte mask of the dark ones; XORed with itself
+// shifted by a pixel, the mask marks the pixels whose class differs from
+// the one before, and only those are visited. Most words of a photo hold
+// none.
 func (m *ThresholdMap) runs(y int, inverted bool, dst []int) []int {
 	src := m.l[y*m.W : (y+1)*m.W]
 	t := m.t[m.block(y, m.H, m.bh)*m.bw:]
-	prev, start := false, 0
+	start := 0
 	if m.global {
+		prev := false
 		for x, v := range src {
 			if d := (v <= t[0]) != inverted; d != prev {
 				dst = append(dst, x-start)
 				prev, start = d, x
 			}
 		}
-	} else {
-		tail := m.W - ThresholdBlock
-		for bx := 0; bx < m.bw; bx++ {
-			x0, x1 := bx*ThresholdBlock, min((bx+1)*ThresholdBlock, tail)
-			if bx == m.bw-1 {
-				x0, x1 = tail, m.W
-			}
-			tb := t[bx]
-			for x := x0; x < x1; x++ {
-				if d := (src[x] <= tb) != inverted; d != prev {
-					dst = append(dst, x-start)
-					prev, start = d, x
-				}
-			}
+		return append(dst, m.W-start)
+	}
+	var flip uint64 // to read light pixels as dark
+	if inverted {
+		flip = ^uint64(0)
+	}
+	// The blocks cover the row in words, except for the one before the
+	// last, which stops at the last block, aligned to the right edge;
+	// words are still read whole, since the last block follows.
+	tail := m.W - ThresholdBlock
+	var last uint64 // its top byte is 0xFF when the pixel before the word is dark
+	for bx := 0; bx < m.bw; bx++ {
+		x0, n := bx*ThresholdBlock, min(ThresholdBlock, tail-bx*ThresholdBlock)
+		if bx == m.bw-1 {
+			x0, n = tail, ThresholdBlock
 		}
+		d := byteGE(uint64(t[bx])*0x0101010101010101, binary.LittleEndian.Uint64(src[x0:])) ^ flip
+		c := d ^ (d<<8 | last>>56)
+		if n < ThresholdBlock {
+			c &= 1<<(8*n) - 1
+		}
+		for c != 0 {
+			i := bits.TrailingZeros64(c) >> 3
+			dst = append(dst, x0+i-start)
+			start = x0 + i
+			c &^= 0xFF << (8 * i)
+		}
+		last = d << (8 * (ThresholdBlock - n))
 	}
 	return append(dst, m.W-start)
 }

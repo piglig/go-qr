@@ -3,6 +3,7 @@ package detect
 import (
 	"bytes"
 	"math/rand"
+	"slices"
 	"testing"
 )
 
@@ -179,6 +180,95 @@ func BenchmarkHybridThresholds(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		HybridThresholds(l, 4000, 3000)
+	}
+}
+
+// referenceRuns is ThresholdMap.runs up to v2.7, which classified one pixel
+// at a time.
+func referenceRuns(m *ThresholdMap, y int, inverted bool) []int {
+	var dst []int
+	src := m.l[y*m.W : (y+1)*m.W]
+	t := m.t[m.block(y, m.H, m.bh)*m.bw:]
+	prev, start := false, 0
+	for x, v := range src {
+		tb := t[0]
+		if !m.global {
+			tb = t[m.block(x, m.W, m.bw)]
+		}
+		if d := (v <= tb) != inverted; d != prev {
+			dst = append(dst, x-start)
+			prev, start = d, x
+		}
+	}
+	return append(dst, m.W-start)
+}
+
+func TestRunsMatchReference(t *testing.T) {
+	r := rand.New(rand.NewSource(1))
+	images := map[string]func(x, y int) uint8{
+		"random": func(int, int) uint8 { return uint8(r.Intn(256)) },
+		// Modules of a few pixels, so runs start and end inside words and
+		// across them, and the thresholds vary between blocks.
+		"modules": func(x, y int) uint8 { return uint8((x/3+y/5)%2*200 + r.Intn(40)) },
+		"wide":    func(x, y int) uint8 { return uint8((x / 29) % 2 * 255) },
+		"flat":    func(int, int) uint8 { return 128 },
+		"bytes":   func(x, y int) uint8 { return uint8(x*37 + y) }, // every value, high bits
+	}
+	for name, f := range images {
+		for _, w := range []int{40, 41, 47, 48, 49, 55, 56, 63, 64, 65, 83, 200, 203} {
+			h := 41
+			l := make([]uint8, w*h)
+			for y := 0; y < h; y++ {
+				for x := 0; x < w; x++ {
+					l[y*w+x] = f(x, y)
+				}
+			}
+			tm := HybridThresholds(l, w, h)
+			if tm.global {
+				t.Fatalf("%s %dx%d: global threshold", name, w, h)
+			}
+			for y := 0; y < h; y++ {
+				for _, inverted := range []bool{false, true} {
+					got, want := tm.runs(y, inverted, nil), referenceRuns(tm, y, inverted)
+					if !slices.Equal(got, want) {
+						t.Fatalf("%s %dx%d row %d inverted %v: runs = %v, want %v", name, w, h, y, inverted, got, want)
+					}
+				}
+			}
+		}
+	}
+}
+
+func BenchmarkRuns(b *testing.B) {
+	for _, bc := range []struct {
+		name string
+		f    func(r *rand.Rand, x, y int) uint8
+	}{
+		// Noise is the worst case, with a class change at most pixels; the
+		// modules of a code in a photo change every few pixels; texture
+		// with gentle shading, most of a photo, rarely.
+		{"noise", func(r *rand.Rand, _, _ int) uint8 { return uint8(r.Intn(256)) }},
+		{"modules", func(r *rand.Rand, x, y int) uint8 { return uint8((x/4+y/4)%2*180 + r.Intn(40)) }},
+		{"smooth", func(r *rand.Rand, x, y int) uint8 { return uint8(100 + (x+y)/64%50 + r.Intn(8)) }},
+	} {
+		r := rand.New(rand.NewSource(1))
+		w, h := 4000, 3000
+		l := make([]uint8, w*h)
+		for y := 0; y < h; y++ {
+			for x := 0; x < w; x++ {
+				l[y*w+x] = bc.f(r, x, y)
+			}
+		}
+		tm := HybridThresholds(l, w, h)
+		b.Run(bc.name, func(b *testing.B) {
+			var dst []int
+			b.ReportAllocs()
+			for i := 0; i < b.N; i++ {
+				for y := 0; y < h; y += 3 {
+					dst = tm.runs(y, false, dst[:0])
+				}
+			}
+		})
 	}
 }
 
