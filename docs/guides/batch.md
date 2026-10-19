@@ -5,7 +5,9 @@
 Every function and method in the package is safe for concurrent use, and a
 `*qr.Code` is immutable once returned, so you can encode and render from as
 many goroutines as you like. The encoder shares per-version tables across
-calls without locking.
+calls without locking. `Batch` encodes and renders; to decode many images,
+call `Decode` from several goroutines, as in
+[Decoding many images](decoding.md#decoding-many-images).
 
 ## Batch
 

@@ -228,11 +228,53 @@ bug worth surfacing. `WithMaxSymbols(n)` *Since v2.6* limits `DecodeAll` to
 search for light symbols on a dark background; see
 [scanning video](#scanning-video).
 
+## Decoding many images
+
+`Decode`, `DecodeAll` and `Grade` are safe for concurrent use, and each
+call runs on the goroutine that makes it. To read many images, call them
+from several goroutines, about one per CPU:
+
+```go
+var wg sync.WaitGroup
+sem := make(chan struct{}, runtime.GOMAXPROCS(0)) // one image per CPU at a time
+for _, path := range paths {
+	wg.Add(1)
+	sem <- struct{}{}
+	go func() {
+		defer func() { <-sem; wg.Done() }()
+		f, err := os.Open(path)
+		if err != nil {
+			log.Print(err)
+			return
+		}
+		img, _, err := image.Decode(f) // the file, in the same goroutine
+		f.Close()
+		if err != nil {
+			log.Print(err)
+			return
+		}
+		res, err := qr.Decode(img)
+		if err != nil {
+			log.Printf("%s: %v", path, err)
+			return
+		}
+		fmt.Println(path, res.Text)
+	}()
+}
+wg.Wait()
+```
+
+Decode each image file in the same goroutine as its code: for camera
+photos it is most of the work. On the 141 BoofCV photos of 8 megapixels
+or more, `image/jpeg` takes 73 ms per photo, about six times as long as
+`Decode`. A server that decodes an upload per request already decodes in
+parallel, one request per goroutine.
+
 ## Scanning video
 
 Most frames of a camera feed in which a code is being looked for hold no
 code, and a frame without a code is the slowest to decode: every scale of
-it is searched. Three things keep up with the frames:
+it is searched. Four things keep up with the frames:
 
 - `WithoutInverted()` skips the last search, for light symbols on a dark
   background, which printed codes rarely are. On frames of texture without
@@ -240,6 +282,9 @@ it is searched. Three things keep up with the frames:
 - A frame needs no more pixels than its code: downscale frames to a
   megapixel or two before decoding when the code fills a good part of
   the view.
+- When one goroutine cannot keep up, decode frames on a few, and drop the
+  frames that arrive while all of them are busy; a newer frame can cancel
+  an older one's decode through `DecodeContext`.
 - Once a code is found, look for it in the next frames around where it
   was, through `SubImage`; `Decode` reports `Corners` in the coordinates
   of the full frame:
@@ -263,8 +308,19 @@ for frame := range frames {
 		last = image.Rectangle{}
 		continue
 	}
-	last = around(res.Corners, frame.Bounds()) // the corners' bounding box, enlarged
+	last = around(res.Corners, frame.Bounds())
 	handle(res)
+}
+
+// around returns the bounding box of corners, enlarged by half its size
+// on each side, within bounds.
+func around(corners [4]image.Point, bounds image.Rectangle) image.Rectangle {
+	r := image.Rectangle{Min: corners[0], Max: corners[0]}
+	for _, p := range corners[1:] {
+		r.Min.X, r.Min.Y = min(r.Min.X, p.X), min(r.Min.Y, p.Y)
+		r.Max.X, r.Max.Y = max(r.Max.X, p.X), max(r.Max.Y, p.Y)
+	}
+	return r.Inset(-max(r.Dx(), r.Dy()) / 2).Intersect(bounds)
 }
 ```
 

@@ -11,6 +11,7 @@ import (
 	"math/rand"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/piglig/go-qr/v2/internal/bitbuffer"
@@ -503,6 +504,51 @@ func TestDecodeIgnoresStrayFinder(t *testing.T) {
 		}
 	}
 	assertEqual(t, "stray finder nearby", decodeText(t, canvas))
+}
+
+func TestDecodeConcurrent(t *testing.T) {
+	// Decode and DecodeAll share per-version tables between calls; calls
+	// from many goroutines must read what one at a time reads. The images
+	// take the fast path, the robust search, and a mirror image.
+	var imgs []image.Image
+	for v, text := range []string{"concurrent 1", "https://example.com/concurrent/2", strings.Repeat("concurrent 3 ", 30)} {
+		code, err := Encode(text)
+		if err != nil {
+			t.Fatal(err)
+		}
+		// A quiet zone wide enough for the corners to stay in the image.
+		img, _ := code.Image(WithScale(3+v), WithQuietZone(10))
+		imgs = append(imgs, img, rotateGray(img, 0.3), mirror(img))
+	}
+	want := make([]string, len(imgs))
+	for i, img := range imgs {
+		res, err := Decode(img)
+		if err != nil {
+			t.Fatalf("image %d: %v", i, err)
+		}
+		want[i] = res.Text
+	}
+	var wg sync.WaitGroup
+	for g := 0; g < 8; g++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for k := range 3 * len(imgs) {
+				i := (g + k) % len(imgs)
+				res, err := Decode(imgs[i])
+				if err != nil || res.Text != want[i] {
+					t.Errorf("image %d: Decode = %v, %v; want %q", i, res, err, want[i])
+					return
+				}
+				all, err := DecodeAll(imgs[i])
+				if err != nil || len(all) != 1 || all[0].Text != want[i] {
+					t.Errorf("image %d: DecodeAll = %d symbols, %v", i, len(all), err)
+					return
+				}
+			}
+		}()
+	}
+	wg.Wait()
 }
 
 func TestDecodeFlatImageFailsFast(t *testing.T) {
