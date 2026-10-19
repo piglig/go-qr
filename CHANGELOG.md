@@ -33,6 +33,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   takes 3.4 s instead of 3.7 s; a 12-megapixel image with a small code
   takes 24 ms instead of 30 ms, one without a code 81 ms instead of
   105 ms, and a 48-megapixel one 59 ms instead of 73 ms.
+- `Decode` computes the global threshold of an image of more than a
+  megapixel, which only the fast path uses and such an image tries only
+  after the robust search, when the fast path first needs it, instead of
+  before searching. Whether the image has contrast at all is checked first
+  on the pyramid level the search starts at, whose pixels are means of the
+  image's, and only on the whole image if that level has none. On the
+  536 BoofCV photos `Decode` takes 3.1 s instead of 3.4 s, and 1.7 s
+  instead of 2.0 s on the 141 of 8 megapixels or more, with the same
+  result for every photo; a 12-megapixel image with a small code takes
+  23 ms instead of 25 ms, and a 48-megapixel one 53 ms instead of 60 ms.
 
 ## [2.7.0] - 2026-10-18
 

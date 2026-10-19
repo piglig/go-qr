@@ -5,6 +5,7 @@ import (
 	"errors"
 	"image"
 	"image/color"
+	"image/draw"
 	"image/png"
 	"math"
 	"math/rand"
@@ -511,6 +512,73 @@ func TestDecodeFlatImageFailsFast(t *testing.T) {
 	}
 	if _, err := Decode(flat); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("error = %v, want ErrNotFound", err)
+	}
+}
+
+func TestDecodeLargeImageContrast(t *testing.T) {
+	// Large images are checked for contrast on the first pyramid level the
+	// search locates symbols in, and only if it has none, on the image.
+	const w, h = 2000, 1500
+	noContrast := func(img image.Image) bool {
+		_, err := Decode(img)
+		if !errors.Is(err, ErrNotFound) {
+			t.Fatalf("error = %v, want ErrNotFound", err)
+		}
+		return strings.Contains(err.Error(), "no contrast")
+	}
+	flat := image.NewGray(image.Rect(0, 0, w, h))
+	for i := range flat.Pix {
+		flat.Pix[i] = 128 + uint8(i%10)
+	}
+	if !noContrast(flat) {
+		t.Error("a flat large image was searched")
+	}
+	// Lone pixels 32 levels lighter are averaged out at the level, a
+	// sixteenth of a 4×4 block each, but the image itself has contrast.
+	specks := image.NewGray(image.Rect(0, 0, w, h))
+	for i := range specks.Pix {
+		specks.Pix[i] = 128
+	}
+	for i := 0; i < len(specks.Pix); i += 4999 {
+		specks.Pix[i] = 160
+	}
+	if noContrast(specks) {
+		t.Error("a large image with contrast at full resolution was rejected")
+	}
+}
+
+func TestDecodeLargeFastPathOnly(t *testing.T) {
+	// A large image tries the fast path only after the robust search,
+	// and computes its global threshold only then. With the top-right and
+	// bottom-left finders filled in, only the fast path reads the symbol:
+	// it needs the top-left finder's pitch and the symbol's bounding box,
+	// and reads no finder modules as data.
+	const scale, quiet = 40, 4
+	code, err := Encode("only the fast path")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Gray levels, so that only a threshold between them separates them.
+	fg, bg := color.Gray{Y: 60}, color.Gray{Y: 200}
+	img, err := code.Image(WithScale(scale), WithQuietZone(quiet), WithForeground(fg), WithBackground(bg))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if b := img.Bounds(); b.Dx()*b.Dy() <= 1_000_000 {
+		t.Fatalf("image of %v is not large", b)
+	}
+	n := code.Size()
+	for _, f := range []image.Point{{n - 7, 0}, {0, n - 7}} {
+		o := f.Add(image.Pt(quiet, quiet)).Mul(scale)
+		r := image.Rectangle{Min: o, Max: o.Add(image.Pt(7*scale, 7*scale))}
+		draw.Draw(img, r, image.NewUniform(fg), image.Point{}, draw.Src)
+	}
+	res, err := Decode(img)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Text != "only the fast path" {
+		t.Errorf("Decode = %q", res.Text)
 	}
 }
 

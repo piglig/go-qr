@@ -289,6 +289,23 @@ func OtsuThreshold(l []uint8) (t, lo, hi uint8) {
 	return uint8(bestT), lo, hi
 }
 
+// LumaRange returns the lowest and highest luminance in l. It compares a
+// word of eight pixels at a time, in eight independent byte lanes.
+func LumaRange(l []uint8) (lo, hi uint8) {
+	mn, mx := ^uint64(0), uint64(0)
+	i := 0
+	for ; i+8 <= len(l); i += 8 {
+		a := binary.LittleEndian.Uint64(l[i:])
+		mn ^= (mn ^ a) & byteGE(mn, a)
+		mx ^= (mx ^ a) & byteGE(a, mx)
+	}
+	lo, hi = wordRange(mn, mx)
+	for _, v := range l[i:] {
+		lo, hi = min(lo, v), max(hi, v)
+	}
+	return lo, hi
+}
+
 // HybridThresholds thresholds each 8x8 block against the average black
 // point of the surrounding 5x5 blocks, after ZXing's HybridBinarizer. A
 // block with little contrast, such as the inside of a large module, takes
@@ -385,13 +402,20 @@ func blockStats(l []uint8, w int) (lo, hi uint8, sum int) {
 		mn ^= (mn ^ a) & byteGE(mn, a)
 		mx ^= (mx ^ a) & byteGE(a, mx)
 	}
+	lo, hi = wordRange(mn, mx)
+	return lo, hi, int(acc * 0x0001000100010001 >> 48)
+}
+
+// wordRange returns the lowest byte of mn and the highest of mx.
+func wordRange(mn, mx uint64) (lo, hi uint8) {
+	const lanes = 0x00FF00FF00FF00FF
 	n := laneMin(mn&lanes, mn>>8&lanes)
 	n = laneMin(n, n>>32)
 	n = laneMin(n, n>>16)
 	x := laneMax(mx&lanes, mx>>8&lanes)
 	x = laneMax(x, x>>32)
 	x = laneMax(x, x>>16)
-	return uint8(n), uint8(x), int(acc * 0x0001000100010001 >> 48)
+	return uint8(n), uint8(x)
 }
 
 // byteGE returns 0xFF in each byte in which x is at least y, and 0 in the
