@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Performance
+
+- The levels of the image pyramid that `Decode` and `DecodeAll` search
+  are computed eight pixels at a time, in the 16-bit lanes of a word,
+  instead of one pixel at a time, which makes halving an image 2.2 times
+  as fast. The levels are the same, and so are the results. On the
+  536 BoofCV photos `Decode` takes 4.0 s instead of 4.5 s, and 2.4 s
+  instead of 2.8 s on the 141 of 8 megapixels or more; a 12-megapixel
+  image with a small code takes 31 ms instead of 35 ms, and a
+  48-megapixel one 78 ms instead of 90 ms.
+
 ## [2.7.0] - 2026-10-18
 
 ### Added

@@ -1,6 +1,7 @@
 package detect
 
 import (
+	"bytes"
 	"math/rand"
 	"testing"
 )
@@ -74,6 +75,57 @@ func TestHalve(t *testing.T) {
 	}
 	if got[0] != (0+4+104+108+2)/4 || got[1] != (8+12+112+255+2)/4 {
 		t.Errorf("Halve = %v", got)
+	}
+}
+
+// referenceHalve is Halve up to v2.7, which added one pixel at a time.
+func referenceHalve(l []uint8, w, h int) ([]uint8, int, int) {
+	nw, nh := w/2, h/2
+	out := make([]uint8, nw*nh)
+	for y := 0; y < nh; y++ {
+		r0, r1 := l[2*y*w:], l[(2*y+1)*w:]
+		for x := 0; x < nw; x++ {
+			out[y*nw+x] = uint8((int(r0[2*x]) + int(r0[2*x+1]) + int(r1[2*x]) + int(r1[2*x+1]) + 2) / 4)
+		}
+	}
+	return out, nw, nh
+}
+
+func TestHalveMatchesReference(t *testing.T) {
+	r := rand.New(rand.NewSource(1))
+	fill := map[string]func(i int) uint8{
+		"random": func(int) uint8 { return uint8(r.Intn(256)) },
+		"white":  func(int) uint8 { return 255 },
+		"black":  func(int) uint8 { return 0 },
+		// Sums of 1, 2 and 3 modulo 4 round both ways.
+		"steps": func(i int) uint8 { return uint8(i % 4 * 85) },
+	}
+	for name, f := range fill {
+		for _, sz := range [][2]int{{1, 1}, {2, 2}, {7, 3}, {8, 2}, {9, 5}, {15, 4}, {16, 2}, {16, 16}, {17, 9}, {33, 4}, {83, 61}, {4001, 3}} {
+			w, h := sz[0], sz[1]
+			l := make([]uint8, w*h)
+			for i := range l {
+				l[i] = f(i)
+			}
+			got, gw, gh := Halve(l, w, h)
+			want, ww, wh := referenceHalve(l, w, h)
+			if gw != ww || gh != wh || !bytes.Equal(got, want) {
+				t.Errorf("%s %dx%d: Halve differs from the reference", name, w, h)
+			}
+		}
+	}
+}
+
+func BenchmarkHalve(b *testing.B) {
+	r := rand.New(rand.NewSource(1))
+	l := make([]uint8, 4000*3000)
+	for i := range l {
+		l[i] = uint8(r.Intn(256))
+	}
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		Halve(l, 4000, 3000)
 	}
 }
 
