@@ -17,6 +17,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   instead of 2.8 s on the 141 of 8 megapixels or more; a 12-megapixel
   image with a small code takes 31 ms instead of 35 ms, and a
   48-megapixel one 78 ms instead of 90 ms.
+- The adaptive threshold measures the lowest, highest and mean luminance
+  of each 8×8 block a row of eight pixels at a time, comparing all eight
+  bytes of a word at once, instead of one pixel at a time, whose
+  comparisons each waited for the one before. It takes 8.9 ms instead of
+  12.8 ms for 12 megapixels, with the same thresholds and results. On the
+  536 BoofCV photos `Decode` takes 3.7 s instead of 4.0 s; a 12-megapixel
+  image with a small code takes 30 ms instead of 32 ms, one without a code
+  105 ms instead of 112 ms, and a 48-megapixel one 73 ms instead of 79 ms.
 
 ## [2.7.0] - 2026-10-18
 

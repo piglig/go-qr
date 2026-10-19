@@ -315,15 +315,8 @@ func HybridThresholds(l []uint8, w, h int) *ThresholdMap {
 	for by := 0; by < bh; by++ {
 		y0 := origin(by, h)
 		for bx := 0; bx < bw; bx++ {
-			x0 := origin(bx, w)
-			lo, hi, sum := 255, 0, 0
-			for y := y0; y < y0+block; y++ {
-				for _, v := range l[y*w+x0 : y*w+x0+block] {
-					sum += int(v)
-					lo, hi = min(lo, int(v)), max(hi, int(v))
-				}
-			}
-			stats[by*bw+bx] = stat{uint8(lo), uint8(hi), uint8(sum / (block * block))}
+			lo, hi, sum := blockStats(l[y0*w+origin(bx, w):], w)
+			stats[by*bw+bx] = stat{lo, hi, uint8(sum / (block * block))}
 		}
 	}
 	pyr := newRangePyramid(bw, bh, func(i int) (uint8, uint8) { return stats[i].lo, stats[i].hi })
@@ -372,6 +365,56 @@ func HybridThresholds(l []uint8, w, h int) *ThresholdMap {
 	}
 	return &ThresholdMap{l: l, W: w, H: h, bw: bw, bh: bh, t: thr}
 }
+
+// blockStats returns the lowest and highest luminance and the sum of the
+// ThresholdBlock×ThresholdBlock pixels whose top left is l[0], in rows w
+// pixels apart.
+//
+// A row of a block is one word of eight pixels. The minimum and maximum of
+// each of its bytes are taken down the rows, all eight at once, and only
+// then across them; a pixel at a time, every comparison would wait for the
+// one before it. The even and odd pixels are summed in 16-bit lanes, each
+// the sum of 16 pixels, 4080 at most.
+func blockStats(l []uint8, w int) (lo, hi uint8, sum int) {
+	const lanes = 0x00FF00FF00FF00FF
+	mn, mx, acc := ^uint64(0), uint64(0), uint64(0)
+	for y := 0; y < ThresholdBlock; y++ {
+		a := binary.LittleEndian.Uint64(l[y*w:])
+		acc += a&lanes + a>>8&lanes
+		mn ^= (mn ^ a) & byteGE(mn, a)
+		mx ^= (mx ^ a) & byteGE(a, mx)
+	}
+	n := laneMin(mn&lanes, mn>>8&lanes)
+	n = laneMin(n, n>>32)
+	n = laneMin(n, n>>16)
+	x := laneMax(mx&lanes, mx>>8&lanes)
+	x = laneMax(x, x>>32)
+	x = laneMax(x, x>>16)
+	return uint8(n), uint8(x), int(acc * 0x0001000100010001 >> 48)
+}
+
+// byteGE returns 0xFF in each byte in which x is at least y, and 0 in the
+// others (Hacker's Delight, 2nd ed., §2-18). Where the bytes' high bits
+// differ, the one with it set is larger; where they agree, (x|H)-(y&^H)
+// subtracts their low seven bits with a borrow from bit 7 alone, which
+// stays set exactly when x's are at least y's.
+func byteGE(x, y uint64) uint64 {
+	const high = 0x8080808080808080
+	t := (x | high) - (y &^ high)
+	return (x&^y | ^(x^y)&t) & high >> 7 * 0xFF
+}
+
+// laneGE returns 0xFF in each 16-bit lane in which x is at least y, and 0
+// in the others, for lanes of values up to 255: x+256-y has bit 8 set
+// exactly then, and borrows from no other lane.
+func laneGE(x, y uint64) uint64 {
+	return ((x | 0x0100010001000100) - y) >> 8 & 0x0001000100010001 * 0xFF
+}
+
+// laneMin and laneMax return the lane-wise minimum and maximum of x and y,
+// 16-bit lanes of values up to 255.
+func laneMin(x, y uint64) uint64 { return x ^ (x^y)&laneGE(x, y) }
+func laneMax(x, y uint64) uint64 { return y ^ (x^y)&laneGE(x, y) }
 
 // ThresholdBlock is the side, in pixels, of the blocks a ThresholdMap
 // holds one threshold for.
