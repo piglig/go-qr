@@ -167,9 +167,9 @@ first.
 
 | Image | Time | Memory |
 | --- | --- | --- |
-| 12 megapixels | 34 ms | 5.4 MB |
-| 12 megapixels, no code | 113 ms | 8.5 MB |
-| 48 megapixels | 88 ms | 19.0 MB |
+| 12 megapixels | 31 ms | 5.4 MB |
+| 12 megapixels, no code | 109 ms | 8.5 MB |
+| 48 megapixels | 78 ms | 19.0 MB |
 
 These are the worst case for the search: a version 4 code at 3 pixels per
 module on random texture, which half resolution barely resolves. Codes in
