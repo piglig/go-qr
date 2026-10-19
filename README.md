@@ -41,7 +41,7 @@
   zxing-cpp and more than WeChat, ZBar and gozxing
   ([comparison](docs/explanation/performance.md#reading-photos)).
 - **Fast and dependency-free.** Only the standard library. Encoding is 8 to
-  21× faster than [skip2/go-qrcode] and decoding about 7× faster than
+  21× faster than [skip2/go-qrcode] and decoding 3 to 6× faster than
   [gozxing], with orders of magnitude fewer allocations
   ([benchmarks](docs/explanation/performance.md)).
 

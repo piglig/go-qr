@@ -75,8 +75,8 @@ not accept rounded or circular finders.
   photo: tilt the code away from the light, and hold the camera steady.
 - **Very large images.** No need to downscale: the decoder searches reduced
   scales itself and reads modules at full resolution. The median
-  12-megapixel camera photo takes about 11 ms; a very small code takes
-  up to about 35 ms, and an image without a code about 110 ms, since
+  12-megapixel camera photo takes about 6 ms; a very small code takes
+  up to about 25 ms, and an image without a code about 80 ms, since
   every scale is searched.
 - **Several codes.** `Decode` returns one of them. `DecodeAll`
   (*since v2.6*) returns every code in reading order; or crop the image to
